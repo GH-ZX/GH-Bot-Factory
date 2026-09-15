@@ -89,23 +89,45 @@ class TenantResolutionMiddleware(BaseMiddleware):
                 user_binding = res_user.scalar_one_or_none()
 
                 if user_binding is None:
-                    # Provision domain User scoped to this tenant membership
-                    user = User(
-                        username=from_user.username,
-                        first_name=from_user.first_name,
-                        last_name=from_user.last_name,
-                        is_active=True,
+                    sibling_stmt = (
+                        select(TenantTelegramUser)
+                        .where(
+                            TenantTelegramUser.tenant_id == tenant.id,
+                            TenantTelegramUser.telegram_user_id == from_user.id,
+                        )
+                        .limit(1)
                     )
-                    session.add(user)
-                    await session.flush()
+                    sibling = (await session.execute(sibling_stmt)).scalar_one_or_none()
+                    user = await session.get(User, sibling.user_id) if sibling is not None else None
+                    if user is None:
+                        user_stmt = select(User).where(User.telegram_id == from_user.id)
+                        user = (await session.execute(user_stmt)).scalar_one_or_none()
+                    if user is None:
+                        user = User(
+                            telegram_id=from_user.id,
+                            username=from_user.username,
+                            first_name=from_user.first_name,
+                            last_name=from_user.last_name,
+                            is_active=True,
+                        )
+                        session.add(user)
+                        await session.flush()
+                    elif user.telegram_id is None:
+                        user.telegram_id = from_user.id
 
-                    membership = Membership(
-                        tenant_id=tenant.id,
-                        user_id=user.id,
-                        role=Role.CUSTOMER,
-                        permissions=["catalog:read", "orders:create", "wallet:use"],
+                    membership_stmt = select(Membership).where(
+                        Membership.tenant_id == tenant.id,
+                        Membership.user_id == user.id,
                     )
-                    session.add(membership)
+                    membership = (await session.execute(membership_stmt)).scalar_one_or_none()
+                    if membership is None:
+                        membership = Membership(
+                            tenant_id=tenant.id,
+                            user_id=user.id,
+                            role=Role.CUSTOMER,
+                            permissions=["catalog:read", "orders:create", "wallet:use"],
+                        )
+                        session.add(membership)
 
                     user_binding = TenantTelegramUser(
                         tenant_id=tenant.id,
@@ -143,6 +165,7 @@ class TenantResolutionMiddleware(BaseMiddleware):
                 bot_username=bot_record.username,
                 language_code=from_user.language_code if from_user else "en",
                 config=bot_record.config or {},
+                tenant_settings=tenant.settings or {},
             )
             data["tenant_context"] = tenant_context
 

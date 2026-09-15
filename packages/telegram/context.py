@@ -21,6 +21,7 @@ class TenantContext:
     bot_username: str | None = None
     language_code: str | None = "en"
     config: dict[str, Any] = field(default_factory=dict)
+    tenant_settings: dict[str, Any] = field(default_factory=dict)
 
     @property
     def currency(self) -> str:

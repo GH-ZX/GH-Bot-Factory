@@ -1,5 +1,4 @@
 import enum
-import os
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -8,6 +7,7 @@ from typing import Any
 
 import jwt
 
+from packages.core.config import Settings
 from packages.tenants.models import Role
 
 
@@ -54,6 +54,7 @@ class AuthenticatedPrincipal:
     roles: frozenset[Role] = frozenset([Role.CUSTOMER])
     permissions: frozenset[str] = frozenset()
     token_version: int = 1
+    bot_id: uuid.UUID | None = None
 
     def is_customer(self) -> bool:
         """Returns True if the principal has CUSTOMER role."""
@@ -68,10 +69,10 @@ class AuthenticatedPrincipal:
         return bool(self.roles.intersection({Role.ADMIN, Role.OWNER}))
 
 
-DEFAULT_JWT_SECRET = "gh-bot-factory-insecure-dev-secret-key-must-be-rotated-for-production-min256bit"
 DEFAULT_ALGORITHM = "HS256"
 DEFAULT_ISSUER = "gh-bot-factory"
 DEFAULT_AUDIENCE = "gh-bot-factory-api"
+MIN_JWT_SECRET_BYTES = 32
 
 
 class AuthTokenService:
@@ -84,11 +85,15 @@ class AuthTokenService:
         issuer: str = DEFAULT_ISSUER,
         audience: str = DEFAULT_AUDIENCE,
     ) -> None:
-        env = (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "").lower()
-        resolved_key = secret_key or os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY")
-        if not resolved_key and env in ("production", "prod"):
-            raise RuntimeError("JWT_SECRET_KEY must be explicitly configured in production environments.")
-        self.secret_key = resolved_key or DEFAULT_JWT_SECRET
+        resolved_key = secret_key if secret_key is not None else Settings().jwt_secret_key
+        if not resolved_key or not resolved_key.strip():
+            raise RuntimeError("JWT_SECRET_KEY must be explicitly configured.")
+        if len(resolved_key.encode("utf-8")) < MIN_JWT_SECRET_BYTES:
+            raise RuntimeError(
+                f"JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_BYTES} bytes long."
+            )
+
+        self._secret_key = resolved_key
         self.algorithm = algorithm
         self.issuer = issuer
         self.audience = audience
@@ -124,7 +129,7 @@ class AuthTokenService:
             safe_claims = {k: v for k, v in extra_claims.items() if k not in reserved}
             payload.update(safe_claims)
 
-        return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        return jwt.encode(payload, self._secret_key, algorithm=self.algorithm)
 
     def verify_access_token(self, token: str) -> dict[str, Any]:
         """Verifies JWT signature, expiration, issuer, audience, and required claims."""
@@ -134,7 +139,7 @@ class AuthTokenService:
         try:
             payload = jwt.decode(
                 token,
-                self.secret_key,
+                self._secret_key,
                 algorithms=[self.algorithm],
                 issuer=self.issuer,
                 audience=self.audience,
@@ -154,4 +159,4 @@ class AuthTokenService:
         except jwt.InvalidSignatureError as exc:
             raise TokenInvalidSignatureError("Access token signature is invalid.") from exc
         except (jwt.InvalidTokenError, ValueError, KeyError) as exc:
-            raise TokenMalformedError(f"Malformed or invalid token: {exc}") from exc
+            raise TokenMalformedError("Malformed or invalid token.") from exc

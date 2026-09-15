@@ -1,0 +1,40 @@
+# Optional safe-rollout overlay.
+# Usage:
+#   GHBF_CANARY_IMAGE_TAG=<candidate-tag> docker compose -f docker-compose.yml -f docker-compose.rollout.yml up -d bot-runtime bot-runtime-canary
+# Stable bots remain on the base image while CANARY bots run on the candidate image.
+services:
+  bot-runtime:
+    environment:
+      BOT_RUNTIME_RELEASE_CHANNELS: STABLE
+
+  bot-runtime-canary:
+    image: gh-bot-factory:${GHBF_CANARY_IMAGE_TAG:?GHBF_CANARY_IMAGE_TAG must identify the candidate image}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      BOT_RUNTIME_RELEASE_CHANNELS: CANARY
+    command: ["python", "-m", "apps.bot_runtime.main"]
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - secret_store_data:/var/lib/ghbf/secret-store
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py", "bot-runtime"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy

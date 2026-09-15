@@ -8,7 +8,7 @@ from packages.payments.state_machine import PaymentIntentStatus
 
 @dataclass
 class PaymentCreateRequest:
-    order_id: uuid.UUID
+    order_id: uuid.UUID | None
     amount: Decimal
     currency: str
     idempotency_key: str
@@ -52,6 +52,7 @@ class PaymentRefundRequest:
     currency: str
     idempotency_key: str
     reason: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -73,6 +74,7 @@ class PaymentProvider(Protocol):
     supports_webhooks: bool
     supports_refunds: bool
     supports_partial_refunds: bool
+    supports_safe_refund_retries: bool
 
     async def create_payment(self, request: PaymentCreateRequest) -> PaymentCreateResult:
         """Initiates a payment attempt with the upstream payment gateway."""

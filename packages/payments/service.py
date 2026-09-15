@@ -19,10 +19,36 @@ logger = logging.getLogger("payments.ledger")
 CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"
 CANONICAL_SETTLEMENT_TYPE = "PAYMENT_SETTLEMENT"
 CANONICAL_PAYMENT_REFUND_TYPE = "PAYMENT_REFUND"
+CANONICAL_TOPUP_REVERSAL_TYPE = "WALLET_TOPUP_REVERSAL"
 
 
 class LedgerService:
     """Provides auditable double-entry balance modifications and reconciliation."""
+
+    @staticmethod
+    async def _lock_wallet(session: AsyncSession, wallet: Wallet) -> Wallet:
+        """Serialize every balance mutation on the authoritative wallet row.
+
+        SQLite largely ignores ``FOR UPDATE`` so the fast unit suite keeps its existing
+        behavior. PostgreSQL, however, will block competing transactions until the
+        current balance mutation commits or rolls back. ``populate_existing`` is
+        required because callers commonly pass a Wallet that is already present in the
+        session identity map; after waiting for a concurrent transaction we must reload
+        the newly committed balance before calculating ``balance_before``.
+        """
+        stmt = (
+            select(Wallet)
+            .where(
+                Wallet.id == wallet.id,
+                Wallet.tenant_id == wallet.tenant_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        locked_wallet = (await session.execute(stmt)).scalar_one_or_none()
+        if locked_wallet is None:
+            raise ValueError(f"Wallet with id {wallet.id} does not exist for tenant {wallet.tenant_id}.")
+        return locked_wallet
 
     @staticmethod
     async def get_or_create_wallet(
@@ -70,6 +96,8 @@ class LedgerService:
         if amount <= Decimal("0.00"):
             raise ValueError("Credit amount must be strictly positive.")
 
+        wallet = await cls._lock_wallet(session, wallet)
+
         balance_before = wallet.balance
         balance_after = balance_before + amount
         wallet.balance = balance_after
@@ -105,6 +133,8 @@ class LedgerService:
         """
         if amount <= Decimal("0.00"):
             raise ValueError("Settlement amount must be strictly positive.")
+
+        wallet = await cls._lock_wallet(session, wallet)
 
         wallet_id = wallet.id
         ref_id = str(payment_intent_id)
@@ -187,6 +217,82 @@ class LedgerService:
             raise
 
     @classmethod
+    async def reserve_topup_reversal(
+        cls,
+        session: AsyncSession,
+        wallet: Wallet,
+        amount: Decimal,
+        reversal_id: uuid.UUID,
+        description: str | None = None,
+    ) -> LedgerTransaction:
+        """Idempotently reserve wallet funds for an external top-up refund saga.
+
+        The debit happens before the external refund is attempted so the customer cannot
+        spend funds that are being returned upstream. A partial unique index guarantees
+        that retries and concurrent workers can never reserve the same reversal twice.
+        """
+        if amount <= Decimal("0.00"):
+            raise ValueError("Top-up reversal amount must be strictly positive.")
+
+        wallet = await cls._lock_wallet(session, wallet)
+
+        wallet_id = wallet.id
+        reference_id = str(reversal_id)
+        stmt = select(LedgerTransaction).where(
+            LedgerTransaction.wallet_id == wallet_id,
+            LedgerTransaction.transaction_type == TransactionType.DEBIT,
+            LedgerTransaction.reference_type == CANONICAL_TOPUP_REVERSAL_TYPE,
+            LedgerTransaction.reference_id == reference_id,
+        )
+        existing_tx = (await session.execute(stmt)).scalars().first()
+        if existing_tx is not None:
+            if existing_tx.amount != amount:
+                raise LedgerIntegrityError(
+                    f"Top-up reversal amount mismatch for reversal {reference_id}: "
+                    f"existing={existing_tx.amount}, requested={amount}."
+                )
+            return existing_tx
+
+        if wallet.balance < amount:
+            raise InsufficientFundsError(
+                f"Insufficient reversible balance: available {wallet.balance} {wallet.currency}, "
+                f"required {amount} {wallet.currency}."
+            )
+
+        try:
+            async with session.begin_nested():
+                balance_before = wallet.balance
+                wallet.balance = balance_before - amount
+                tx = LedgerTransaction(
+                    tenant_id=wallet.tenant_id,
+                    wallet_id=wallet_id,
+                    transaction_type=TransactionType.DEBIT,
+                    amount=amount,
+                    balance_before=balance_before,
+                    balance_after=wallet.balance,
+                    reference_id=reference_id,
+                    reference_type=CANONICAL_TOPUP_REVERSAL_TYPE,
+                    description=description or f"Wallet top-up reversal reservation {reference_id}",
+                )
+                session.add(tx)
+                await session.flush()
+            return tx
+        except IntegrityError as exc:
+            try:
+                await session.refresh(wallet)
+            except Exception:  # noqa: BLE001
+                session.expire(wallet)
+            existing_tx = (await session.execute(stmt)).scalars().first()
+            if existing_tx is not None:
+                if existing_tx.amount != amount:
+                    raise LedgerIntegrityError(
+                        f"Top-up reversal amount mismatch for reversal {reference_id}: "
+                        f"existing={existing_tx.amount}, requested={amount}."
+                    ) from exc
+                return existing_tx
+            raise
+
+    @classmethod
     async def debit(
         cls,
         session: AsyncSession,
@@ -198,6 +304,13 @@ class LedgerService:
     ) -> LedgerTransaction:
         if amount <= Decimal("0.00"):
             raise ValueError("Debit amount must be strictly positive.")
+
+        wallet = await cls._lock_wallet(session, wallet)
+
+        if not wallet.is_active:
+            raise InsufficientFundsError(
+                "Wallet is unavailable pending financial reconciliation."
+            )
 
         if wallet.balance < amount:
             raise InsufficientFundsError(
@@ -235,6 +348,8 @@ class LedgerService:
     ) -> LedgerTransaction:
         if amount <= Decimal("0.00"):
             raise ValueError("Refund amount must be strictly positive.")
+
+        wallet = await cls._lock_wallet(session, wallet)
 
         wallet_id = wallet.id
 
@@ -334,6 +449,8 @@ class LedgerService:
     ) -> LedgerTransaction:
         if target_balance < Decimal("0.00"):
             raise ValueError("Target balance cannot be negative.")
+
+        wallet = await cls._lock_wallet(session, wallet)
 
         balance_before = wallet.balance
         balance_after = target_balance

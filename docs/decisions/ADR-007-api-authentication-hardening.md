@@ -142,3 +142,24 @@ Payment gateway webhooks represent server-to-server callbacks from external fina
 ### Negative / Trade-offs
 - **Token Lifecycle Management:** Frontend clients (Telegram Mini App, web dashboards) must store Bearer tokens and handle token refresh or re-authentication upon expiry.
 - **Database Overhead per Request:** Validating user/tenant activity and `token_version` requires database lookups during request dispatch (acceptable for current scale; Redis caching will be added in Phase 6).
+
+---
+
+## Security Hardening Addendum — Phase 5.1.1: JWT Signing Key Configuration
+
+**Date:** 2026-09-15
+
+Phase 5.1 originally allowed `AuthTokenService` to fall back to a repository-known development signing key when `JWT_SECRET_KEY` was absent outside production. That behavior is prohibited because any known fallback signing key can be used to forge otherwise valid Bearer tokens.
+
+The authentication boundary now enforces the following signing-key rules:
+
+1. `JWT_SECRET_KEY` is the only environment/configuration key accepted for JWT signing. Generic `SECRET_KEY` is not a JWT fallback.
+2. No repository-known default JWT signing key exists.
+3. `AuthTokenService()` fails closed when `JWT_SECRET_KEY` is missing or blank.
+4. JWT signing keys must be at least 32 bytes to meet the minimum key size expected for HS256 use.
+5. Explicit `secret_key=` injection remains available for isolated tests and controlled dependency injection, but production dependencies construct the service from `JWT_SECRET_KEY`.
+6. Rotating `JWT_SECRET_KEY` invalidates tokens signed by the previous key because signature verification fails under the new key.
+7. User-facing malformed-token errors do not include raw PyJWT exception text, and signing keys are never included in token errors or logs.
+8. `.env.example` intentionally leaves `JWT_SECRET_KEY` blank and documents generation using a cryptographically secure random source. Copying the example without configuring a real key therefore fails closed instead of creating a predictable deployment secret.
+
+These rules extend the Identity Law and Zero Secret Leakage law established by this ADR and the project constitution.

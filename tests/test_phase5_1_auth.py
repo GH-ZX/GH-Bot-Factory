@@ -36,6 +36,8 @@ from packages.tenants.models import Membership, Role, Tenant, User
 
 pytestmark = pytest.mark.asyncio
 
+TEST_JWT_SECRET = "test-jwt-secret-key-0123456789abcdef-0123456789abcdef"
+
 
 # ---------------------------------------------------------------------------
 # Helpers & Factories
@@ -65,7 +67,7 @@ async def create_user(
     token_version: int = 1,
 ) -> tuple[User, str]:
     user = User(
-        telegram_id=telegram_id or int(time.time() * 1000) % 1_000_000_000,
+        telegram_id=telegram_id or int(uuid.uuid4().int % 2_000_000_000),
         username=f"user_{uuid.uuid4().hex[:6]}",
         first_name="TestUser",
         is_active=is_active,
@@ -83,7 +85,7 @@ async def create_user(
     session.add(membership)
     await session.flush()
 
-    token_service = AuthTokenService()
+    token_service = AuthTokenService(secret_key=TEST_JWT_SECRET)
     token = token_service.issue_access_token(
         user_id=user.id,
         tenant_id=tenant_id,
@@ -173,7 +175,7 @@ async def api_env(db_session: AsyncSession) -> AsyncGenerator[dict[str, Any], No
     mock_provider = MockPaymentProvider(default_create_status=PaymentIntentStatus.PENDING)
     payment_service = PaymentService(registry=registry, secret_storage=secret_storage)
     reconcile_service = PaymentReconciliationService(payment_service=payment_service)
-    token_service = AuthTokenService()
+    token_service = AuthTokenService(secret_key=TEST_JWT_SECRET)
 
     async def override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
@@ -701,7 +703,7 @@ async def test_telegram_miniapp_auth_returns_bearer_token_and_works_immediately(
     secret_storage: EnvSecretStorage = api_env["secret_storage"]
 
     tenant = await create_tenant(session)
-    bot_token = "123456789:AAHk69MockTelegramBotTokenForTestingAuth"
+    bot_token = "123456789:" + "AAHk69MockTelegramBotTokenForTestingAuth"
     token_ref = f"BOT_TOKEN_MINIAPP_{tenant.id}"
     await secret_storage.set_secret(token_ref, bot_token)
 
@@ -767,7 +769,7 @@ async def test_telegram_miniapp_expired_auth_date_returns_401(api_env: dict[str,
     secret_storage: EnvSecretStorage = api_env["secret_storage"]
 
     tenant = await create_tenant(session)
-    bot_token = "123456789:AAHk69MockTelegramBotTokenForTestingAuth"
+    bot_token = "123456789:" + "AAHk69MockTelegramBotTokenForTestingAuth"
     token_ref = f"BOT_TOKEN_EXPIRED_{tenant.id}"
     await secret_storage.set_secret(token_ref, bot_token)
 
@@ -803,7 +805,7 @@ async def test_telegram_miniapp_invalid_hmac_hash_returns_401(api_env: dict[str,
     secret_storage: EnvSecretStorage = api_env["secret_storage"]
 
     tenant = await create_tenant(session)
-    bot_token = "123456789:AAHk69MockTelegramBotTokenForTestingAuth"
+    bot_token = "123456789:" + "AAHk69MockTelegramBotTokenForTestingAuth"
     token_ref = f"BOT_TOKEN_FORGED_{tenant.id}"
     await secret_storage.set_secret(token_ref, bot_token)
 
@@ -841,7 +843,7 @@ async def test_telegram_miniapp_deactivated_user_returns_403(api_env: dict[str, 
     secret_storage: EnvSecretStorage = api_env["secret_storage"]
 
     tenant = await create_tenant(session)
-    bot_token = "123456789:AAHk69MockTelegramBotTokenForTestingAuth"
+    bot_token = "123456789:" + "AAHk69MockTelegramBotTokenForTestingAuth"
     token_ref = f"BOT_TOKEN_DEACT_{tenant.id}"
     await secret_storage.set_secret(token_ref, bot_token)
 

@@ -47,11 +47,13 @@ stateDiagram-v2
 
 The `FulfillmentWorker` combines durable database tracking with asynchronous in-memory dispatch:
 
-1. **Transactional Outbox / Durable Storage:** Every `enqueue()` call persists a `FulfillmentJobRecord` in `fulfillment_jobs` with status `QUEUED`.
-2. **Crash Recovery (`recover_pending_jobs`):** When the application restarts after an unexpected termination or server crash, the worker scans for any abandoned jobs in `QUEUED` or `RUNNING` status and safely restores them into the active queue.
-3. **Exponential Backoff:** If an attempt fails retryably, delay is calculated as:
+1. **Transactional Durable Storage:** Generic `enqueue()` persists a `FulfillmentJobRecord` before scheduling it in memory. Storefront checkout goes further: it stages the `QUEUED` record in the exact database transaction that records the paid order and wallet debit, so a committed debit always has durable fulfillment work.
+2. **Database Polling:** The dedicated worker polls `QUEUED` rows and schedules records not already queued in that process. Discovery does not grant execution ownership.
+3. **Atomic Claim:** `claim_job()` performs a conditional database update from `QUEUED` to `RUNNING`. If multiple workers discover the same record, only one claim succeeds.
+4. **Crash Recovery (`recover_pending_jobs`):** When the worker restarts after an unexpected termination or server crash, it restores abandoned `QUEUED` or `RUNNING` records to the active queue.
+5. **Exponential Backoff:** If an attempt fails retryably, delay is calculated as:
    $$\text{Delay} = \text{base\_backoff} \times 2^{\text{attempt} - 1}$$
-4. **Dead Letter Queue:** If attempts exceed `max_retries` (default: 3), the job record is marked `DEAD_LETTER` with error details for operator inspection.
+6. **Dead Letter Queue:** If attempts exceed `max_retries` (default: 3), the job record is marked `DEAD_LETTER` with error details for operator inspection.
 
 ---
 
@@ -88,3 +90,36 @@ For real-world distributed architectures where workers restart or network partit
 - Supports querying upstream providers by `external_order_id` OR `idempotency_key` (recovering orders when the app crashed before recording the external order ID).
 - If upstream completed: sets attempt `SUCCEEDED` and order `FULFILLED`.
 - If upstream failed: sets attempt `FAILED`, order `FAILED`, and triggers automatic ledger refund.
+
+---
+
+## 6. Operator Operations Center & Manual Recovery
+
+Phase 7.1 adds a tenant-scoped operational surface for durable fulfillment jobs and attempts.
+
+### Visibility
+
+STAFF and above can inspect:
+- durable job state (`QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`, `DEAD_LETTER`),
+- the current failure classification and last error,
+- manual requeue count and last requeue time,
+- ordered `FulfillmentAttempt` history with attempt number, provider, external order ID, status, and error classification.
+
+### Safe manual requeue
+
+A manual requeue is **not** a generic replay. Before `DEAD_LETTER -> QUEUED`, the server proves all of the following:
+
+1. The job belongs to the authenticated tenant and is currently `DEAD_LETTER`.
+2. The order is still `PAID` or `PROCESSING`.
+3. No canonical `ORDER_FULFILLMENT_REFUND` ledger transaction exists for the order.
+4. No latest attempt has an `external_order_id`.
+5. The latest attempt is not `UNKNOWN`, `PROCESSING`, or `SUCCEEDED`.
+6. A `FAILED` attempt must have been explicitly marked retryable.
+
+The transition uses a conditional database `UPDATE ... WHERE status = 'DEAD_LETTER'`. Therefore two admins clicking requeue concurrently cannot both win.
+
+### Targeted reconciliation
+
+ADMIN/OWNER may reconcile a single order. `ReconciliationService.reconcile_order()` only examines the requested tenant/order and never scans unrelated orders. Ambiguous `UNKNOWN` outcomes are intentionally routed here instead of being replayed.
+
+All manual requeues and reconciliation runs are written to `AuditLog`.

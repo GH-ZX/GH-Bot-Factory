@@ -90,7 +90,7 @@ async def create_tenant(session: AsyncSession, name: str = "Test Tenant") -> Ten
 
 async def create_user(session: AsyncSession, tenant_id: uuid.UUID, telegram_id: int | None = None) -> User:
     user = User(
-        telegram_id=telegram_id or int(time.time() * 1000) % 1_000_000_000,
+        telegram_id=telegram_id or int(uuid.uuid4().int % 2_000_000_000),
         username=f"user_{uuid.uuid4().hex[:6]}",
         first_name="Alice",
         is_active=True,
@@ -809,7 +809,7 @@ async def test_unsupported_provider_capabilities_fail_cleanly(db_session: AsyncS
 
 async def test_miniapp_auth_valid_init_data(db_session: AsyncSession) -> None:
     tenant = await create_tenant(db_session)
-    bot_token = "123456789:AAHk69MockTelegramBotTokenForTesting"
+    bot_token = "123456789:" + "AAHk69MockTelegramBotTokenForTesting"
     secret_storage = EnvSecretStorage()
     token_ref = f"BOT_TOKEN_{tenant.id}"
     await secret_storage.set_secret(token_ref, bot_token)

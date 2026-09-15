@@ -381,3 +381,603 @@ This document serves as the historical record of all user prompts, architectural
    - **106/106 tests passing (100% pass rate)** across entire repository test suite (86 prior tests + 20 new Phase 5.1 authentication & authorization tests in [`tests/test_phase5_1_auth.py`](file:///home/it/Coding/gh-bot-factory/tests/test_phase5_1_auth.py)).
    - Zero lint errors under `ruff check .`.
 
+
+---
+
+## Milestone 11: Phase 5.1.1 — JWT Signing Secret Hardening
+
+- **Date:** 2026-09-15
+- **Status:** Implemented; canonical full-suite/lint verification pending an environment with all declared dev dependencies installed
+- **Base Commit:** `1a955ba`
+
+### User Continuation Prompt
+
+> "ما عندي، لنستكمل العمل سوياً من هنا"
+
+The user then provided the current `gh-bot-factory.zip` repository snapshot so work could continue directly from the Phase 5.1 security review checkpoint.
+
+### Implementation
+
+1. Removed the repository-known `DEFAULT_JWT_SECRET` fallback from `packages/core/auth.py`.
+2. Removed `SECRET_KEY` as an alternate JWT signing-key source; JWT signing now requires `JWT_SECRET_KEY` unless a key is explicitly injected for tests/dependency injection.
+3. Added `JWT_SECRET_KEY` to `packages/core/config.py` and removed the hard-coded generic `SECRET_KEY` development default.
+4. Enforced a minimum JWT signing-key size of 32 UTF-8 bytes.
+5. Changed malformed JWT failures to return a generic message without exposing raw PyJWT exception details.
+6. Updated `.env.example` so no usable signing key is committed and documented secure key generation.
+7. Updated Phase 5/5.1 API test fixtures to inject explicit test-only signing keys without weakening production behavior.
+8. Added `tests/test_phase5_1_1_jwt_secret.py` covering missing-key failure, legacy `SECRET_KEY` fallback rejection, environment-based configuration, short-key rejection, key rotation invalidation, and secret non-disclosure in repr/errors/logs.
+
+### Verification Performed in This Session
+
+- New JWT hardening tests: **6/6 passed**.
+- Regression suite excluding the two modules that require unavailable `aiogram`: **104/104 passed** using an external temporary `aiosqlite` compatibility harness; the harness was not added to the repository.
+- `python -m compileall -q apps packages tests`: passed.
+- `git diff --check`: passed.
+- Repository scan confirmed removal of `DEFAULT_JWT_SECRET`, the previous insecure development JWT literal, and the previous hard-coded generic development secret.
+- Full canonical test/lint gate remains to be run in the project development environment because this execution environment does not contain `aiogram`, `aiosqlite`, or `ruff` and cannot download packages.
+
+---
+
+## Milestone 12: Phase 6.0-6.1 — Telegram Mini App Storefront & Durable Fulfillment Boundary
+
+- **Date:** 2026-09-15
+- **Status:** Implemented in working tree; canonical full-suite/lint verification pending an environment with all declared dev dependencies installed
+- **Base Working Tree:** Phase 5.1.1 JWT secret hardening changes, based on commit `1a955ba`
+
+### User Continuation Prompt
+
+> "تمام، لنكمل هلق"
+
+The immediately preceding discussion established that work would continue from the repository snapshot in this execution environment rather than through direct SSH access to the user's Ubuntu workstation. Local network addresses, SSH session output, and credentials were intentionally not persisted in repository documentation.
+
+### Implementation
+
+1. Added a Telegram Mini App storefront under `apps/miniapp/static/`, served by FastAPI at `/miniapp/` with no npm/build dependency.
+2. Reused the existing server-side Telegram Mini App authentication boundary: the browser forwards raw `Telegram.WebApp.initData` plus non-secret `bot_id` routing metadata to `/api/v1/auth/telegram-miniapp`, then holds the returned short-lived Bearer JWT in memory only.
+3. Added `apps/api/v1/storefront.py` with authenticated tenant-scoped endpoints for bootstrap, catalog, customer orders, individual order retrieval, and wallet checkout.
+4. Added explicit public allow-lists for tenant settings and product metadata so arbitrary internal JSON fields are not exposed to the browser.
+5. Enforced customer order ownership through `AuthenticatedPrincipal`; customer callers cannot list or fetch another user's orders, while privileged roles remain tenant-scoped.
+6. Extended `CheckoutService` to support multi-line carts while continuing to load authoritative `ProductVariant.price` records from the authenticated tenant. Mixed-currency carts are rejected.
+7. Checkout request models reject extra fields, preventing client injection of price, amount, tenant identity, or user identity.
+8. Added database-backed checkout idempotency fields to `Order`: `checkout_idempotency_key` and `checkout_request_hash`.
+9. Added database uniqueness on `(tenant_id, user_id, checkout_idempotency_key)`. Checkout inserts the idempotent order boundary before wallet debit; concurrent retries resolve at the unique constraint before a second debit can occur.
+10. Added reversible Alembic migration `c41d6f8e2a10_add_order_checkout_idempotency.py`.
+11. Added `tests/test_phase6_miniapp_storefront.py` covering static Mini App delivery, tenant-scoped catalog/bootstrap data, public metadata filtering, authoritative price enforcement, duplicate checkout replay, changed-payload idempotency rejection, customer ownership, cross-tenant checkout rejection, and inactive membership rejection.
+12. Fixed pre-existing millisecond-based Telegram test ID generation in Phase 5 tests by using random UUID-derived IDs, removing an unrelated flaky uniqueness collision discovered during regression testing.
+13. Added ADR-008 and `docs/architecture/miniapp-storefront.md`; updated the README, living roadmap, Agent Map, and local repository skill guide.
+14. Removed supplier execution from the storefront HTTP critical path. Checkout now stages `FulfillmentJobRecord(status=QUEUED)` before committing the paid order and wallet debit, so durable job persistence and the financial commit succeed or roll back together.
+15. Extended `FulfillmentWorker` with database polling of queued durable records while preserving `claim_job()` as the atomic single-executor boundary. In-process duplicate scheduling is suppressed by tracked job IDs.
+16. Added `apps/worker/main.py` as the dedicated fulfillment worker process with startup recovery and graceful signal handling.
+17. Updated `docker-compose.yml` to run the API on port 8010 (preserving the host port-8000 invariant) and start a separate worker service using the project package dependencies.
+18. Added an explicit fail-closed regression test proving that a durable job insert failure rolls back the pending wallet debit and does not leave a committed order.
+
+### Verification Performed in This Session
+
+- New storefront and checkout tests passed.
+- Regression suite excluding only the two modules requiring unavailable `aiogram`: **113/113 passed** using an external temporary `aiosqlite` compatibility harness; the harness was not added to the repository.
+- The excluded Aiogram modules contain **8 tests** total. They were not represented as passing because the actual `aiogram` package is unavailable in this execution environment.
+- Alembic migration verification passed through **upgrade -> downgrade -> upgrade** to revision `c41d6f8e2a10` on a temporary SQLite database.
+- `python -m compileall -q apps packages tests migrations`: passed.
+- `node --check apps/miniapp/static/app.js`: passed.
+- `git diff --check`: passed.
+- Canonical `ruff check .` remains pending because Ruff is unavailable in this environment.
+- No commit or push was created because the repository constitution requires the complete test suite and Ruff gate before milestone version-control actions.
+
+### Architectural Follow-up
+
+The next storefront milestone is Phase 6.2 payment top-up UX: expose a customer-safe payment-intent creation/status flow to the Mini App, hand off to configured gateway providers, and reconcile the wallet after verified settlement without allowing client-supplied authoritative payment amounts.
+
+
+---
+
+## Milestone 13: Phase 6.1.1 — Telegram Live Launch Integration
+
+- **Date:** 2026-09-15
+- **Status:** Implemented in working tree; canonical Aiogram/Ruff verification pending the full development dependency environment
+- **Base Working Tree:** Phase 6.0-6.1 implementation based on commit `1a955ba`
+
+### User Continuation Prompt
+
+> "اوكي لنبدا الخطوة التالية"
+
+### Implementation
+
+1. Added `MINIAPP_PUBLIC_URL` and `MINIAPP_MENU_TEXT` configuration. Telegram launch URLs are built server-side and require HTTPS.
+2. Added `packages/telegram/launch.py` to construct per-bot Mini App URLs, replace any preconfigured `bot_id`, reject URL credentials, and configure Telegram's persistent Web App menu button.
+3. Updated `/start` and `/menu` handlers to expose an `Open Store` Web App button in private chats while preserving the legacy callback catalog flow when the Mini App is not configured or the chat is not private.
+4. Added `apps/bot_runtime/main.py` as the executable multi-bot polling process, including shutdown handling and early Mini App URL validation.
+5. Updated Docker Compose with Postgres/Redis health checks, an explicit migration service, ordered API/worker/bot-runtime startup, and `.env` injection.
+6. Added `scripts/register_telegram_bot.py` for idempotent bot/tenant registration without storing or printing Telegram bot tokens.
+7. Fixed Telegram identity continuity across multiple bots owned by one tenant: middleware now records `User.telegram_id`, Mini App authentication reuses an existing tenant-scoped binding from another bot, and legacy users are backfilled rather than duplicated.
+8. Added `docs/runbooks/telegram-miniapp-live.md` with the public HTTPS, secret, registration, startup and smoke-test procedure.
+9. Added `tests/test_phase6_2_telegram_launch.py` covering HTTPS URL construction, authoritative bot-id replacement, and cross-bot user identity reuse.
+
+### Verification Performed in This Session
+
+- Phase 5.1/5.1.1 + Phase 6 launch/storefront targeted regression: **38/38 passed**.
+- Repository test suite excluding the two Aiogram-importing modules: **116/116 passed** using the external temporary `aiosqlite` compatibility harness; the harness was not added to the repository.
+- `python -m compileall -q apps packages scripts tests`: passed.
+- `git diff --check`: passed.
+- `docker-compose.yml` parsed successfully as YAML and contains the expected six services.
+- Docker itself is not installed in this execution environment, so Compose containers could not be launched here.
+- `aiogram` and `ruff` remain unavailable and cannot be downloaded from this environment, so the canonical full-suite/lint gate remains pending.
+
+---
+
+## Milestone 14: Phase 6.2 — Wallet Top-up UX
+
+- **Date:** 2026-09-15
+- **Status:** Implemented in working tree; canonical Aiogram/Ruff verification pending the full development dependency environment
+- **Base Working Tree:** Phase 6.1.1 Telegram Live Launch Integration
+
+### User Continuation Prompt
+
+> "تمام أكمل"
+
+### Implementation
+
+1. Extended `PaymentIntent` with explicit `PaymentIntentPurpose` (`ORDER_PAYMENT`, `WALLET_TOPUP`), nullable `order_id` for top-ups, and persisted provider `checkout_url`.
+2. Added migration `d84f2a6c9b31_add_wallet_topup_payment_intents.py`; downgrade is reversible before financial top-up data exists and fails closed rather than deleting financial provenance after top-ups exist.
+3. Added `PaymentService.create_wallet_topup_intent()` with tenant provider policy validation, two-decimal amount normalization, configured currency enforcement, provider-adapter verification, and idempotency binding to user/provider/amount/currency.
+4. Hardened provider checkout handoff: only HTTPS URLs with a hostname and no URL credentials are persisted or returned.
+5. Added synchronous provider-success settlement support and allowed the legal `CREATED -> SUCCEEDED` state transition.
+6. Reused `LedgerService.settle_payment()` and `uq_settlement_idempotency` so webhook, reconciliation, immediate-success, and user-return races converge on exactly one wallet credit.
+7. Added authenticated storefront top-up options/create/get/reconcile APIs. Tenant and user identity come only from `AuthenticatedPrincipal`.
+8. Added Mini App Add Funds UX with provider/currency selection, tenant limits, quick amounts, HTTPS gateway handoff, visibility-aware reconciliation polling, pending-intent recovery from opaque local storage ID, and wallet refresh after settlement.
+9. Blocked `WALLET_TOPUP` from the legacy order-payment refund path because a wallet-funding refund requires a dedicated gateway-refund plus wallet-reversal design.
+10. Added architecture documentation and ADR-009.
+
+### Verification Performed in This Session
+
+- New Phase 6.2 wallet top-up tests: **7/7 passed**.
+- Repository suite excluding only the two modules that import unavailable `aiogram`: **123/123 passed** using the external temporary `aiosqlite` compatibility harness; the harness was not added to the repository.
+- Alembic **upgrade -> downgrade -> upgrade** passed through revision `d84f2a6c9b31` on a temporary SQLite database with no top-up financial data.
+- `python -m compileall -q packages apps migrations tests`: passed.
+- `node --check apps/miniapp/static/app.js`: passed.
+- `git diff --check`: passed.
+- `ruff` and the Aiogram-dependent tests remain unavailable in this execution environment; no milestone commit/push was created.
+
+### Follow-up
+
+Phase 6.2 is provider-agnostic. A real production gateway adapter remains required before live customer wallet funding can be enabled; only the deterministic mock provider is registered by default in this repository snapshot.
+
+
+---
+
+## Milestone 15: Phase 6.2.1-6.2.2 — Telegram Stars Native Payments & Durable Wallet Reversal
+
+- **Date:** 2026-09-15
+- **Status:** Implemented in working tree; canonical Aiogram/Ruff verification pending the full development dependency environment
+- **Base Working Tree:** Phase 6.2 Wallet Top-up UX
+
+### User Continuation Prompts
+
+> "كمل"
+
+The prior turn had described a Telegram Stars implementation that was not present in the actual Phase 6.2 artifact. This milestone therefore implemented and verified both the native Stars adapter and its refund/reversal hardening in the real working tree rather than relying on the earlier narrative state.
+
+### Implementation
+
+1. Added `TelegramStarsProvider` and registered `telegram_stars` in the provider registry. Bot credentials are resolved through existing secret references rather than persisted as plaintext payment-provider credentials.
+2. Added native `createInvoiceLink` top-up checkout in `XTR` and Mini App `Telegram.WebApp.openInvoice` integration.
+3. Added Telegram payment routing for authoritative `pre_checkout_query` validation and `successful_payment` settlement. The invoice/browser callback is UX-only and never credits the wallet.
+4. Added server-enforced whole-Star amount policy, HTTPS Terms acceptance/version metadata, `/terms`, and `/paysupport`.
+5. Added `WalletTopUpReversal` and migration `e91a3b7c4d52_add_wallet_topup_reversal_saga.py`.
+6. Added a database-enforced `WALLET_TOPUP_REVERSAL` debit and reserve-before-refund ordering so external refund success cannot leave the same internal value spendable.
+7. Added `WalletTopUpReversalWorker` with atomic claim, startup recovery, exponential retry for ambiguous provider failures, and fail-closed `MANUAL_REVIEW` for deterministic integrity failures.
+8. Added safe Telegram Stars refund retry semantics around `refundStarPayment`, including idempotent treatment of an already-refunded charge.
+9. Added tenant-scoped staff endpoints to request and inspect wallet top-up reversals.
+10. Added `scripts/configure_telegram_stars.py` to configure a tenant using its existing bot secret reference.
+11. Fixed the actual Telegram tenant middleware so the same Telegram customer identity is reused across sibling bots within a tenant.
+12. Added ADR-010 and updated wallet-top-up architecture, roadmap, README, Agent Map, and repository skill guidance.
+
+### Verification Performed in This Session
+
+- Focused Telegram Stars/reversal tests: **6/6 passed**.
+- Combined new Phase 6.2 tests: **11/11 passed**.
+- Repository suite excluding only the two modules importing unavailable `aiogram`: **129/129 passed** using an external temporary `aiosqlite` compatibility harness; the harness is outside the repository and is not packaged.
+- Alembic full clean upgrade to `e91a3b7c4d52 (head)`: passed.
+- Alembic `e91a3b7c4d52 -> d84f2a6c9b31 -> e91a3b7c4d52`: passed.
+- `python -m compileall -q apps packages scripts tests migrations`: passed.
+- `node --check apps/miniapp/static/app.js`: passed.
+- `git diff --check`: passed.
+- `ruff` and the Aiogram-dependent tests remain unavailable in this execution environment. No milestone commit or push was created.
+
+### Follow-up
+
+Phase 6.2.3 should reconcile external Telegram Stars reversals/chargebacks that can occur independently of the application-originated refund saga. It must correlate provider-side outbound transactions to original payments without duplicating intentional reversals already represented by `WalletTopUpReversal`.
+
+
+---
+
+## Milestone 16: Phase 6.2.3 — External Telegram Stars Reversal Reconciliation
+
+- **Date:** 2026-09-15
+- **Status:** Implemented in working tree; canonical Aiogram/Ruff verification pending
+- **Continuation:** The user's "كمل" directive was carried through the remaining external-chargeback hardening immediately after the native Stars/refund saga implementation.
+
+### Implementation
+
+1. Added `PaymentReconciliationEvent` as a durable provider-observation audit/deduplication boundary and migration `f02c4d8e5a63`.
+2. Added periodic Telegram Stars transaction scanning through the authenticated provider adapter.
+3. Restricted automated handling to outbound user invoice transactions and correlated each candidate to tenant, charge ID, optional GH-Bot-Factory invoice payload, amount/currency, and Telegram user identity.
+4. Recognized intentional local reversals and used provider observation to close the provider-success/local-commit crash window without making a duplicate refund call.
+5. Converted provider-originated reversals with no local saga into exact-once local `WALLET_TOPUP_REVERSAL` debits.
+6. When reversed value had already been spent, froze the affected wallet, persisted manual-review state, and blocked further normal debits.
+7. Added staff reconciliation-event audit listing and external-reversal local resolution after funds are restored; successful resolution clears the event and reactivates the wallet when no other unresolved reversal remains.
+8. Added database uniqueness for top-up-reversal `PaymentTransaction` records.
+9. Extended Stars configuration with chargeback reconciliation enablement and bounded transaction scan pages.
+10. Added ADR-011 and updated architecture, roadmap, README, Agent Map, and repository skill guidance.
+
+### Verification
+
+- Stars/refund/chargeback focused tests: **10/10 passed**.
+- Full repository suite excluding only the two modules importing unavailable `aiogram`: **133/133 passed**.
+- Alembic clean upgrade through `f02c4d8e5a63 (head)`: passed.
+- Alembic `f02c4d8e5a63 -> e91a3b7c4d52 -> f02c4d8e5a63`: passed.
+- `python -m compileall -q apps packages scripts tests migrations`: passed.
+- `node --check apps/miniapp/static/app.js`: passed.
+- `git diff --check`: passed.
+- Canonical Aiogram tests and Ruff remain pending because those dependencies are unavailable in this execution environment; no commit/push was created.
+
+
+---
+
+## Milestone 17: Phase 6.3 — Storefront Product UX
+
+- **Date:** 2026-09-15
+- **Status:** Implemented in working tree; canonical Aiogram/Ruff verification pending
+
+### User Continuation Prompt
+
+> "كمل"
+
+### Implementation
+
+1. Added tenant-scoped catalog search across product title/description and active variant title/SKU.
+2. Added availability filtering and deterministic bounded offset pagination with total/next-page metadata.
+3. Upgraded the Mini App catalog with debounced search, stock filter, load-more behavior, stock/SKU/delivery details, and sold-out guards.
+4. Added a persistent in-session variant cache so cart lines survive search/category/page changes while checkout remains server-authoritative.
+5. Added skeleton loading, contextual empty/error states, offline banner/recovery, and stale-request suppression.
+6. Added catalog search/pagination/availability tests including cross-tenant isolation.
+
+### Verification
+
+- Storefront tests: **11/11 passed**.
+- Repository suite excluding only unavailable-Aiogram modules: **135/135 passed**.
+- `compileall`, JavaScript syntax check, and `git diff --check`: passed.
+- Ruff and Aiogram-dependent tests remain unavailable in this execution environment.
+
+### Follow-up
+
+Phase 7 can now introduce an authenticated administrative client over the same tenant/RBAC boundaries, beginning with tenant/catalog management and operational order/payment views.
+
+
+## Milestone 18 — Phase 7.0 Admin Client
+
+**User prompt (verbatim):**
+
+> كمل
+
+**Implementation note:** Continued from the latest actual Phase 6.3 artifact into the first Admin Client vertical slice. Added tenant-scoped Telegram-authenticated admin operations with STAFF read access, MANAGER+ catalog mutations, AuditLog writes, orders/fulfillment visibility, and reconciliation review.
+
+---
+
+## Milestone 19 — Phase 7.1 Fulfillment Operations Center
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> اسطورة، كمل
+
+### Implementation
+
+1. Added tenant-scoped fulfillment job listing/detail endpoints and Admin UI navigation for dead-letter operations.
+2. Added durable `failure_classification`, `manual_requeue_count`, `last_requeued_at`, and `last_requeued_by` metadata with migration `19c7d8e41f02`.
+3. Added fail-closed manual requeue evaluation that blocks terminal/refunded orders, UNKNOWN outcomes, recorded upstream order IDs, active/succeeded attempts, and permanent provider failures.
+4. Made the `DEAD_LETTER -> QUEUED` operator transition an atomic conditional database update to prevent duplicate concurrent requeue actions.
+5. Restricted high-risk fulfillment mutations to ADMIN/OWNER while keeping operational visibility at STAFF+.
+6. Added targeted single-order reconciliation so an operator action cannot scan/mutate unrelated tenant orders.
+7. Added AuditLog records for requeue and reconciliation actions.
+8. Added Admin UI controls that expose the server safety decision and disable unsafe requeues.
+9. Added ADR-013 and updated fulfillment architecture/roadmap/README.
+
+### Verification
+
+- Phase 7.0 + 7.1 focused tests: **12/12 passed**.
+- Full repository suite excluding only the two modules importing unavailable `aiogram`: **147/147 passed**.
+- Alembic clean upgrade through `19c7d8e41f02 (head)`: passed on temporary SQLite.
+- `python -m compileall -q apps packages tests`: passed.
+- `node --check apps/admin/static/app.js`: passed.
+- `git diff --check`: passed.
+- Ruff and the two Aiogram-dependent tests remain unavailable in this execution environment; no milestone commit/push was created.
+
+
+---
+
+## Milestone 20 — Phase 7.2 Provider Configuration & Secret Boundary
+
+**Date:** 2026-09-15
+
+**Continuation directive:** The user asked to keep progressing after Phase 7.1 ("اسطورة، كمل"). Phase 7.2 was completed as the next Admin operations slice.
+
+### Implementation
+
+1. Added supplier-provider, credential-reference, product mapping, health-check, and payment-provider Admin operations with tenant scoping and ADMIN/OWNER mutation RBAC.
+2. Kept all secret values outside persistence and browser responses; APIs expose only safe configured-status and reject secret-like metadata/settings.
+3. Connected `ProviderCredential` references to runtime provider configuration and made fulfillment reconciliation use the same resolved-secret boundary as initial execution.
+4. Hardened Telegram Stars provider configuration against endpoint redirection/token exfiltration and enforced native XTR payment invariants.
+5. Added provider configuration UI, AuditLog coverage, and ADR-014.
+
+### Verification
+
+- Phase 7.2 focused: **7/7 passed**.
+- Phase 7 Admin/provider/fulfillment focused: **19/19 passed**.
+- Full runnable suite excluding unavailable-Aiogram modules: **154/154 passed**.
+- Clean Alembic upgrade: `19c7d8e41f02 (head)`.
+- Python compileall, Admin JavaScript syntax, and `git diff --check`: passed.
+- Ruff and Aiogram-dependent tests remain unavailable in this execution environment.
+
+
+---
+
+## Milestone 21 — Phase 7.3 Members & RBAC
+
+**Date:** 2026-09-15
+
+**Continuation:** Phase 7.3 was implemented in the same uninterrupted continuation requested by the user after Phase 7.1/7.2.
+
+### Implementation
+
+1. Added tenant-scoped member directory APIs and Admin UI.
+2. Added strict OWNER/ADMIN hierarchy rules, last-active-owner protection, and tenant-level write serialization.
+3. Membership deactivation remains immediately authoritative because every protected request checks the live membership.
+4. Added validated permission mutation and audit logging.
+5. Added ADR-015.
+
+### Verification
+
+- Phase 7.3 tests: **5/5 passed**.
+- Phase 7.0–7.3 focused suite: **24/24 passed**.
+- Full runnable suite excluding unavailable-Aiogram modules: **159/159 passed**.
+- Compileall, Admin JavaScript syntax, and `git diff --check`: passed.
+- Migration head remains `19c7d8e41f02`.
+
+
+---
+
+## Milestone 22 — Phase 7.4 Financial Resolution Center
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> تمام انتقل للمرحلة التالية، وأهم شي بدنا نوصل لنتيجة مثالية ويعتمد عليها
+
+### Implementation
+
+1. Converted scattered manual-review state into a durable, tenant-scoped financial case workflow while preserving ledger/provider evidence as authoritative.
+2. Added worker-driven case creation, upgrade backfill, assignment, optimistic concurrency, strict RBAC, audited resolution actions, and the Admin Financial Center.
+3. Restricted wallet unfreeze to an OWNER-only, evidence-driven false-positive path with competing-case/reversal guards.
+4. Added ADR-016 and migration `5a6e7f8b9c10`.
+
+### Verification
+
+- Phase 7.4: **7/7 passed**.
+- Full runnable suite: **166/166 passed**.
+- Clean migration upgrade/downgrade/upgrade and populated backfill migration test: passed.
+- Compileall, Admin JavaScript syntax, and `git diff --check`: passed.
+- Ruff and Aiogram-dependent tests remain unavailable in this execution environment.
+
+
+---
+
+## Milestone 23 — Phase 7.5 Analytics & Audit + Agent Traceability
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> تمام، كمل، وملاحظة صغيرة: التقدم سجله، وثق بشكل عام قصدي، ما بعرف اذا عم توثق، بدي بالنهاية اوصل لشي قابل للصيانة وقابل للتتبع بسهولة من الإيجنت
+
+### Intent
+
+Continue the roadmap, but treat maintainability, progress recording, and agent-to-agent traceability as first-class product requirements rather than incidental documentation.
+
+### Implementation
+
+1. Added a read-only `packages.analytics` domain boundary and tenant-scoped 7/30/90-day analytics endpoint.
+2. Kept all monetary metrics currency-separated and distinguished order value, wallet funding/reversals, and current wallet liability.
+3. Added fulfillment/provider performance, operational exposure, and daily activity reporting.
+4. Added a tenant-scoped Audit Explorer API/UI with pagination/filtering, actor context, and recursive secret-key redaction defense.
+5. Added time-window query indexes in migration `7b8c9d0e1f23`.
+6. Added `docs/operations/CURRENT_STATE.md`, `CHANGELOG_AGENT.md`, and `AGENT_HANDOFF.md` as the resumable institutional-memory layer.
+7. Updated `AGENTS.md` and the repository skill so documentation is a mandatory milestone gate, with explicit separation between canonical, runnable, and blocked verification results.
+8. Added ADR-017 documenting analytics semantics, currency boundaries, and audit exposure/redaction decisions.
+
+### Verification
+
+Phase 7.5 focused tests: **3/3 passed**. Phase 7.4 + Admin + Phase 7.5 focused tests: **17/17 passed**. Full runnable suite excluding only the two modules importing unavailable `aiogram`: **169/169 passed**. Alembic clean upgrade and `7b8c9d0e1f23 -> 5a6e7f8b9c10 -> 7b8c9d0e1f23` cycle passed. Python compileall, Admin/MiniApp JavaScript syntax, and `git diff --check` passed. Ruff and the two Aiogram-direct modules remain blocked by missing dependencies in this execution environment.
+
+---
+
+## Milestone 24 — Phase 7.9 Production Readiness: CI & PostgreSQL Concurrency
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> قبل ما نبدأ فيز 8، شو عندك امور ممكن تكون كويسة لو اشتغلناها؟
+
+The agreed direction was to insert a production-readiness hardening phase before Phase 8, prioritizing CI, PostgreSQL concurrency verification, production containers, observability, disaster recovery, security hardening, staging E2E/failure injection, and operational runbooks.
+
+**User continuation (verbatim):**
+
+> اوكي Go ahead
+
+### Implementation
+
+1. Added executable GitHub Actions fast and PostgreSQL quality gates instead of relying on manually remembered commands.
+2. Added a canonical `make verify` / `scripts/verify.sh` release entry point and handoff-consistency validation.
+3. Added real-PostgreSQL concurrency tests for wallet, checkout, settlement, durable job claiming, and wallet creation invariants.
+4. Serialized every wallet balance mutation with a PostgreSQL row lock before authoritative balance arithmetic.
+5. Added migration `8a9b0c1d2e34` to remove inherited payment-index drift so `alembic check` can be a meaningful release gate.
+6. Added CI dependency/runtime evidence and Dependabot configuration.
+7. Added ADR-018 plus verification/concurrency architecture documentation.
+
+### Verification
+
+Static checks available in this build container passed: Python compileall, Admin/Mini App JavaScript syntax, and `git diff --check`. The container does not provide PostgreSQL/Docker or the declared `ruff`, `aiosqlite`, `asyncpg`, and `aiogram` dependencies, so the new canonical `make verify` gate is intentionally recorded as pending external execution rather than falsely reported green.
+
+## 2026-09-15 — Phase 7.9 completion directive
+
+**User prompt (verbatim):** `كمل الكل لتوصل لفيز 8`
+
+**Intent:** Complete all production-readiness work before entering Phase 8, while preserving the project's maintainability and agent traceability requirements.
+
+**Implementation summary:** Completed the Phase 7.9.3–7.9.8 working-tree implementation: immutable production containers, observability/health, backup/restore/DR tooling, security/abuse controls, staging E2E/failure injection, operational runbooks, and release evidence generation. Phase 8 is now the next implementation checkpoint, but production cutover remains gated on canonical external verification in GitHub Actions or the target Ubuntu environment. A dependency-limited final regression also passed **173 tests** with **7 PostgreSQL tests deselected**, excluding the two direct-`aiogram` modules; its temporary `aiosqlite` compatibility shim was outside the repository.
+
+---
+
+## Milestone 26 — Phase 8.0 + 8.4 Durable Bot Provisioning & Runtime Reconciliation
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> اوكي Go ahead ، اشتغل الريكومندد
+
+### Intent
+
+Follow the recommended Phase 8 entry path: implement durable bot provisioning and runtime desired-state reconciliation together, while preserving the Phase 7.9 production-readiness gates and agent traceability protocol.
+
+### Implementation
+
+1. Added durable `BotProvisioningJob` state, idempotency fingerprint, retry/lease/crash-recovery model and migration `9e1f2a3b4c56`.
+2. Added Admin Bot Factory APIs/UI for fleet inventory, provisioning queue, retry/cancel, and enable/disable with tenant RBAC.
+3. Enforced secret-reference-only provisioning and secret/token-shaped config rejection; Admin responses do not expose secret references.
+4. Added worker-side secret resolution plus Telegram `getMe` identity verification, expected-username assertion, global `telegram_bot_id` ownership, same-tenant convergence, transient retry, and identity-race retry.
+5. Added bot runtime reconciliation for create/update/disable/deleted/crashed polling state without process restart.
+6. Added provisioning/fleet metrics, Prometheus alerts, ADR-020, architecture documentation, and canonical Aiogram runtime-reconciliation test coverage.
+
+### Verification
+
+- Phase 8 focused tests: **9/9 passed**.
+- Fast runnable regression excluding PostgreSQL and direct-Aiogram modules: **182/182 passed**.
+- SQLite migration upgrade/downgrade/re-upgrade and `alembic check`: passed.
+- Compileall, Admin JavaScript syntax, and `git diff --check`: passed.
+- Real PostgreSQL, Ruff, direct-Aiogram, Docker/staging, and full release-gate evidence remain externally pending.
+
+
+---
+
+## Milestone 27 — Phase 8.1 + 8.5A Templates, Branding & First Trial UX
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> اوكي اشتغل على ما تريده ، الخطوات التالية، لكن ضع بالحسبان اني اريد ان اجرب بقا بعد هالخطوة، خذ وقتك واعمل بافضل شكل
+
+### Intent
+
+Continue with the recommended Bot Factory work, but prioritize a coherent, high-quality vertical slice that the user can exercise live immediately after delivery instead of expanding into several partially testable Phase 8 subprojects.
+
+### Implementation
+
+1. Added versioned server-owned Bot Factory templates and allow-listed config/branding validation.
+2. Added a guided Admin provisioning wizard and safe post-provision bot configuration editing.
+3. Bound Mini App API sessions to the verified bot via a signed `bot_id` JWT claim and applied bot-specific storefront branding.
+4. Added bot-specific Telegram menu/store-button wording and hardened custom HTML rendering boundaries.
+5. Added privileged Telegram `/admin` entry, `/whoami`, `ADMIN_PUBLIC_URL`, first-tenant OWNER/control-bot bootstrap tooling, and an end-to-end live trial runbook.
+6. Added ADR-021 and architecture documentation. No database migration was required.
+
+### Verification
+
+- Phase 8.1 focused tests: **3/3 passed**.
+- Full dependency-limited runnable regression: **186/186 passed** with 8 PostgreSQL tests deselected and the two direct-Aiogram modules excluded.
+- Final static/security/handoff checks are required again before packaging.
+
+---
+
+## Milestone 28 — Phase 8.2A + 8.5B Easy Start / Web Installer
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> عندي فكرة، الاصدار ابدأ شغل بالاصدار القادم ويكون تشغيله اسهل بكتير وبواجهة ويب وهيك رجاءا
+
+### Intent
+
+Turn the next trial build from an operator-heavy Docker/env/bootstrap workflow into a substantially simpler self-hosted product experience centered on a first-run web UI.
+
+### Implementation
+
+1. Added one-command `scripts/easy_start.py` startup/configuration with generated local secrets and safe PostgreSQL URL encoding.
+2. Added a one-time web installer and durable singleton install lock.
+3. Added Telegram token verification plus first Tenant/OWNER/control-bot creation directly from the web workflow.
+4. Added a shared encrypted local SecretStorage backend so vault-backed bot credentials become visible to API/worker/runtime without container recreation.
+5. Added per-tenant public Mini App/Admin URLs and updated Telegram launch/runtime resolution to use them with environment fallbacks.
+6. Added ADR-022, Easy Start runbook, handoff/current-state/changelog updates.
+
+### Verification
+
+- Easy Start focused tests: **4/4 passed**.
+- Full dependency-limited runnable regression: **191/191 passed**, with 8 PostgreSQL tests deselected and the two direct-Aiogram modules excluded.
+- SQLite migration upgrade/downgrade/re-upgrade to `a1b2c3d4e5f6` and `alembic check` passed.
+
+
+## Milestone 29 — Phase 8.2A.1 Easy Start Startup Hotfix
+
+**Date:** 2026-09-15
+
+**Observed live-trial failure:**
+
+> `ConnectionResetError: [Errno 104] Connection reset by peer` while `easy_start.py` was waiting on `/health/ready` after Docker reported API/worker/bot-runtime as started.
+
+### Intent
+
+Make first-run startup resilient to the normal brief TCP reset/refusal window that can occur while Uvicorn is still initializing, without masking permanent readiness failures.
+
+### Implementation
+
+1. Extended the Easy Start readiness retry boundary to treat transient `OSError` network failures as retryable until the existing timeout.
+2. Added a regression test that forces a connection reset on the first readiness attempt and a successful response on the next attempt.
+3. Kept the existing timeout/failure message so persistent API startup failures still fail loudly and direct the operator to Docker logs.
+
+### Verification
+
+- Python compile: passed.
+- Isolated transient-reset recovery test: passed.
+- No migration/schema changes.
+
+---
+
+## Milestone 30 — Phase 8 Bot Factory Release Candidate Completion
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> حلوو ، البوت استجاب وكلو تمام ، خلينا نكمل شغل هلق وننهي عمل كلشي، وين وصلنا ؟
+
+### Intent
+
+Treat the successful Ubuntu/Telegram live response as proof that the Easy Start path works, then finish the remaining high-value Bot Factory operational work required for a maintainable release candidate rather than expanding into unrelated SaaS scope.
+
+### Implementation
+
+1. Added credential lifecycle metadata and identity-safe verify/rotate operations backed by the encrypted vault.
+2. Added Redis-backed fleet observation and Admin operations for observed runtime status and restart intent.
+3. Added server-authoritative fleet capacity controls.
+4. Added STABLE/CANARY runtime ownership and candidate-image rollout overlay.
+5. Added a server-authoritative launch readiness checklist spanning Telegram, runtime, HTTPS URLs, catalog, fulfillment routing, and payment readiness.
+6. Added migration `b2c3d4e5f6a7`, ADR-023, fleet architecture/runbook documentation, and synchronized agent handoff state.
+
+### Verification
+
+- Focused and full runnable suites are rerun at packaging time.
+- SQLite migration upgrade and `alembic check` passed during implementation.
+- Real PostgreSQL concurrency, Ruff, direct-Aiogram runtime tests, and complete release-gate evidence remain external requirements.

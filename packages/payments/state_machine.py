@@ -22,6 +22,7 @@ LEGAL_PAYMENT_TRANSITIONS: dict[PaymentIntentStatus, set[PaymentIntentStatus]] =
     PaymentIntentStatus.CREATED: {
         PaymentIntentStatus.PENDING,
         PaymentIntentStatus.PROCESSING,
+        PaymentIntentStatus.SUCCEEDED,
         PaymentIntentStatus.CANCELLED,
         PaymentIntentStatus.EXPIRED,
         PaymentIntentStatus.FAILED,

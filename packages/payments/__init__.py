@@ -16,6 +16,7 @@ from packages.payments.exceptions import (
 from packages.payments.models import (
     LedgerTransaction,
     PaymentIntent,
+    PaymentIntentPurpose,
     PaymentProviderConfig,
     PaymentTransaction,
     PaymentTransactionType,
@@ -67,6 +68,7 @@ __all__ = [
     "PaymentError",
     "PaymentIntegrityError",
     "PaymentIntent",
+    "PaymentIntentPurpose",
     "PaymentIntentNotFoundError",
     "PaymentIntentStatus",
     "PaymentProvider",

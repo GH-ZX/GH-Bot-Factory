@@ -69,7 +69,7 @@ async def get_current_principal(
     except TokenMalformedError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Malformed or invalid token: {exc}",
+            detail=str(exc),
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
@@ -112,10 +112,24 @@ async def get_current_principal(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not a member of the specified tenant.",
         )
+    if not membership.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User membership in the specified tenant is inactive.",
+        )
 
     roles = frozenset([membership.role])
     permissions = frozenset(membership.permissions or [])
     source = AuthSource(payload.get("source", AuthSource.SESSION.value))
+    bot_id_raw = payload.get("bot_id")
+    try:
+        bot_id = uuid.UUID(str(bot_id_raw)) if bot_id_raw else None
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token contains an invalid bot_id claim.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
 
     return AuthenticatedPrincipal(
         user_id=user.id,
@@ -124,6 +138,7 @@ async def get_current_principal(
         roles=roles,
         permissions=permissions,
         token_version=getattr(user, "token_version", 1),
+        bot_id=bot_id,
     )
 
 
@@ -151,5 +166,29 @@ async def require_staff_or_above(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Operation requires privileged staff, admin, or owner role.",
+        )
+    return principal
+
+
+async def require_manager_or_above(
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> AuthenticatedPrincipal:
+    """Enforces catalog/configuration mutation privileges for MANAGER, ADMIN, or OWNER."""
+    if not principal.roles.intersection({Role.MANAGER, Role.ADMIN, Role.OWNER}):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation requires manager, admin, or owner role.",
+        )
+    return principal
+
+
+async def require_admin_or_owner(
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> AuthenticatedPrincipal:
+    """Enforces high-risk operational mutation privileges for ADMIN or OWNER."""
+    if not principal.roles.intersection({Role.ADMIN, Role.OWNER}):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation requires admin or owner role.",
         )
     return principal

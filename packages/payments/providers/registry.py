@@ -12,6 +12,7 @@ from packages.payments.exceptions import (
 from packages.payments.models import PaymentProviderConfig
 from packages.payments.providers.interface import PaymentProvider
 from packages.payments.providers.mock import MockPaymentProvider
+from packages.payments.providers.telegram_stars import TelegramStarsProvider
 from packages.telegram.secrets import SecretStorage
 
 logger = logging.getLogger("payments.registry")
@@ -30,11 +31,16 @@ class PaymentProviderRegistry:
         self._factories: dict[str, ProviderFactory] = {}
         self._instance_overrides: dict[tuple[uuid.UUID, str], PaymentProvider] = {}
         self._cached_instances: dict[tuple[uuid.UUID, str], PaymentProvider] = {}
-        # Register default mock provider factory
+        # Register built-in provider factories.
         self.register_factory("mock", self._create_mock_provider)
+        self.register_factory("telegram_stars", self._create_telegram_stars_provider)
 
     def register_factory(self, provider_name: str, factory: ProviderFactory) -> None:
         self._factories[provider_name.lower()] = factory
+
+    def registered_provider_names(self) -> tuple[str, ...]:
+        """Return configured adapter names without exposing registry internals."""
+        return tuple(sorted(self._factories))
 
     def register_instance(
         self,
@@ -48,6 +54,14 @@ class PaymentProviderRegistry:
     def unregister_instance(self, tenant_id: uuid.UUID, provider_name: str) -> None:
         self._instance_overrides.pop((tenant_id, provider_name.lower()), None)
         self._cached_instances.pop((tenant_id, provider_name.lower()), None)
+
+    def invalidate_cached_instance(self, tenant_id: uuid.UUID, provider_name: str) -> None:
+        """Drop only a factory-created cached adapter after config changes."""
+        self._cached_instances.pop((tenant_id, provider_name.lower()), None)
+
+    def has_provider(self, tenant_id: uuid.UUID, provider_name: str) -> bool:
+        normalized_name = provider_name.lower()
+        return (tenant_id, normalized_name) in self._instance_overrides or normalized_name in self._factories
 
     async def get_provider(
         self,
@@ -108,6 +122,18 @@ class PaymentProviderRegistry:
         return instance
 
     @staticmethod
+    def _create_telegram_stars_provider(
+        settings: dict[str, Any],
+        credentials: str,
+        webhook_secret: str | None,
+    ) -> TelegramStarsProvider:
+        return TelegramStarsProvider(
+            settings=settings,
+            bot_token=credentials,
+            webhook_secret=webhook_secret,
+        )
+
+    @staticmethod
     def _create_mock_provider(
         settings: dict[str, Any],
         credentials: str,
@@ -120,6 +146,7 @@ class PaymentProviderRegistry:
             supports_webhooks=settings.get("supports_webhooks", True),
             supports_refunds=settings.get("supports_refunds", True),
             supports_partial_refunds=settings.get("supports_partial_refunds", True),
+            supports_safe_refund_retries=settings.get("supports_safe_refund_retries", True),
         )
 
 

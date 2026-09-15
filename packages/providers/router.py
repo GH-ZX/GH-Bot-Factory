@@ -21,6 +21,7 @@ from packages.providers.models import (
     ProviderHealthStatus,
     ProviderProductMapping,
 )
+from packages.telegram.secrets import SecretNotFoundError, SecretStorage, get_default_secret_storage
 
 logger = logging.getLogger("providers.router")
 
@@ -31,9 +32,11 @@ class ProviderRouter:
     def __init__(
         self,
         registry: ProviderClientRegistry | None = None,
+        secret_storage: SecretStorage | None = None,
         max_consecutive_failures: int = 3,
     ) -> None:
         self.registry = registry or provider_registry
+        self.secret_storage = secret_storage or get_default_secret_storage()
         self.max_consecutive_failures = max_consecutive_failures
 
     async def get_eligible_mappings(
@@ -53,7 +56,9 @@ class ProviderRouter:
                 ProviderProductMapping.is_enabled.is_(True),
                 Provider.is_enabled.is_(True),
             )
-            .options(selectinload(ProviderProductMapping.provider))
+            .options(
+                selectinload(ProviderProductMapping.provider).selectinload(Provider.credentials)
+            )
         )
 
         if variant_id:
@@ -97,6 +102,28 @@ class ProviderRouter:
         )
         return eligible
 
+    async def build_provider_config(self, provider_record: Provider) -> dict[str, Any]:
+        """Resolve credential references into an ephemeral runtime config.
+
+        Secret values are never written back to database models or logs. Adapters can
+        read them from config["credentials"] keyed by credential_type.
+        """
+        config = dict(provider_record.metadata_json or {})
+        credentials: dict[str, str] = {}
+        for credential in provider_record.credentials:
+            try:
+                credentials[credential.credential_type] = await self.secret_storage.get_secret(
+                    credential.secret_ref
+                )
+            except SecretNotFoundError as exc:
+                from packages.providers.exceptions import ProviderAuthenticationError
+
+                raise ProviderAuthenticationError(
+                    f"Credential reference for provider '{provider_record.name}' is not available."
+                ) from exc
+        config["credentials"] = credentials
+        return config
+
     async def route_and_execute_order(
         self,
         session: AsyncSession,
@@ -137,7 +164,7 @@ class ProviderRouter:
             client: BaseProviderClient = self.registry.get_client(
                 provider_type=provider_record.provider_type,
                 provider_name=provider_record.name,
-                config=provider_record.metadata_json,
+                config=await self.build_provider_config(provider_record),
                 provider_id=str(provider_record.id),
             )
 

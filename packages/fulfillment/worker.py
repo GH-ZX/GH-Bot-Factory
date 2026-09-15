@@ -46,6 +46,7 @@ class FulfillmentWorker:
         self.base_backoff_seconds = base_backoff_seconds
         self.queue: asyncio.Queue[FulfillmentJob] = asyncio.Queue()
         self.dead_letter_queue: list[FulfillmentJob] = []
+        self._queued_job_ids: set[uuid.UUID] = set()
         self._worker_task: asyncio.Task | None = None
         self._is_running = False
 
@@ -80,46 +81,106 @@ class FulfillmentWorker:
         persist_db: bool = True,
         job_id: uuid.UUID | None = None,
     ) -> FulfillmentJob:
-        if job_id is None and persist_db:
-            job_id = uuid.uuid4()
+        """Persist a durable job first, then schedule its in-memory wake-up."""
+        if persist_db:
+            try:
+                async with self.session_factory() as session:
+                    order = await session.get(Order, order_id)
+                    if order is None:
+                        raise ValueError(f"Order {order_id} does not exist.")
+                    job = await self.stage_durable_job(
+                        session=session,
+                        order=order,
+                        recipient=recipient,
+                        attempt_number=attempt_number,
+                        metadata=metadata,
+                        job_id=job_id,
+                    )
+                    await session.commit()
+            except Exception as exc:
+                logger.error(
+                    "Failed to persist durable FulfillmentJobRecord for order %s. "
+                    "Aborting enqueue to fail closed.",
+                    order_id,
+                )
+                raise RuntimeError(
+                    f"Durable enqueue failed for order {order_id}: database persistence failed"
+                ) from exc
+        else:
+            job = FulfillmentJob(
+                order_id=order_id,
+                recipient=recipient,
+                attempt_number=attempt_number,
+                metadata=metadata,
+                job_id=job_id,
+            )
 
+        await self.enqueue_persisted_job(job)
+        logger.info("Enqueued fulfillment job for order %s (attempt=%d)", order_id, attempt_number)
+        return job
+
+    @staticmethod
+    async def stage_durable_job(
+        session: AsyncSession,
+        order: Order,
+        recipient: str,
+        attempt_number: int = 1,
+        metadata: dict[str, Any] | None = None,
+        job_id: uuid.UUID | None = None,
+    ) -> FulfillmentJob:
+        """Stage a durable job inside the caller's existing database transaction."""
+        job_id = job_id or uuid.uuid4()
         job = FulfillmentJob(
-            order_id=order_id,
+            order_id=order.id,
             recipient=recipient,
             attempt_number=attempt_number,
             metadata=metadata,
             job_id=job_id,
         )
-
-        if persist_db:
-            try:
-                async with self.session_factory() as session:
-                    order = await session.get(Order, order_id)
-                    tenant_id = order.tenant_id if order else uuid.uuid4()
-                    record = FulfillmentJobRecord(
-                        id=job_id,
-                        tenant_id=tenant_id,
-                        order_id=order_id,
-                        recipient=recipient,
-                        attempt_number=attempt_number,
-                        status=FulfillmentJobStatus.QUEUED,
-                        payload=metadata or {},
-                    )
-                    session.add(record)
-                    await session.commit()
-            except Exception as e:
-                logger.error(
-                    "Failed to persist durable FulfillmentJobRecord for order %s: %s. Aborting enqueue to fail closed.",
-                    order_id,
-                    e,
-                )
-                raise RuntimeError(
-                    f"Durable enqueue failed for order {order_id}: database persistence failed ({e})"
-                ) from e
-
-        await self.queue.put(job)
-        logger.info("Enqueued fulfillment job for order %s (attempt=%d)", order_id, attempt_number)
+        session.add(
+            FulfillmentJobRecord(
+                id=job_id,
+                tenant_id=order.tenant_id,
+                order_id=order.id,
+                recipient=recipient,
+                attempt_number=attempt_number,
+                status=FulfillmentJobStatus.QUEUED,
+                payload=metadata or {},
+            )
+        )
+        await session.flush()
         return job
+
+    async def enqueue_persisted_job(self, job: FulfillmentJob) -> bool:
+        """Schedule a previously persisted job without creating another database record."""
+        if job.job_id is not None:
+            if job.job_id in self._queued_job_ids:
+                return False
+            self._queued_job_ids.add(job.job_id)
+        await self.queue.put(job)
+        return True
+
+    async def poll_queued_jobs(self, session: AsyncSession, limit: int = 100) -> int:
+        """Load durable QUEUED jobs that are not already scheduled in this process."""
+        stmt = (
+            select(FulfillmentJobRecord)
+            .where(FulfillmentJobRecord.status == FulfillmentJobStatus.QUEUED)
+            .order_by(FulfillmentJobRecord.created_at.asc())
+            .limit(limit)
+        )
+        records = list((await session.execute(stmt)).scalars().all())
+        scheduled = 0
+        for rec in records:
+            job = FulfillmentJob(
+                order_id=rec.order_id,
+                recipient=rec.recipient,
+                attempt_number=rec.attempt_number,
+                metadata=rec.payload,
+                job_id=rec.id,
+            )
+            if await self.enqueue_persisted_job(job):
+                scheduled += 1
+        return scheduled
 
     async def recover_pending_jobs(self, session: AsyncSession) -> int:
         """Recovers any abandoned QUEUED or RUNNING jobs from database after process restart/crash."""
@@ -138,8 +199,8 @@ class FulfillmentWorker:
                 metadata=rec.payload,
                 job_id=rec.id,
             )
-            await self.queue.put(job)
-            count += 1
+            if await self.enqueue_persisted_job(job):
+                count += 1
         await session.commit()
         logger.info("Recovered %d abandoned fulfillment jobs from durable storage.", count)
         return count
@@ -164,10 +225,17 @@ class FulfillmentWorker:
             try:
                 job = await asyncio.wait_for(self.queue.get(), timeout=1.0)
             except TimeoutError:
+                try:
+                    async with self.session_factory() as session:
+                        await self.poll_queued_jobs(session)
+                except Exception:
+                    logger.exception("Failed to poll durable fulfillment jobs")
                 continue
             except asyncio.CancelledError:
                 break
 
+            if job.job_id is not None:
+                self._queued_job_ids.discard(job.job_id)
             await self._process_job(job)
             self.queue.task_done()
 
@@ -228,6 +296,7 @@ class FulfillmentWorker:
                             rec.status = FulfillmentJobStatus.QUEUED
                             rec.attempt_number = job.attempt_number + 1
                             rec.last_error = str(prov_err)
+                            rec.failure_classification = type(prov_err).__name__
                             await session.commit()
 
                     await asyncio.sleep(backoff)
@@ -251,6 +320,7 @@ class FulfillmentWorker:
                         if rec:
                             rec.status = FulfillmentJobStatus.DEAD_LETTER
                             rec.last_error = str(prov_err)
+                            rec.failure_classification = type(prov_err).__name__
                             await session.commit()
                     self.dead_letter_queue.append(job)
                 return None
@@ -262,6 +332,7 @@ class FulfillmentWorker:
                     if rec:
                         rec.status = FulfillmentJobStatus.DEAD_LETTER
                         rec.last_error = str(e)
+                        rec.failure_classification = type(e).__name__
                         await session.commit()
                 self.dead_letter_queue.append(job)
                 return None
@@ -271,6 +342,8 @@ class FulfillmentWorker:
         if self.queue.empty():
             return None
         job = await self.queue.get()
+        if job.job_id is not None:
+            self._queued_job_ids.discard(job.job_id)
         res = await self._process_job(job)
         self.queue.task_done()
         return res

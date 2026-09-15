@@ -17,7 +17,7 @@ from packages.payments.exceptions import (
     MiniAppSignatureInvalidError,
 )
 from packages.telegram.miniapp import TelegramMiniAppAuthService
-from packages.telegram.secrets import EnvSecretStorage, SecretStorage
+from packages.telegram.secrets import SecretStorage, get_default_secret_storage
 from packages.tenants.models import Membership, Role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -39,7 +39,7 @@ class TelegramMiniAppAuthResponse(BaseModel):
 
 
 def get_secret_storage() -> SecretStorage:
-    return EnvSecretStorage()
+    return get_default_secret_storage()
 
 
 @router.post(
@@ -87,6 +87,7 @@ async def authenticate_telegram_miniapp(
             source=AuthSource.TELEGRAM_MINIAPP,
             token_version=token_version,
             expires_in_seconds=3600,
+            extra_claims={"bot_id": str(req.bot_id)},
         )
 
         return TelegramMiniAppAuthResponse(

@@ -1,0 +1,18 @@
+services:
+  api:
+    read_only: false
+    volumes:
+      - .:/app
+    command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8010", "--reload"]
+  worker:
+    read_only: false
+    volumes:
+      - .:/app
+  bot-runtime:
+    read_only: false
+    volumes:
+      - .:/app
+  migrate:
+    read_only: false
+    volumes:
+      - .:/app

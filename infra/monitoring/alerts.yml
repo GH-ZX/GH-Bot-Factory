@@ -1,0 +1,31 @@
+groups:
+  - name: gh-bot-factory
+    rules:
+      - alert: GhBotFactoryApiErrors
+        expr: sum(rate(ghbf_http_requests_total{status=~"5.."}[5m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GH Bot Factory API is returning elevated 5xx responses"
+      - alert: GhBotFactoryHighLatency
+        expr: (sum(rate(ghbf_http_request_duration_seconds_sum[5m])) / clamp_min(sum(rate(ghbf_http_requests_total[5m])), 0.001)) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GH Bot Factory average API latency exceeds 2 seconds"
+      - alert: GhBotFactoryProvisioningFailures
+        expr: ghbf_bot_provisioning_jobs{status="FAILED"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "One or more bot provisioning jobs are in FAILED state"
+      - alert: GhBotFactoryProvisioningBacklog
+        expr: sum(ghbf_bot_provisioning_jobs{status=~"PENDING|RETRY"}) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Bot provisioning backlog is growing"

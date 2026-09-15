@@ -40,6 +40,13 @@ class FulfillmentAttempt(Base, UUIDMixin, TimestampMixin):
         UniqueConstraint("idempotency_key", name="uq_fulfillment_idempotency_key"),
         Index("ix_fulfillment_tenant_order", "tenant_id", "order_id", "status"),
         Index("ix_fulfillment_external_order", "provider_id", "external_order_id"),
+        Index(
+            "ix_fulfillment_tenant_started_provider_status",
+            "tenant_id",
+            "started_at",
+            "provider_id",
+            "status",
+        ),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -141,6 +148,23 @@ class FulfillmentJobRecord(Base, UUIDMixin, TimestampMixin):
     )
     payload: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict, nullable=False)
     last_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    failure_classification: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        index=True,
+    )
+    manual_requeue_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        server_default="0",
+    )
+    last_requeued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_requeued_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

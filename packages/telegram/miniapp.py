@@ -164,9 +164,28 @@ class TelegramMiniAppAuthService:
             if user is None:
                 raise MiniAppAuthError("Linked user record not found.")
         else:
-            # Check if User exists by telegram_id
-            user_stmt = select(User).where(User.telegram_id == telegram_user_id)
-            user = (await session.execute(user_stmt)).scalar_one_or_none()
+            # Reuse an existing tenant-scoped Telegram identity from another bot
+            # before falling back to the global telegram_id field. This keeps a
+            # customer on one domain User across multiple bots owned by a tenant.
+            sibling_binding_stmt = (
+                select(TenantTelegramUser)
+                .where(
+                    TenantTelegramUser.tenant_id == tenant_id,
+                    TenantTelegramUser.telegram_user_id == telegram_user_id,
+                )
+                .limit(1)
+            )
+            sibling_binding = (await session.execute(sibling_binding_stmt)).scalar_one_or_none()
+            user = (
+                await session.get(User, sibling_binding.user_id)
+                if sibling_binding is not None
+                else None
+            )
+
+            if user is None:
+                user_stmt = select(User).where(User.telegram_id == telegram_user_id)
+                user = (await session.execute(user_stmt)).scalar_one_or_none()
+
             if user is None:
                 user = User(
                     telegram_id=telegram_user_id,
@@ -177,8 +196,11 @@ class TelegramMiniAppAuthService:
                 )
                 session.add(user)
                 await session.flush()
+            elif user.telegram_id is None:
+                # Backfill identities provisioned by older Telegram middleware.
+                user.telegram_id = telegram_user_id
 
-            # Create binding
+            # Create the authoritative binding for the bot that launched this Mini App.
             binding = TenantTelegramUser(
                 tenant_id=tenant_id,
                 bot_id=bot_id,

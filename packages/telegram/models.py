@@ -1,11 +1,14 @@
 import uuid
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
 )
@@ -43,6 +46,13 @@ class Bot(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     username: Mapped[str | None] = mapped_column(String(100), index=True, nullable=True)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     token_secret_ref: Mapped[str] = mapped_column(String(255), nullable=False)
+    credential_status: Mapped[str] = mapped_column(String(32), default="CONFIGURED", nullable=False)
+    credential_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    credential_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    credential_rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    credential_last_error_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    runtime_revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    release_channel: Mapped[str] = mapped_column(String(16), default="STABLE", nullable=False)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     config: Mapped[dict[str, Any]] = mapped_column(
         JSON_TYPE,

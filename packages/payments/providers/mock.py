@@ -31,6 +31,7 @@ class MockPaymentProvider(PaymentProvider):
         supports_webhooks: bool = True,
         supports_refunds: bool = True,
         supports_partial_refunds: bool = True,
+        supports_safe_refund_retries: bool = True,
         simulate_network_error: bool = False,
         simulate_timeout: bool = False,
         simulate_lookup_timeout: bool = False,
@@ -43,6 +44,7 @@ class MockPaymentProvider(PaymentProvider):
         self.supports_webhooks = supports_webhooks
         self.supports_refunds = supports_refunds
         self.supports_partial_refunds = supports_partial_refunds
+        self.supports_safe_refund_retries = supports_safe_refund_retries
 
         # Simulation behavior flags
         self.simulate_network_error = simulate_network_error

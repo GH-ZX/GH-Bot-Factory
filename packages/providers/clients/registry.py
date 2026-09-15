@@ -26,6 +26,10 @@ class ProviderClientRegistry:
     def register_type(self, provider_type: str, factory: ProviderFactory) -> None:
         self._factories[provider_type.upper()] = factory
 
+    def registered_types(self) -> tuple[str, ...]:
+        """Return the supported provider adapter types without exposing registry internals."""
+        return tuple(sorted(self._factories))
+
     def register_singleton(self, provider_id_or_name: str, instance: BaseProviderClient) -> None:
         """Allows injecting pre-configured instances (e.g. for testing specific failure modes)."""
         self._singletons[provider_id_or_name] = instance

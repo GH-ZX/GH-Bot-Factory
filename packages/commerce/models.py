@@ -117,6 +117,13 @@ class Order(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_order_tenant_status", "tenant_id", "status"),
         Index("ix_order_tenant_user", "tenant_id", "user_id"),
+        Index("ix_order_tenant_created_status", "tenant_id", "created_at", "status"),
+        UniqueConstraint(
+            "tenant_id",
+            "user_id",
+            "checkout_idempotency_key",
+            name="uq_order_checkout_idempotency",
+        ),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -137,6 +144,10 @@ class Order(Base, UUIDMixin, TimestampMixin):
     )
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    checkout_idempotency_key: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
+    checkout_request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     items: Mapped[list["OrderItem"]] = relationship(
         "OrderItem",

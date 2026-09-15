@@ -178,3 +178,113 @@ async def test_runtime_manager_health_status(db_session: AsyncSession):
     assert health["active_bots_count"] == 0
     assert "running_bots" in health
     assert "startup_failures" in health
+
+@pytest.mark.asyncio
+async def test_runtime_reconciliation_converges_create_update_disable_without_process_restart(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from types import SimpleNamespace
+
+    import packages.telegram.runtime as runtime_module
+
+    tenant = Tenant(name="Runtime Reconcile", slug="runtime-reconcile")
+    db_session.add(tenant)
+    await db_session.flush()
+    bot = Bot(
+        tenant_id=tenant.id,
+        telegram_bot_id=777001,
+        username="runtime_reconcile_bot",
+        display_name="Runtime Bot",
+        token_secret_ref="RUNTIME_RECONCILE_TOKEN",
+        is_enabled=True,
+        config={"locale": "en"},
+    )
+    db_session.add(bot)
+    await db_session.commit()
+
+    session_factory = async_sessionmaker(
+        bind=db_session.bind,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    manager = BotRuntimeManager(
+        secret_storage=EnvSecretStorage({"RUNTIME_RECONCILE_TOKEN": "123:ABC"}),
+        session_factory=session_factory,
+    )
+    manager._is_running = True
+
+    async def fake_initialize(record: Bot):
+        instance = SimpleNamespace(
+            bot_record=record,
+            signature=runtime_module._bot_runtime_signature(record),
+            task=None,
+        )
+        manager.active_bots[record.id] = instance
+        return instance
+
+    async def fake_start(instance):
+        return None
+
+    async def fake_stop(bot_id):
+        manager.active_bots.pop(bot_id, None)
+
+    monkeypatch.setattr(manager, "initialize_bot", fake_initialize)
+    monkeypatch.setattr(manager, "_start_instance", fake_start)
+    monkeypatch.setattr(manager, "_stop_instance", fake_stop)
+
+    first = await manager.reconcile_once()
+    assert first["started"] == 1
+    assert bot.id in manager.active_bots
+
+    bot.display_name = "Runtime Bot v2"
+    await db_session.commit()
+    second = await manager.reconcile_once()
+    assert second["restarted"] == 1
+    assert second["failed"] == 0
+
+    bot.is_enabled = False
+    await db_session.commit()
+    third = await manager.reconcile_once()
+    assert third["stopped"] == 1
+    assert bot.id not in manager.active_bots
+
+
+@pytest.mark.asyncio
+async def test_runtime_only_loads_configured_release_channels(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from packages.core.config import settings
+
+    tenant = Tenant(name="Channel Tenant", slug="channel-tenant")
+    db_session.add(tenant)
+    await db_session.flush()
+    stable = Bot(
+        tenant_id=tenant.id,
+        telegram_bot_id=777101,
+        username="stable_bot",
+        display_name="Stable",
+        token_secret_ref="STABLE_TOKEN",
+        release_channel="STABLE",
+        is_enabled=True,
+    )
+    canary = Bot(
+        tenant_id=tenant.id,
+        telegram_bot_id=777102,
+        username="canary_bot",
+        display_name="Canary",
+        token_secret_ref="CANARY_TOKEN",
+        release_channel="CANARY",
+        is_enabled=True,
+    )
+    db_session.add_all([stable, canary])
+    await db_session.commit()
+
+    monkeypatch.setattr(settings, "bot_runtime_release_channels", "CANARY")
+    manager = BotRuntimeManager(
+        secret_storage=EnvSecretStorage({}),
+        session_factory=async_sessionmaker(bind=db_session.bind, class_=AsyncSession, expire_on_commit=False),
+    )
+    rows = await manager._load_desired_bots()
+    assert [row.id for row in rows] == [canary.id]

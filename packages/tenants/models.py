@@ -121,6 +121,7 @@ class AuditLog(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_audit_tenant_action", "tenant_id", "action"),
         Index("ix_audit_tenant_resource", "tenant_id", "resource_type", "resource_id"),
+        Index("ix_audit_tenant_created_at", "tenant_id", "created_at"),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(

@@ -1,38 +1,112 @@
-services:
-  api:
-    image: python:3.12-slim
-    working_dir: /app
-    volumes:
-      - .:/app
-    command: >
-      sh -c "pip install --no-cache-dir
-      fastapi uvicorn sqlalchemy asyncpg alembic redis pydantic-settings aiogram &&
-      uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload"
-    ports:
-      - "127.0.0.1:8000:8000"
-    environment:
-      PYTHONUNBUFFERED: "1"
-    depends_on:
-      - postgres
-      - redis
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      VCS_REF: ${GHBF_VCS_REF:-unknown}
+  image: gh-bot-factory:${GHBF_IMAGE_TAG:-local}
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONDONTWRITEBYTECODE: "1"
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  volumes:
+    - secret_store_data:/var/lib/ghbf/secret-store
+  restart: unless-stopped
+  stop_grace_period: 30s
+  security_opt:
+    - no-new-privileges:true
 
+services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_DB: gh_bot_factory
-      POSTGRES_USER: gh_bot_factory
-      POSTGRES_PASSWORD: CHANGE_ME
+      POSTGRES_DB: ${POSTGRES_DB:-gh_bot_factory}
+      POSTGRES_USER: ${POSTGRES_USER:-gh_bot_factory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     restart: unless-stopped
+    stop_grace_period: 60s
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
+
+  migrate:
+    <<: *app-common
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app-common
+    command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8010", "--proxy-headers", "--forwarded-allow-ips", "${FORWARDED_ALLOW_IPS:-127.0.0.1}"]
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8010}:8010"
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py", "api-deps"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app-common
+    command: ["python", "-m", "apps.worker.main"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py", "worker"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  bot-runtime:
+    <<: *app-common
+    command: ["python", "-m", "apps.bot_runtime.main"]
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py", "bot-runtime"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
   redis_data:
+  secret_store_data:

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <title>GH Bot Factory Admin</title>
+  <link rel="stylesheet" href="/admin/styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div id="fatal" class="fatal hidden"></div>
+  <div id="app" class="shell hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">GH</span><div><strong id="storeName">Admin</strong><small id="actorRole">Secure console</small></div></div>
+      <nav>
+        <button class="nav active" data-view="dashboard">Overview</button>
+        <button class="nav" data-view="bots">Bots</button>
+        <button class="nav" data-view="analytics">Analytics</button>
+        <button class="nav" data-view="products">Products</button>
+        <button class="nav" data-view="orders">Orders</button>
+        <button class="nav" data-view="fulfillment">Fulfillment</button>
+        <button class="nav" data-view="providers">Providers</button>
+        <button class="nav" data-view="members" data-admin-only>Members</button>
+        <button class="nav" data-view="finance">Financial Center</button>
+        <button class="nav" data-view="audit">Audit</button>
+        <button class="nav" data-view="reconciliation">Evidence</button>
+      </nav>
+      <div class="sidebar-foot"><span id="actorName">Telegram staff</span><small>Tenant-scoped access</small></div>
+    </aside>
+    <main>
+      <header><div><small class="eyebrow">OPERATIONS</small><h1 id="viewTitle">Overview</h1></div><button id="refreshButton" class="ghost">Refresh</button></header>
+
+      <section id="view-dashboard" class="view active">
+        <div id="metricGrid" class="metric-grid"></div>
+        <div class="panel"><div class="panel-head"><div><small class="eyebrow">SECURITY BOUNDARY</small><h2>Tenant operations</h2></div></div><p class="muted">All data and mutations are resolved from the authenticated principal. The client never submits a tenant ID.</p></div>
+      </section>
+
+      <section id="view-bots" class="view">
+        <div class="toolbar"><div></div><button id="newBot" class="primary" data-admin-only>Provision bot</button></div>
+        <div class="panel operation-note"><strong>Durable provisioning.</strong><span class="muted"> Paste the BotFather token into the wizard. It is moved into the encrypted server vault, never stored in the database, and never returned to the browser.</span></div>
+        <div class="panel-head"><div><small class="eyebrow">FLEET</small><h2>Tenant bots</h2></div></div>
+        <div id="botList" class="stack"></div>
+        <div class="panel-head mapping-head"><div><small class="eyebrow">PROVISIONING</small><h2>Recent jobs</h2></div></div>
+        <div id="botJobList" class="stack operation-stack"></div>
+      </section>
+
+      <section id="view-analytics" class="view">
+        <div class="toolbar analytics-toolbar"><select id="analyticsDays"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select><div></div></div>
+        <div class="panel operation-note"><strong>Currency-safe metrics.</strong><span class="muted"> Monetary values are never combined across currencies. Wallet liability is a point-in-time balance; order and funding metrics use the selected UTC period.</span></div>
+        <div id="analyticsMetricGrid" class="metric-grid"></div>
+        <div class="panel-head"><div><small class="eyebrow">FINANCIALS</small><h2>Currency buckets</h2></div></div>
+        <div id="analyticsFinancials" class="analytics-currency-grid"></div>
+        <div class="analytics-grid">
+          <div><div class="panel-head"><div><small class="eyebrow">SUPPLIERS</small><h2>Provider performance</h2></div></div><div id="providerAnalytics" class="stack"></div></div>
+          <div><div class="panel-head"><div><small class="eyebrow">TREND</small><h2>Daily activity</h2></div></div><div id="dailyAnalytics" class="stack compact-stack"></div></div>
+        </div>
+      </section>
+
+      <section id="view-products" class="view">
+        <div class="toolbar"><input id="productSearch" placeholder="Search products or SKU"><select id="productActive"><option value="">All states</option><option value="true">Active</option><option value="false">Inactive</option></select><button id="newProduct" class="primary">New product</button></div>
+        <div id="productList" class="stack"></div>
+      </section>
+
+      <section id="view-orders" class="view">
+        <div class="toolbar"><input id="orderSearch" placeholder="Search order number"><select id="orderStatus"><option value="">All statuses</option><option>PAID</option><option>PROCESSING</option><option>PARTIALLY_FULFILLED</option><option>FULFILLED</option><option>FAILED</option><option>REFUNDED</option></select></div>
+        <div id="orderList" class="stack"></div>
+      </section>
+
+      <section id="view-fulfillment" class="view">
+        <div class="toolbar"><input id="fulfillmentSearch" placeholder="Search order number"><select id="fulfillmentStatus"><option value="DEAD_LETTER">Dead letters</option><option value="">All statuses</option><option>QUEUED</option><option>RUNNING</option><option>COMPLETED</option><option>FAILED</option></select></div>
+        <div class="panel operation-note"><strong>Safety first.</strong><span class="muted"> Unknown provider outcomes and refunded orders cannot be replayed. Reconcile them before any retry.</span></div>
+        <div id="fulfillmentList" class="stack operation-stack"></div>
+      </section>
+
+      <section id="view-providers" class="view">
+        <div class="toolbar provider-toolbar"><div></div><button id="newMapping" class="ghost">New mapping</button><button id="newSupplier" class="primary">New supplier</button><button id="configurePayment" class="primary">Configure payment</button></div>
+        <div class="panel operation-note"><strong>Secret-safe configuration.</strong><span class="muted"> Store environment/vault references only. Secret values are never returned to this client.</span></div>
+        <div class="provider-grid">
+          <div><div class="panel-head"><div><small class="eyebrow">SUPPLIERS</small><h2>Fulfillment providers</h2></div></div><div id="supplierProviderList" class="stack"></div></div>
+          <div><div class="panel-head"><div><small class="eyebrow">PAYMENTS</small><h2>Payment providers</h2></div></div><div id="paymentProviderList" class="stack"></div></div>
+        </div>
+        <div class="panel-head mapping-head"><div><small class="eyebrow">ROUTING</small><h2>Product mappings</h2></div></div>
+        <div id="providerMappingList" class="stack"></div>
+      </section>
+
+      <section id="view-members" class="view">
+        <div class="toolbar"><input id="memberSearch" placeholder="Search member name, username, or email"><select id="memberRole"><option value="">All roles</option><option>OWNER</option><option>ADMIN</option><option>MANAGER</option><option>STAFF</option><option>CUSTOMER</option></select><select id="memberActive"><option value="">All states</option><option value="true">Active</option><option value="false">Inactive</option></select></div>
+        <div class="panel operation-note"><strong>Privilege boundary.</strong><span class="muted"> Admins cannot modify peer admins or owners. Only owners can grant ADMIN/OWNER, and the tenant must always retain one active owner.</span></div>
+        <div id="memberList" class="stack"></div>
+      </section>
+
+      <section id="view-finance" class="view">
+        <div class="toolbar"><input id="financeSearch" placeholder="Search case type or resolution"><select id="financeStatus"><option value="">Open + resolved</option><option value="OPEN" selected>Open</option><option value="IN_PROGRESS">In progress</option><option value="RESOLVED">Resolved</option></select><select id="financeSeverity"><option value="">All severities</option><option value="CRITICAL">Critical</option><option value="HIGH">High</option></select><select id="financeAssigned"><option value="">Any assignee</option><option value="mine">Assigned to me</option><option value="unassigned">Unassigned</option></select></div>
+        <div class="panel operation-note"><strong>Financial safety boundary.</strong><span class="muted"> Provider evidence and ledger entries are never deleted. Case actions are version-checked, tenant-scoped, and audited. Wallet reactivation after a false positive is OWNER-only.</span></div>
+        <div id="financialCaseList" class="stack operation-stack"></div>
+      </section>
+
+      <section id="view-audit" class="view">
+        <div class="toolbar audit-toolbar"><input id="auditSearch" placeholder="Search action, resource type, or resource ID"><input id="auditAction" placeholder="Exact action (optional)"><input id="auditResourceType" placeholder="Exact resource type (optional)"></div>
+        <div class="panel operation-note"><strong>Traceable operations.</strong><span class="muted"> Audit records are tenant-scoped, newest first, and defensively redact secret-like fields before leaving the API.</span></div>
+        <div id="auditList" class="stack"></div>
+        <div class="audit-footer"><small id="auditCount" class="muted"></small><button id="auditLoadMore" class="ghost hidden">Load more</button></div>
+      </section>
+
+      <section id="view-reconciliation" class="view">
+        <div class="toolbar"><select id="reviewFilter"><option value="true">Needs review</option><option value="">All events</option><option value="false">Resolved / informational</option></select></div>
+        <div id="reconciliationList" class="stack"></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="botProvisionDialog" class="wizard-dialog">
+    <form id="botProvisionForm" method="dialog">
+      <div class="dialog-head"><div><small class="eyebrow">BOT FACTORY</small><h2 id="botWizardTitle">Create a bot</h2></div><button type="button" class="icon" data-close-bot>×</button></div>
+      <input id="botWizardBotId" type="hidden">
+      <div class="wizard-steps" aria-label="Provisioning steps"><span data-step-dot="1">1 · Template</span><span data-step-dot="2">2 · Telegram</span><span data-step-dot="3">3 · Brand</span></div>
+
+      <section class="wizard-step" data-wizard-step="1">
+        <label>Store template<select id="botTemplate" required></select></label>
+        <div id="botTemplatePreview" class="template-preview"></div>
+        <p class="muted">Templates are versioned server-side. Future template updates never silently rewrite an existing bot.</p>
+      </section>
+
+      <section class="wizard-step hidden" data-wizard-step="2">
+        <div id="botCredentialFields">
+          <label>BotFather token<input id="botToken" type="password" autocomplete="off" placeholder="123456789:AA…"></label>
+          <p class="muted">The token is sent once to the API and stored only in the encrypted server vault. It is never returned to the browser.</p>
+          <label>Expected @username<input id="botExpectedUsername" maxlength="100" placeholder="my_store_bot"></label>
+          <p class="muted">The worker verifies this with Telegram <code>getMe</code> before the bot can become READY.</p>
+        </div>
+        <div id="botCredentialPreserved" class="panel operation-note hidden"><strong>Credential preserved.</strong><span class="muted"> Editing branding never exposes or replaces the existing Telegram credential.</span></div>
+      </section>
+
+      <section class="wizard-step hidden" data-wizard-step="3">
+        <div class="grid2"><label>Display name<input id="botDisplayName" required maxlength="100" placeholder="My Store"></label><label>Accent color<input id="botBrandAccent" type="color" value="#7c6cff"></label></div>
+        <label>Store tagline<input id="botStoreTagline" maxlength="240" placeholder="Fast checkout. Secure delivery."></label>
+        <label>Welcome message<textarea id="botWelcomeText" rows="3" maxlength="500" placeholder="Welcome to our store!"></textarea></label>
+        <div class="grid2"><label>Logo URL (HTTPS)<input id="botLogoUrl" type="url" maxlength="500" placeholder="https://example.com/logo.png"></label><label>Support @handle<input id="botSupportContact" maxlength="64" placeholder="@support"></label></div>
+        <div class="grid2"><label>Support URL (HTTPS)<input id="botSupportUrl" type="url" maxlength="500" placeholder="https://example.com/support"></label><label>Menu button text<input id="botMenuText" maxlength="64" value="Open Store"></label></div>
+        <div class="grid2"><label>Currency<input id="botCurrency" maxlength="3" value="USD"></label><label>Locale<input id="botLocale" maxlength="20" value="en"></label></div>
+        <fieldset class="module-picker"><legend>Enabled modules</legend><label class="check"><input id="botModuleCatalog" type="checkbox" checked> Catalog</label><label class="check"><input id="botModuleOrders" type="checkbox" checked> Orders</label><label class="check"><input id="botModuleAccount" type="checkbox" checked> Wallet & account</label></fieldset>
+        <label class="check"><input id="botEnabled" type="checkbox" checked> Runtime enabled after verification</label>
+        <div id="botBrandPreview" class="brand-preview"><div id="botBrandPreviewMark" class="brand-preview-mark">G</div><div><strong id="botBrandPreviewName">My Store</strong><span id="botBrandPreviewTagline">Your storefront preview</span></div></div>
+      </section>
+
+      <div class="dialog-actions wizard-actions"><button id="botWizardBack" type="button" class="ghost hidden">Back</button><div class="wizard-spacer"></div><button type="button" class="ghost" data-close-bot>Cancel</button><button id="botWizardNext" class="primary" type="button">Next</button><button id="botWizardSubmit" class="primary hidden" type="submit">Queue provisioning</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="botLaunchDialog">
+    <div class="dialog-head"><div><small class="eyebrow">LAUNCH READINESS</small><h2>Bot launch checklist</h2></div><button type="button" class="icon" data-close-bot-launch>×</button></div>
+    <div id="botLaunchSummary" class="panel operation-note"></div>
+    <div id="botLaunchChecks" class="stack operation-stack"></div>
+    <div class="dialog-actions"><button type="button" class="primary" data-close-bot-launch>Close</button></div>
+  </dialog>
+
+  <dialog id="botCredentialDialog">
+    <form id="botCredentialForm" method="dialog">
+      <div class="dialog-head"><div><small class="eyebrow">CREDENTIAL LIFECYCLE</small><h2>Rotate BotFather token</h2></div><button type="button" class="icon" data-close-bot-credential>×</button></div>
+      <input id="botCredentialBotId" type="hidden">
+      <div class="panel operation-note"><strong>Identity-safe rotation.</strong><span class="muted"> The server verifies the new token with Telegram and refuses it unless it belongs to this exact bot ID. The old credential remains untouched on failure.</span></div>
+      <label>New BotFather token<input id="botCredentialToken" type="password" autocomplete="off" required placeholder="123456789:AA…"></label>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close-bot-credential>Cancel</button><button class="primary" type="submit">Verify & rotate</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="productDialog">
+    <form id="productForm" method="dialog">
+      <div class="dialog-head"><div><small class="eyebrow">CATALOG</small><h2 id="productDialogTitle">New product</h2></div><button type="button" class="icon" data-close-dialog>×</button></div>
+      <input type="hidden" id="productId">
+      <label>Title<input id="productTitle" required maxlength="255"></label>
+      <label>Description<textarea id="productDescription" rows="3"></textarea></label>
+      <label>Category<select id="productCategory"><option value="">Uncategorized</option></select></label>
+      <label class="check"><input id="productEnabled" type="checkbox" checked> Active in storefront</label>
+      <div id="variantFields">
+        <h3>Initial variant</h3>
+        <div class="grid2"><label>SKU<input id="variantSku" maxlength="100"></label><label>Variant title<input id="variantTitle" maxlength="100" value="Standard"></label></div>
+        <div class="grid3"><label>Price<input id="variantPrice" type="number" min="0.01" step="0.01"></label><label>Currency<input id="variantCurrency" maxlength="3" value="USD"></label><label>Stock<input id="variantStock" type="number" min="0" step="1" value="0"></label></div>
+      </div>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close-dialog>Cancel</button><button class="primary" type="submit">Save</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="supplierDialog">
+    <form id="supplierForm" method="dialog">
+      <div class="dialog-head"><div><small class="eyebrow">SUPPLIER</small><h2>New fulfillment provider</h2></div><button type="button" class="icon" data-close-supplier>×</button></div>
+      <div class="grid2"><label>Name<input id="supplierName" required maxlength="100"></label><label>Slug<input id="supplierSlug" required maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*"></label></div>
+      <div class="grid2"><label>Adapter<select id="supplierType"></select></label><label>Priority<input id="supplierPriority" type="number" min="1" max="1000" value="1"></label></div>
+      <label>Safe metadata JSON<textarea id="supplierMetadata" rows="4">{}</textarea></label>
+      <h3>Optional credential reference</h3>
+      <div class="grid2"><label>Credential type<input id="supplierCredentialType" placeholder="API_KEY"></label><label>Environment secret ref<input id="supplierCredentialRef" placeholder="ENV_VENDOR_API_KEY"></label></div>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close-supplier>Cancel</button><button class="primary" type="submit">Create provider</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="paymentProviderDialog">
+    <form id="paymentProviderForm" method="dialog">
+      <div class="dialog-head"><div><small class="eyebrow">PAYMENTS</small><h2>Configure payment provider</h2></div><button type="button" class="icon" data-close-payment-provider>×</button></div>
+      <label>Adapter<select id="paymentProviderName"></select></label>
+      <label class="check"><input id="paymentProviderEnabled" type="checkbox" checked> Enabled</label>
+      <div class="grid2"><label>Credential secret ref<input id="paymentCredentialRef" placeholder="ENV_PAYMENT_API_KEY"></label><label>Webhook secret ref<input id="paymentWebhookRef" placeholder="ENV_PAYMENT_WEBHOOK_SECRET"></label></div>
+      <p class="muted">Leave secret-reference fields blank when editing to preserve the existing references.</p>
+      <label>Safe settings JSON<textarea id="paymentProviderSettings" rows="10">{"display_name":"Gateway","topup_enabled":true,"topup_min_amount":"5.00","topup_max_amount":"500.00","topup_currencies":["USD"]}</textarea></label>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close-payment-provider>Cancel</button><button class="primary" type="submit">Save configuration</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="memberDialog">
+    <form id="memberForm" method="dialog">
+      <div class="dialog-head"><div><small class="eyebrow">ACCESS</small><h2 id="memberDialogTitle">Manage member</h2></div><button type="button" class="icon" data-close-member>×</button></div>
+      <input id="memberId" type="hidden">
+      <p id="memberIdentity" class="muted"></p>
+      <label>Role<select id="memberEditRole"><option>OWNER</option><option>ADMIN</option><option>MANAGER</option><option>STAFF</option><option>CUSTOMER</option></select></label>
+      <label class="check"><input id="memberEditActive" type="checkbox"> Membership active</label>
+      <label>Permissions (one per line)<textarea id="memberPermissions" rows="5" placeholder="catalog:read
+orders:read"></textarea></label>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close-member>Cancel</button><button class="primary" type="submit">Save access</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="mappingDialog">
+    <form id="mappingForm" method="dialog">
+      <div class="dialog-head"><div><small class="eyebrow">ROUTING</small><h2>New product mapping</h2></div><button type="button" class="icon" data-close-mapping>×</button></div>
+      <label>Supplier<select id="mappingProvider" required></select></label>
+      <label>Product<select id="mappingProduct" required></select></label>
+      <label>Variant<select id="mappingVariant"><option value="">Product-level mapping</option></select></label>
+      <label>External product ID<input id="mappingExternalId" required maxlength="100"></label>
+      <div class="grid3"><label>Cost<input id="mappingCost" type="number" min="0" step="0.01" value="0"></label><label>Currency<input id="mappingCurrency" maxlength="3" value="USD"></label><label>Priority<input id="mappingPriority" type="number" min="1" max="1000"></label></div>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close-mapping>Cancel</button><button class="primary" type="submit">Create mapping</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="financialResolutionDialog">
+    <form id="financialResolutionForm" method="dialog">
+      <div class="dialog-head"><div><small class="eyebrow">FINANCIAL RESOLUTION</small><h2 id="financialCaseTitle">Resolve case</h2></div><button type="button" class="icon" data-close-financial>×</button></div>
+      <input id="financialCaseId" type="hidden">
+      <input id="financialCaseVersion" type="hidden">
+      <p id="financialCaseSummary" class="muted"></p>
+      <label>Resolution action<select id="financialAction" required></select></label>
+      <label>Operator note<textarea id="financialNote" rows="5" minlength="12" maxlength="1000" required placeholder="Document the evidence checked and why this action is safe."></textarea></label>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close-financial>Cancel</button><button class="primary" type="submit">Resolve case</button></div>
+    </form>
+  </dialog>
+
+  <script src="/admin/app.js" defer></script>
+</body>
+</html>

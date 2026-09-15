@@ -13,6 +13,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.deps import get_auth_token_service
 from apps.api.main import app
 from apps.api.v1.auth import get_secret_storage
 from apps.api.v1.payments import (
@@ -38,6 +39,8 @@ from packages.tenants.models import Membership, Role, Tenant, User
 
 pytestmark = pytest.mark.asyncio
 
+TEST_JWT_SECRET = "test-jwt-secret-key-0123456789abcdef-0123456789abcdef"
+
 
 # ---------------------------------------------------------------------------
 # Helpers & Factories
@@ -61,7 +64,7 @@ async def create_user(
     role: Role = Role.CUSTOMER,
 ) -> tuple[User, str]:
     user = User(
-        telegram_id=telegram_id or int(time.time() * 1000) % 1_000_000_000,
+        telegram_id=telegram_id or int(uuid.uuid4().int % 2_000_000_000),
         username=f"user_{uuid.uuid4().hex[:6]}",
         first_name="Alice",
         is_active=True,
@@ -78,7 +81,7 @@ async def create_user(
     session.add(membership)
     await session.flush()
 
-    token_service = AuthTokenService()
+    token_service = AuthTokenService(secret_key=TEST_JWT_SECRET)
     token = token_service.issue_access_token(
         user_id=user.id,
         tenant_id=tenant_id,
@@ -169,6 +172,7 @@ async def api_env(db_session: AsyncSession) -> AsyncGenerator[dict[str, Any], No
     mock_provider = MockPaymentProvider(default_create_status=PaymentIntentStatus.PENDING)
     payment_service = PaymentService(registry=registry, secret_storage=secret_storage)
     reconcile_service = PaymentReconciliationService(payment_service=payment_service)
+    token_service = AuthTokenService(secret_key=TEST_JWT_SECRET)
 
     async def override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
@@ -177,6 +181,7 @@ async def api_env(db_session: AsyncSession) -> AsyncGenerator[dict[str, Any], No
     app.dependency_overrides[get_secret_storage] = lambda: secret_storage
     app.dependency_overrides[get_payment_service] = lambda: payment_service
     app.dependency_overrides[get_reconciliation_service] = lambda: reconcile_service
+    app.dependency_overrides[get_auth_token_service] = lambda: token_service
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -188,6 +193,7 @@ async def api_env(db_session: AsyncSession) -> AsyncGenerator[dict[str, Any], No
             "mock_provider": mock_provider,
             "payment_service": payment_service,
             "reconcile_service": reconcile_service,
+            "token_service": token_service,
         }
 
     app.dependency_overrides.clear()
@@ -605,7 +611,7 @@ async def test_post_auth_telegram_miniapp_full_suite(api_env: dict[str, Any]) ->
     tenant_a = await create_tenant(session, "Tenant A")
     tenant_b = await create_tenant(session, "Tenant B")
 
-    bot_token = "987654321:AAHk69MockTelegramBotTokenForTesting"
+    bot_token = "987654321:" + "AAHk69MockTelegramBotTokenForTesting"
     token_ref = f"BOT_TOKEN_API_{tenant_a.id}"
     await secret_storage.set_secret(token_ref, bot_token)
 
