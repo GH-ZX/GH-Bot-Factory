@@ -81,13 +81,15 @@ class PaymentService:
             raise ValueError("idempotency_key is required for payment intent creation.")
 
         # 1. Fetch Order scoped strictly to tenant
-        stmt = select(Order).where(
-            Order.id == order_id,
-            Order.tenant_id == tenant_id,
-        )
+        stmt = select(Order).where(Order.id == order_id)
         order = (await session.execute(stmt)).scalar_one_or_none()
         if order is None:
-            raise PaymentError(f"Order {order_id} not found for tenant {tenant_id}.")
+            raise PaymentError(f"Order {order_id} not found.")
+
+        if order.tenant_id != tenant_id:
+            raise TenantAccessViolationError(
+                f"Tenant {tenant_id} cannot access order {order_id} belonging to {order.tenant_id}."
+            )
 
         if order.status not in (OrderStatus.PENDING, OrderStatus.PAYMENT_PENDING):
             raise PaymentError(

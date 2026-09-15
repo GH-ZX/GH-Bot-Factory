@@ -22,6 +22,7 @@ from apps.api.v1.payments import (
 )
 from packages.commerce.models import Order
 from packages.commerce.state_machine import OrderStatus
+from packages.core.auth import AuthSource, AuthTokenService
 from packages.payments.models import (
     PaymentProviderConfig,
 )
@@ -33,7 +34,7 @@ from packages.payments.service import LedgerService
 from packages.payments.state_machine import PaymentIntentStatus
 from packages.telegram.models import Bot
 from packages.telegram.secrets import EnvSecretStorage
-from packages.tenants.models import Tenant, User
+from packages.tenants.models import Membership, Role, Tenant, User
 
 pytestmark = pytest.mark.asyncio
 
@@ -53,7 +54,12 @@ async def create_tenant(session: AsyncSession, name: str = "Test Tenant", is_act
     return tenant
 
 
-async def create_user(session: AsyncSession, tenant_id: uuid.UUID, telegram_id: int | None = None) -> User:
+async def create_user(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    telegram_id: int | None = None,
+    role: Role = Role.CUSTOMER,
+) -> tuple[User, str]:
     user = User(
         telegram_id=telegram_id or int(time.time() * 1000) % 1_000_000_000,
         username=f"user_{uuid.uuid4().hex[:6]}",
@@ -62,7 +68,25 @@ async def create_user(session: AsyncSession, tenant_id: uuid.UUID, telegram_id: 
     )
     session.add(user)
     await session.flush()
-    return user
+
+    membership = Membership(
+        tenant_id=tenant_id,
+        user_id=user.id,
+        role=role,
+        is_active=True,
+    )
+    session.add(membership)
+    await session.flush()
+
+    token_service = AuthTokenService()
+    token = token_service.issue_access_token(
+        user_id=user.id,
+        tenant_id=tenant_id,
+        roles=[role],
+        source=AuthSource.TEST,
+        token_version=getattr(user, "token_version", 1),
+    )
+    return user, token
 
 
 async def create_order(
@@ -179,7 +203,7 @@ async def test_post_payment_intent_server_authoritative_amount(api_env: dict[str
     secret_storage: EnvSecretStorage = api_env["secret_storage"]
 
     tenant = await create_tenant(session)
-    user = await create_user(session, tenant.id)
+    user, token = await create_user(session, tenant.id)
     # The order has an authoritative amount of 149.99 USD
     order = await create_order(
         session, tenant.id, user.id, total_amount=Decimal("149.99"), currency="USD"
@@ -194,8 +218,7 @@ async def test_post_payment_intent_server_authoritative_amount(api_env: dict[str
         "return_url": "https://example.com/checkout/return",
     }
     headers = {
-        "X-Tenant-ID": str(tenant.id),
-        "X-User-ID": str(user.id),
+        "Authorization": f"Bearer {token}",
     }
 
     # 1. Create intent
@@ -229,20 +252,13 @@ async def test_post_payment_intent_server_authoritative_amount(api_env: dict[str
     assert conflict_response.status_code == 400
     assert "already exists" in conflict_response.json()["detail"]
 
-    # 4. Missing required tenant or user headers rejected
-    no_tenant_resp = await client.post(
+    # 4. Missing Authorization header rejected -> 401 Unauthorized
+    no_auth_resp = await client.post(
         "/api/v1/payments/intents",
         json=payload,
-        headers={"X-User-ID": str(user.id)},
     )
-    assert no_tenant_resp.status_code == 422
-
-    no_user_resp = await client.post(
-        "/api/v1/payments/intents",
-        json=payload,
-        headers={"X-Tenant-ID": str(tenant.id)},
-    )
-    assert no_user_resp.status_code == 422
+    assert no_auth_resp.status_code == 401
+    assert "Authorization" in no_auth_resp.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +272,8 @@ async def test_get_payment_intent_respects_tenant_isolation(api_env: dict[str, A
 
     tenant_a = await create_tenant(session, "Tenant A")
     tenant_b = await create_tenant(session, "Tenant B")
-    user_a = await create_user(session, tenant_a.id)
+    user_a, token_a = await create_user(session, tenant_a.id)
+    _, token_b = await create_user(session, tenant_b.id)
     order_a = await create_order(session, tenant_a.id, user_a.id, total_amount=Decimal("50.00"))
     await setup_provider_config(session, secret_storage, tenant_a.id, "mock")
 
@@ -268,10 +285,7 @@ async def test_get_payment_intent_respects_tenant_isolation(api_env: dict[str, A
             "provider_name": "mock",
             "idempotency_key": "tenant_iso_key_a",
         },
-        headers={
-            "X-Tenant-ID": str(tenant_a.id),
-            "X-User-ID": str(user_a.id),
-        },
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert create_resp.status_code == 201
     intent_id = create_resp.json()["id"]
@@ -279,7 +293,7 @@ async def test_get_payment_intent_respects_tenant_isolation(api_env: dict[str, A
     # 1. Tenant A fetches its own intent -> 200 OK
     resp_a = await client.get(
         f"/api/v1/payments/intents/{intent_id}",
-        headers={"X-Tenant-ID": str(tenant_a.id)},
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert resp_a.status_code == 200
     assert resp_a.json()["id"] == intent_id
@@ -288,7 +302,7 @@ async def test_get_payment_intent_respects_tenant_isolation(api_env: dict[str, A
     # 2. Tenant B attempts to fetch Tenant A's intent -> 403 Forbidden
     resp_b = await client.get(
         f"/api/v1/payments/intents/{intent_id}",
-        headers={"X-Tenant-ID": str(tenant_b.id)},
+        headers={"Authorization": f"Bearer {token_b}"},
     )
     assert resp_b.status_code == 403
     assert "cannot access payment intent" in resp_b.json()["detail"]
@@ -297,7 +311,7 @@ async def test_get_payment_intent_respects_tenant_isolation(api_env: dict[str, A
     random_id = uuid.uuid4()
     resp_404 = await client.get(
         f"/api/v1/payments/intents/{random_id}",
-        headers={"X-Tenant-ID": str(tenant_a.id)},
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert resp_404.status_code == 404
 
@@ -313,7 +327,8 @@ async def test_post_payment_intent_cancel_lifecycle(api_env: dict[str, Any]) -> 
 
     tenant_a = await create_tenant(session, "Tenant A")
     tenant_b = await create_tenant(session, "Tenant B")
-    user_a = await create_user(session, tenant_a.id)
+    user_a, token_a = await create_user(session, tenant_a.id)
+    _, token_b = await create_user(session, tenant_b.id)
     order_a = await create_order(session, tenant_a.id, user_a.id)
     await setup_provider_config(session, secret_storage, tenant_a.id, "mock")
 
@@ -324,10 +339,7 @@ async def test_post_payment_intent_cancel_lifecycle(api_env: dict[str, Any]) -> 
             "provider_name": "mock",
             "idempotency_key": "cancel_key_001",
         },
-        headers={
-            "X-Tenant-ID": str(tenant_a.id),
-            "X-User-ID": str(user_a.id),
-        },
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert create_resp.status_code == 201
     intent_id = create_resp.json()["id"]
@@ -335,14 +347,14 @@ async def test_post_payment_intent_cancel_lifecycle(api_env: dict[str, Any]) -> 
     # 1. Cross-tenant cancel rejected -> 403 Forbidden
     cross_resp = await client.post(
         f"/api/v1/payments/intents/{intent_id}/cancel",
-        headers={"X-Tenant-ID": str(tenant_b.id)},
+        headers={"Authorization": f"Bearer {token_b}"},
     )
     assert cross_resp.status_code == 403
 
     # 2. Legitimate cancel by Tenant A -> 200 OK
     cancel_resp = await client.post(
         f"/api/v1/payments/intents/{intent_id}/cancel",
-        headers={"X-Tenant-ID": str(tenant_a.id)},
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert cancel_resp.status_code == 200
     assert cancel_resp.json()["status"] == "CANCELLED"
@@ -350,14 +362,14 @@ async def test_post_payment_intent_cancel_lifecycle(api_env: dict[str, Any]) -> 
     # 3. Re-cancelling already CANCELLED terminal intent -> 409 Conflict
     re_cancel_resp = await client.post(
         f"/api/v1/payments/intents/{intent_id}/cancel",
-        headers={"X-Tenant-ID": str(tenant_a.id)},
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert re_cancel_resp.status_code == 409
 
     # 4. Non-existent intent -> 404 Not Found
     resp_404 = await client.post(
         f"/api/v1/payments/intents/{uuid.uuid4()}/cancel",
-        headers={"X-Tenant-ID": str(tenant_a.id)},
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert resp_404.status_code == 404
 
@@ -374,7 +386,8 @@ async def test_post_payment_intent_reconcile(api_env: dict[str, Any]) -> None:
 
     tenant_a = await create_tenant(session, "Tenant A")
     tenant_b = await create_tenant(session, "Tenant B")
-    user_a = await create_user(session, tenant_a.id)
+    user_a, token_a = await create_user(session, tenant_a.id)
+    _, token_b = await create_user(session, tenant_b.id)
     order_a = await create_order(
         session, tenant_a.id, user_a.id, total_amount=Decimal("88.50"), currency="USD"
     )
@@ -390,10 +403,7 @@ async def test_post_payment_intent_reconcile(api_env: dict[str, Any]) -> None:
             "provider_name": "mock",
             "idempotency_key": "reconcile_api_key",
         },
-        headers={
-            "X-Tenant-ID": str(tenant_a.id),
-            "X-User-ID": str(user_a.id),
-        },
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert create_resp.status_code == 201
     intent_id = create_resp.json()["id"]
@@ -403,7 +413,7 @@ async def test_post_payment_intent_reconcile(api_env: dict[str, Any]) -> None:
     # 1. Tenant B attempting to reconcile Tenant A's intent -> 403 Forbidden
     cross_resp = await client.post(
         f"/api/v1/payments/intents/{intent_id}/reconcile",
-        headers={"X-Tenant-ID": str(tenant_b.id)},
+        headers={"Authorization": f"Bearer {token_b}"},
     )
     assert cross_resp.status_code == 403
 
@@ -413,7 +423,7 @@ async def test_post_payment_intent_reconcile(api_env: dict[str, Any]) -> None:
     # Reconcile via API
     reconcile_resp = await client.post(
         f"/api/v1/payments/intents/{intent_id}/reconcile",
-        headers={"X-Tenant-ID": str(tenant_a.id)},
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert reconcile_resp.status_code == 200
     data = reconcile_resp.json()
@@ -429,7 +439,7 @@ async def test_post_payment_intent_reconcile(api_env: dict[str, Any]) -> None:
     # 3. Repeated reconcile on already SUCCEEDED intent is a safe no-op
     repeat_resp = await client.post(
         f"/api/v1/payments/intents/{intent_id}/reconcile",
-        headers={"X-Tenant-ID": str(tenant_a.id)},
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert repeat_resp.status_code == 200
     assert repeat_resp.json()["status"] == "SUCCEEDED"
@@ -453,17 +463,14 @@ async def test_post_payment_intent_reconcile(api_env: dict[str, Any]) -> None:
             "provider_name": "mock_timeout",
             "idempotency_key": "timeout_reconcile_key",
         },
-        headers={
-            "X-Tenant-ID": str(tenant_a.id),
-            "X-User-ID": str(user_a.id),
-        },
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert timeout_create_resp.status_code == 201
     timeout_intent_id = timeout_create_resp.json()["id"]
 
     timeout_reconcile_resp = await client.post(
         f"/api/v1/payments/intents/{timeout_intent_id}/reconcile",
-        headers={"X-Tenant-ID": str(tenant_a.id)},
+        headers={"Authorization": f"Bearer {token_a}"},
     )
     assert timeout_reconcile_resp.status_code == 200
     assert timeout_reconcile_resp.json()["status"] == "UNKNOWN"
@@ -481,7 +488,7 @@ async def test_post_payment_webhooks_signature_and_deduplication(api_env: dict[s
     secret_storage: EnvSecretStorage = api_env["secret_storage"]
 
     tenant = await create_tenant(session)
-    user = await create_user(session, tenant.id)
+    user, token = await create_user(session, tenant.id)
     order = await create_order(
         session, tenant.id, user.id, total_amount=Decimal("60.00"), currency="USD"
     )
@@ -499,10 +506,7 @@ async def test_post_payment_webhooks_signature_and_deduplication(api_env: dict[s
             "provider_name": "mock",
             "idempotency_key": "wh_test_key_001",
         },
-        headers={
-            "X-Tenant-ID": str(tenant.id),
-            "X-User-ID": str(user.id),
-        },
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert create_resp.status_code == 201
     provider_payment_id = create_resp.json()["provider_payment_id"]
@@ -520,10 +524,9 @@ async def test_post_payment_webhooks_signature_and_deduplication(api_env: dict[s
 
     # 1. Invalid signature returns 401 Unauthorized
     invalid_resp = await client.post(
-        "/api/v1/payments/webhooks/mock",
+        f"/api/v1/payments/webhooks/{tenant.id}/mock",
         content=payload_bytes,
         headers={
-            "X-Tenant-ID": str(tenant.id),
             "X-Signature": "invalid_forged_sig_abc123",
             "Content-Type": "application/json",
         },
@@ -533,10 +536,9 @@ async def test_post_payment_webhooks_signature_and_deduplication(api_env: dict[s
 
     # 2. Valid signature returns 200 OK and processes settlement
     valid_resp = await client.post(
-        "/api/v1/payments/webhooks/mock",
+        f"/api/v1/payments/webhooks/{tenant.id}/mock",
         content=payload_bytes,
         headers={
-            "X-Tenant-ID": str(tenant.id),
             "X-Signature": valid_sig,
             "Content-Type": "application/json",
         },
@@ -556,10 +558,9 @@ async def test_post_payment_webhooks_signature_and_deduplication(api_env: dict[s
 
     # 3. Duplicate webhook delivery is idempotent (returns 200, same event_id, no double-credit)
     dup_resp = await client.post(
-        "/api/v1/payments/webhooks/mock",
+        f"/api/v1/payments/webhooks/{tenant.id}/mock",
         content=payload_bytes,
         headers={
-            "X-Tenant-ID": str(tenant.id),
             "X-Signature": valid_sig,
             "Content-Type": "application/json",
         },
@@ -581,10 +582,9 @@ async def test_post_payment_webhooks_signature_and_deduplication(api_env: dict[s
     tampered_sig = hmac.new(webhook_secret.encode("utf-8"), tampered_bytes, hashlib.sha256).hexdigest()
 
     conflict_resp = await client.post(
-        "/api/v1/payments/webhooks/mock",
+        f"/api/v1/payments/webhooks/{tenant.id}/mock",
         content=tampered_bytes,
         headers={
-            "X-Tenant-ID": str(tenant.id),
             "X-Signature": tampered_sig,
             "Content-Type": "application/json",
         },

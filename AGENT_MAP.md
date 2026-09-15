@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**  
-> *Last Updated: 2026-09-15 (Phase 4.1 Completed)*
+> *Last Updated: 2026-09-15 (Phase 5.1 Completed)*
 
 ---
 
@@ -64,6 +64,13 @@ Every AI coding agent working in this repository is strictly bound by these immu
 ### Law 10: Version Control & Remote Sync
 - Every coherent milestone must be committed to Git and pushed to remote `git@github.com:GH-ZX/GH-Bot-Factory.git` on branch `main` using SSH key `~/.ssh/id_ed25519_ghzx`.
 
+### Law 11: The 5 Security Invariants of API Authentication & Authorization Hardening
+1. **Identity Law:** *«Client-supplied user/tenant IDs are never authoritative.»* Clients cannot supply raw identity headers (`X-Tenant-ID`, `X-User-ID`), request body fields, or query parameters to assert user identity. Identity is derived strictly from server-verified Bearer JWT access tokens.
+2. **Authorization Law:** *«Every customer API operation is authorized against the authenticated principal.»* All protected operations are authorized strictly against [`AuthenticatedPrincipal`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L64). Customer-role callers cannot view, cancel, or reconcile another customer's payment intents or orders.
+3. **Mini App Law:** *«Telegram "initData" is authenticated cryptographically before deriving identity.»* Telegram Mini App query strings must be validated using official HMAC-SHA256 signatures against the bot's secret token before user provisioning or token issuance.
+4. **Webhook Law:** *«Payment gateway webhooks are authenticated with provider-specific cryptographic verification and tenant/provider binding.»* External payment webhooks operate under a distinct trust boundary. They are authenticated using provider-specific cryptographic signature verification against the tenant's configured secret and deduplicated on `uq_webhook_tenant_provider_event`. Customer JWTs are never accepted for webhooks.
+5. **Tenant Law:** *«Authenticated tenant context cannot be overridden by request headers/body/query parameters.»* All operations execute strictly within `principal.tenant_id`. Client-supplied tenant IDs that contradict the authenticated principal or bot association are rejected with `TenantAccessViolationError` or `403 Forbidden`.
+
 ---
 
 ## 2. Architecture & Codebase Map
@@ -72,21 +79,23 @@ Every AI coding agent working in this repository is strictly bound by these immu
 GH-Bot-Factory Root
 ├── apps/
 │   ├── api/                  # FastAPI web server, health checks, webhook endpoints
+│   │   ├── deps.py           # Dependency injection: get_current_principal, require_roles
 │   │   └── v1/               # Version 1 modular routers (/payments, /auth)
 ├── packages/
 │   ├── core/                 # Shared Base database model, UUID/Timestamp mixins, global exceptions
-│   ├── tenants/              # Tenant, User, Membership (RBAC: OWNER, ADMIN, STAFF, CUSTOMER)
+│   │   └── auth.py           # JWT signing/verification, AuthenticatedPrincipal, AuthSource
+│   ├── tenants/              # Tenant, User (token_version), Membership (RBAC: OWNER, ADMIN, STAFF, CUSTOMER)
 │   ├── commerce/             # Category, Product, ProductVariant, Order, OrderItem, StateMachine, Checkout
 │   ├── payments/             # PaymentIntent, PaymentTransaction, PaymentProviderConfig, Webhooks, Ledger
 │   ├── telegram/             # Aiogram 3 multi-tenant runtime, Bot Registry, Middlewares, Routers, TMA Auth
 │   ├── providers/            # Provider Protocol, Client Registry, Mock & Digital Providers, ProviderRouter
 │   ├── fulfillment/          # FulfillmentService, Worker (durable queue), ReconciliationService, Models
 │   └── notifications/        # Decoupled notification transport system (Telegram/Audit)
-├── migrations/               # Alembic database schema revisions
-├── tests/                    # Pytest async test suite (86/86 passing)
+├── migrations/               # Alembic database schema revisions (including b7e3a912f45c)
+├── tests/                    # Pytest async test suite (106/106 passing)
 ├── docs/
 │   ├── architecture/         # System architecture deep-dives & sequence diagrams
-│   ├── decisions/            # Architecture Decision Records (ADR-001 through ADR-006)
+│   ├── decisions/            # Architecture Decision Records (ADR-001 through ADR-007)
 │   └── prompts/              # Complete historical archive of all user prompts and instructions
 └── .agents/
     └── skills/               # Antigravity agent skills repository
@@ -95,15 +104,16 @@ GH-Bot-Factory Root
 ### Module Responsibilities & Core Classes:
 | Package / App | Primary Classes / Routers | Key Role |
 | :--- | :--- | :--- |
-| `packages.core` | `Base`, `UUIDMixin`, `TimestampMixin` | Foundation DB base, async engine, session makers |
-| `packages.tenants` | `Tenant`, `User`, `Membership`, `Role` | Tenant scoping, customer authentication, RBAC |
+| `packages.core` | `Base`, `UUIDMixin`, `TimestampMixin`, `AuthenticatedPrincipal`, `AuthTokenService`, `AuthSource` | Foundation DB base, async engine, cryptographic JWT access tokens, principal abstraction |
+| `packages.tenants` | `Tenant`, `User` (with `token_version`), `Membership`, `Role` | Tenant scoping, customer authentication, RBAC, instant session revocation |
 | `packages.commerce` | `Order`, `OrderItem`, `Product`, `ProductVariant`, `OrderStateMachine`, `CheckoutService` | Catalog, legal state transitions, cart checkout |
 | `packages.payments` | `PaymentIntent`, `PaymentTransaction`, `PaymentProviderConfig`, `PaymentWebhookEvent`, `PaymentService`, `PaymentProviderRegistry`, `PaymentReconciliationService`, `Wallet`, `LedgerTransaction`, `LedgerService` | Provider-agnostic payment gateway abstraction, durable PaymentIntents, webhook security, settlement idempotency, double-entry wallet ledger |
 | `packages.telegram` | `Bot`, `TenantTelegramUser`, `TelegramMiniAppAuthService`, `BotRuntimeManager`, `TenantResolutionMiddleware` | Multi-bot runtime, secret storage, tenant resolution, FSM isolation, TMA initData HMAC auth |
 | `packages.providers` | `Provider`, `ProviderCredential`, `ProviderProductMapping`, `ProviderRouter`, `MockProvider` | Supplier protocol, failover routing, credential safety |
 | `packages.fulfillment` | `FulfillmentAttempt`, `FulfillmentJobRecord`, `FulfillmentService`, `FulfillmentWorker`, `ReconciliationService` | Durable execution, retry backoff, crash recovery, out-of-band reconciliation |
 | `packages.notifications`| `NotificationService`, `NotificationPayload`, `MockNotificationTransport` | Asynchronous post-checkout customer alerting |
-| `apps.api.v1` | `payments_router`, `auth_router` | Multi-client REST endpoints: Payment intent lifecycle, webhook ingestion, TMA HMAC validation |
+| `apps.api.deps` | `get_current_principal`, `require_roles`, `require_staff_or_above` | Bearer JWT verification, session revocation check, tenant membership and role enforcement |
+| `apps.api.v1` | `payments_router`, `auth_router` | Multi-client REST endpoints: Bearer JWT issuance, customer-isolated payment intent lifecycle, candidate webhook verification |
 
 ---
 
@@ -162,6 +172,7 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 7. **Milestone 7 (Phase 4.2 Fulfillment Integrity Hardening):** Canonical refund idempotency (`CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"`), fail-closed durable enqueue, atomic conditional job claim, and frozen catalog refund protection. 50/50 tests passing. Commit: `6d750b7`.
 8. **Milestone 8 (Phase 4.3 Database-Enforced Refund Idempotency):** Schema-level partial unique index (`uq_refund_idempotency`), Alembic migration `867840fa9063` with legacy duplicate safety check, concurrency-safe `LedgerService.refund()`, amount mismatch guard (`LedgerIntegrityError`), and 59/59 tests passing. Commit: `79b5ba0`.
 9. **Milestone 9 (Phase 5 Payment Infrastructure & Multi-Client API Foundation):** Provider-agnostic payment gateway abstraction (`packages.payments`), durable `PaymentIntent` with server-authoritative amounts, `PaymentStateMachine`, `PaymentProvider` protocol and registry, database-enforced settlement idempotency (`uq_settlement_idempotency`), distinct `PAYMENT_REFUND` accounting, webhook verification and deduplication, `PaymentReconciliationService`, server-side Telegram Mini App HMAC-SHA256 authentication (`TelegramMiniAppAuthService`), FastAPI REST endpoints (`/api/v1/payments`, `/api/v1/auth`), reversible Alembic migration `a8d5f418df6f`, and 86/86 tests passing. Prompts handled: initial Phase 5 specification and continuation directive *"sorry forvunteruption, use more agents and resume"*. Commit: `334ce90`.
+10. **Milestone 10 (Phase 5.1 API Authentication & Authorization Hardening):** Eliminated raw identity headers (`X-Tenant-ID`, `X-User-ID`) in favor of server-signed Bearer JWT access tokens (`AuthTokenService`) and authoritative [`AuthenticatedPrincipal`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L64). Implemented FastAPI dependency pipeline [`get_current_principal`](file:///home/it/Coding/gh-bot-factory/apps/api/deps.py#L23) with user/tenant activation verification and instant session revocation via `users.token_version` (Alembic migration [`b7e3a912f45c_add_user_token_version.py`](file:///home/it/Coding/gh-bot-factory/migrations/versions/b7e3a912f45c_add_user_token_version.py)). Bound Telegram Mini App HMAC authentication to Bearer JWT issuance. Enforced customer ownership isolation across all payment intent endpoints (preventing cross-user intent access/tampering). Enforced the 5 Security Invariants and established strict architectural separation between customer session authentication and payment gateway webhook cryptographic authentication. Documented in [`docs/decisions/ADR-007-api-authentication-hardening.md`](file:///home/it/Coding/gh-bot-factory/docs/decisions/ADR-007-api-authentication-hardening.md).
 
 ---
 

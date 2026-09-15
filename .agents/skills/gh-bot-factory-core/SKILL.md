@@ -18,6 +18,7 @@ All historical user prompts, architectural milestones, and delivery reports are 
 Key architecture guides & ADRs:
 - **[Payment Architecture & Multi-Client API](file:///home/it/Coding/gh-bot-factory/docs/architecture/payment-architecture.md)**
 - **[ADR-006: Multi-Tenant Payment Abstraction](file:///home/it/Coding/gh-bot-factory/docs/decisions/ADR-006-payment-abstraction.md)**
+- **[ADR-007: API Authentication & Authorization Hardening](file:///home/it/Coding/gh-bot-factory/docs/decisions/ADR-007-api-authentication-hardening.md)**
 
 ---
 
@@ -33,8 +34,9 @@ Every coding agent must memorize and respect these laws at all times:
 6. **Authoritative Price & Payment Law:** Always validate prices against `ProductVariant.price` and create payment intents strictly from server-authoritative `Order.total_amount`. Never trust client-supplied prices or amounts.
 7. **Fulfillment Law:** Use attempt-scoped idempotency keys (`order:{order.id}:attempt:{attempt_number}`). Transient errors mark `RETRYING` or `UNKNOWN`. Never tell the user they were refunded unless the refund ledger transaction has succeeded. Background jobs must be stored durably in `fulfillment_jobs`.
 8. **Telegram Mini App Authentication Boundary:** Mini App `initData` must be validated server-side using HMAC-SHA256 (`HMAC_SHA256("WebAppData", bot_token)`). Freshness must be checked (`auth_date <= 86400s`, future timestamp <= 300s). Tenant scoping must be derived authoritatively from the owning `Bot` record; never trust client-supplied tenant overrides.
-9. **Verification Law:** Maintain 100% test pass rate (`.venv/bin/pytest -v`) and zero lint warnings (`.venv/bin/ruff check .`) before committing. (Current baseline: 86/86 passing tests).
+9. **Verification Law:** Maintain 100% test pass rate (`.venv/bin/pytest -v`) and zero lint warnings (`.venv/bin/ruff check .`) before committing. (Current baseline: 106/106 passing tests).
 10. **Git Remote Law:** Commit coherent milestone commits and push to `origin main` via SSH (`~/.ssh/id_ed25519_ghzx`).
+11. **The 5 Security Invariants Law:** Client-supplied user/tenant IDs are never authoritative (Identity Law). Every customer operation is authorized against `AuthenticatedPrincipal` (Authorization Law). Telegram `initData` is authenticated cryptographically before deriving identity (Mini App Law). Payment gateway webhooks are authenticated with provider-specific verification against tenant secret (Webhook Law). Authenticated tenant context cannot be overridden (Tenant Law). Customer session authentication (`Authorization: Bearer <JWT>`) and gateway webhook ingestion belong to two separate trust boundaries. Instant session revocation is enforced via `token_version`.
 
 ---
 
@@ -51,7 +53,7 @@ Every coding agent must memorize and respect these laws at all times:
    .venv/bin/alembic upgrade head
        ↓
 5. Implement Tests in tests/ (StaticPool in-memory SQLite)
-   .venv/bin/pytest -v (Must be 100% pass, e.g. 86/86)
+   .venv/bin/pytest -v (Must be 100% pass, e.g. 106/106)
        ↓
 6. Lint & Format
    .venv/bin/ruff check . --fix

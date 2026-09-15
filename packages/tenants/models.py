@@ -8,6 +8,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
 )
@@ -73,6 +74,7 @@ class User(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    token_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False, server_default="1")
 
     memberships: Mapped[list["Membership"]] = relationship(
         "Membership",

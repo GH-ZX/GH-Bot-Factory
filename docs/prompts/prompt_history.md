@@ -315,3 +315,69 @@ This document serves as the historical record of all user prompts, architectural
    - **86/86 tests passing (100% pass rate)** across entire repository test suite (59 prior tests + 21 payment domain tests + 6 API integration tests).
    - Zero lint errors under `ruff check .`.
 
+---
+
+## Milestone 10: Phase 5.1 — API Authentication & Authorization Hardening
+
+- **Date:** 2026-09-15
+- **Status:** Completed
+- **Commit:** `Pending / In-Tree`
+
+### User Request / Prompts:
+
+#### Verbatim Prompt:
+> "Phase 5.1 (API Authentication & Authorization Hardening):
+> 1. Create docs/decisions/ADR-007-api-authentication-hardening.md:
+>    - Record decision to replace raw identity headers (X-Tenant-ID, X-User-ID) with server-signed Bearer JWT access tokens and AuthenticatedPrincipal.
+>    - Document AuthTokenService, token_version session revocation, Mini App JWT issuance, RBAC, and distinct webhook authentication boundary.
+> 2. Update docs/architecture/payment-architecture.md:
+>    - Add section on API Authentication & Authorization Architecture.
+>    - Include diagram:
+>      Telegram Mini App initData -> Cryptographic authentication -> Authenticated Principal -> Bearer access token -> Authorized API requests.
+>    - Explicitly document: Customer authentication != payment provider webhook authentication (two separate trust boundaries).
+>    - Document the 5 Security Invariants:
+>      1. Identity Law: «Client-supplied user/tenant IDs are never authoritative.»
+>      2. Authorization Law: «Every customer API operation is authorized against the authenticated principal.»
+>      3. Mini App Law: «Telegram "initData" is authenticated cryptographically before deriving identity.»
+>      4. Webhook Law: «Payment gateway webhooks are authenticated with provider-specific cryptographic verification and tenant/provider binding.»
+>      5. Tenant Law: «Authenticated tenant context cannot be overridden by request headers/body/query parameters.»
+> 3. Update AGENT_MAP.md:
+>    - Add the 5 Security Invariants to Inviolable Laws.
+>    - Update codebase tree with packages/core/auth.py and apps/api/deps.py.
+>    - Add Milestone 10 (Phase 5.1 API Authentication & Authorization Hardening).
+> 4. Update docs/prompts/prompt_history.md:
+>    - Record Milestone 10 with the verbatim prompt from the user.
+> 5. Report your documentation updates."
+
+### Deliverables & Implementation:
+1. **Core Authentication Engine ([`packages/core/auth.py`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py)):**
+   - Implemented [`AuthTokenService`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L91): Issues and validates HMAC-SHA256 (`HS256`) short-lived signed JWT access tokens containing claims: `sub`, `tenant_id`, `source`, `roles`, `token_version`, `iat`, `exp`, `iss`, `aud`.
+   - Defined immutable [`AuthenticatedPrincipal`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L64) dataclass holding verified identity, tenant context, active roles, permissions, and token version.
+   - Comprehensive error hierarchy: [`TokenError`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L27), [`TokenExpiredError`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L33), [`TokenInvalidSignatureError`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L39), [`TokenMalformedError`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L45), [`TokenRevokedError`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L51), and [`ForbiddenAccessError`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py#L57).
+2. **FastAPI Authorization Pipeline ([`apps/api/deps.py`](file:///home/it/Coding/gh-bot-factory/apps/api/deps.py)):**
+   - Implemented [`get_current_principal`](file:///home/it/Coding/gh-bot-factory/apps/api/deps.py#L23): Extracts Bearer token from `Authorization` header, verifies signature and expiry, checks that `User` exists and `is_active`, validates `token_version` against DB to enforce session revocation, verifies that `Tenant` exists and `is_active`, verifies `Membership` exists to derive authoritative `Role` and permissions.
+   - Role enforcement dependencies: [`require_roles()`](file:///home/it/Coding/gh-bot-factory/apps/api/deps.py#L130) and [`require_staff_or_above()`](file:///home/it/Coding/gh-bot-factory/apps/api/deps.py#L146).
+3. **Instant Session Revocation Schema ([`packages/tenants/models.py`](file:///home/it/Coding/gh-bot-factory/packages/tenants/models.py)):**
+   - Added `token_version: int` column (default 1) to `User` model.
+   - Generated and applied Alembic migration [`migrations/versions/b7e3a912f45c_add_user_token_version.py`](file:///home/it/Coding/gh-bot-factory/migrations/versions/b7e3a912f45c_add_user_token_version.py) using SQLite batch mode.
+4. **Mini App Bearer JWT Issuance ([`apps/api/v1/auth.py`](file:///home/it/Coding/gh-bot-factory/apps/api/v1/auth.py)):**
+   - Enhanced `POST /api/v1/auth/telegram-miniapp`: After cryptographic HMAC-SHA256 validation of `initData` and authoritative user/tenant resolution, generates and returns signed JWT access token (`access_token`, `token_type: "bearer"`, `expires_in: 3600`).
+5. **Customer Ownership Scoping & Webhook Trust Boundary ([`apps/api/v1/payments.py`](file:///home/it/Coding/gh-bot-factory/apps/api/v1/payments.py)):**
+   - Removed untrusted raw identity headers (`X-Tenant-ID`, `X-User-ID`). All customer endpoints now require `principal: AuthenticatedPrincipal = Depends(get_current_principal)`.
+   - Customer ownership isolation: `GET /intents/{id}`, `POST /{id}/cancel`, and `POST /{id}/reconcile` enforce `intent.user_id == principal.user_id` when caller holds `CUSTOMER` role (raising `403 Forbidden` on unauthorized access). Staff/admin retain tenant-wide management capability.
+   - Distinct webhook boundary: Payment provider webhooks (`/webhooks/{tenant_id}/{provider_name}` and `/webhooks/{provider_name}`) operate under independent cryptographic verification against the tenant's configured gateway secret.
+6. **The 5 Security Invariants Established:**
+   - Identity Law: Client-supplied user/tenant IDs are never authoritative.
+   - Authorization Law: Every customer API operation is authorized against the authenticated principal.
+   - Mini App Law: Telegram "initData" is authenticated cryptographically before deriving identity.
+   - Webhook Law: Payment gateway webhooks are authenticated with provider-specific cryptographic verification and tenant/provider binding.
+   - Tenant Law: Authenticated tenant context cannot be overridden by request headers/body/query parameters.
+7. **Documentation & Architecture Artifacts:**
+   - [`docs/decisions/ADR-007-api-authentication-hardening.md`](file:///home/it/Coding/gh-bot-factory/docs/decisions/ADR-007-api-authentication-hardening.md): Comprehensive ADR detailing the transition from raw headers to Bearer JWT, session revocation, RBAC, and boundary separation.
+   - [`docs/architecture/payment-architecture.md`](file:///home/it/Coding/gh-bot-factory/docs/architecture/payment-architecture.md): Added Section 7 with sequence diagram, text flowcharts, trust boundary comparison, and updated REST API specs.
+   - [`AGENT_MAP.md`](file:///home/it/Coding/gh-bot-factory/AGENT_MAP.md): Inviolable Laws updated with Law 11 (The 5 Security Invariants); tree and module maps updated with `packages/core/auth.py` and `apps/api/deps.py`.
+   - [`.agents/skills/gh-bot-factory-core/SKILL.md`](file:///home/it/Coding/gh-bot-factory/.agents/skills/gh-bot-factory-core/SKILL.md): Core agent skill updated with ADR-007 references and Bearer auth protocols.
+8. **Verification & Testing:**
+   - **106/106 tests passing (100% pass rate)** across entire repository test suite (86 prior tests + 20 new Phase 5.1 authentication & authorization tests in [`tests/test_phase5_1_auth.py`](file:///home/it/Coding/gh-bot-factory/tests/test_phase5_1_auth.py)).
+   - Zero lint errors under `ruff check .`.
+

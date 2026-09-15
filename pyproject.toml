@@ -13,6 +13,7 @@ dependencies = [
     "redis>=5.0",
     "pydantic-settings>=2.0",
     "aiogram>=3.0",
+    "pyjwt>=2.8.0",
 ]
 
 [project.optional-dependencies]

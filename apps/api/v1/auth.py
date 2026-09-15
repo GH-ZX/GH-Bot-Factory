@@ -3,8 +3,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.deps import get_auth_token_service
+from packages.core.auth import AuthSource, AuthTokenService
 from packages.core.database import get_db_session
 from packages.core.exceptions import TenantAccessViolationError
 from packages.payments.exceptions import (
@@ -15,6 +18,7 @@ from packages.payments.exceptions import (
 )
 from packages.telegram.miniapp import TelegramMiniAppAuthService
 from packages.telegram.secrets import EnvSecretStorage, SecretStorage
+from packages.tenants.models import Membership, Role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,6 +30,9 @@ class TelegramMiniAppAuthRequest(BaseModel):
 
 
 class TelegramMiniAppAuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = 3600
     tenant_id: uuid.UUID
     user_id: uuid.UUID
     telegram_user: dict[str, Any]
@@ -45,10 +52,11 @@ async def authenticate_telegram_miniapp(
     x_tenant_id: uuid.UUID | None = Header(None, alias="X-Tenant-ID"),
     session: AsyncSession = Depends(get_db_session),
     secret_storage: SecretStorage = Depends(get_secret_storage),
+    token_service: AuthTokenService = Depends(get_auth_token_service),
 ) -> TelegramMiniAppAuthResponse:
-    """Authenticates Telegram WebApp initData, cryptographically verifies HMAC signature, and resolves Tenant context.
+    """Authenticates Telegram WebApp initData, cryptographically verifies HMAC signature,
 
-    Prevents client-side tenant spoofing.
+    resolves authoritative Tenant/User context, and issues a short-lived Bearer access token.
     """
     try:
         expected_tenant_id = req.expected_tenant_id or x_tenant_id
@@ -61,7 +69,30 @@ async def authenticate_telegram_miniapp(
                 expected_tenant_id=expected_tenant_id,
             )
         )
+
+        # Resolve role from Membership
+        membership_stmt = select(Membership).where(
+            Membership.tenant_id == tenant.id,
+            Membership.user_id == user.id,
+        )
+        membership = (await session.execute(membership_stmt)).scalar_one_or_none()
+        role = membership.role if membership is not None else Role.CUSTOMER
+
+        # Issue signed JWT access token
+        token_version = getattr(user, "token_version", 1)
+        access_token = token_service.issue_access_token(
+            user_id=user.id,
+            tenant_id=tenant.id,
+            roles=[role],
+            source=AuthSource.TELEGRAM_MINIAPP,
+            token_version=token_version,
+            expires_in_seconds=3600,
+        )
+
         return TelegramMiniAppAuthResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=3600,
             tenant_id=tenant.id,
             user_id=user.id,
             telegram_user=user_payload,
