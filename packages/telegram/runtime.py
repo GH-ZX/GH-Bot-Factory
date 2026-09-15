@@ -71,9 +71,13 @@ class BotRuntimeManager:
         dp.update.outer_middleware(UpdateLoggingMiddleware())
         dp.update.outer_middleware(ErrorHandlingMiddleware())
 
-        # Include standard routers if custom factory provided
+        # Include standard routers if custom factory provided, or default root router
         if self.base_dispatcher_factory:
             self.base_dispatcher_factory(dp)
+        else:
+            from packages.telegram.routers import get_root_router
+
+            dp.include_router(get_root_router())
 
         return dp
 
