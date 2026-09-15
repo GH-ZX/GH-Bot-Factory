@@ -4,7 +4,17 @@ from packages.commerce.models import Category, Order, OrderItem, Product, Produc
 from packages.commerce.state_machine import OrderStatus
 from packages.core.database import Base
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
-from packages.payments.models import LedgerTransaction, TransactionType, Wallet
+from packages.payments.models import (
+    LedgerTransaction,
+    PaymentIntent,
+    PaymentProviderConfig,
+    PaymentTransaction,
+    PaymentTransactionType,
+    PaymentWebhookEvent,
+    TransactionType,
+    Wallet,
+)
+from packages.payments.state_machine import PaymentIntentStatus
 from packages.providers.models import (
     Provider,
     ProviderCredential,
@@ -27,6 +37,12 @@ __all__ = [
     "Order",
     "OrderItem",
     "OrderStatus",
+    "PaymentIntent",
+    "PaymentIntentStatus",
+    "PaymentProviderConfig",
+    "PaymentTransaction",
+    "PaymentTransactionType",
+    "PaymentWebhookEvent",
     "Product",
     "ProductVariant",
     "Provider",

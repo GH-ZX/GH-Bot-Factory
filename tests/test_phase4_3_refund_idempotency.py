@@ -8,7 +8,7 @@ from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from packages.commerce.models import Order, Product, ProductVariant
+from packages.commerce.models import Order, OrderItem, Product, ProductVariant
 from packages.commerce.state_machine import OrderStatus
 from packages.core.exceptions import LedgerIntegrityError
 from packages.core.models import Base, Tenant, User
@@ -218,6 +218,16 @@ async def test_concurrent_mixed_services_refund(wal_session_factory: async_sessi
         s.add(order)
         await s.flush()
         order_id = order.id
+
+        item = OrderItem(
+            order_id=order.id,
+            product_variant_id=variant.id,
+            quantity=1,
+            unit_price=Decimal("50.00"),
+            total_price=Decimal("50.00"),
+        )
+        s.add(item)
+        await s.flush()
 
         attempt = FulfillmentAttempt(
             tenant_id=tenant.id,

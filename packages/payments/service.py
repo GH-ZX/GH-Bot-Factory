@@ -17,6 +17,8 @@ from packages.payments.models import LedgerTransaction, TransactionType, Wallet
 logger = logging.getLogger("payments.ledger")
 
 CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"
+CANONICAL_SETTLEMENT_TYPE = "PAYMENT_SETTLEMENT"
+CANONICAL_PAYMENT_REFUND_TYPE = "PAYMENT_REFUND"
 
 
 class LedgerService:
@@ -45,8 +47,13 @@ class LedgerService:
                 balance=Decimal("0.00"),
                 is_active=True,
             )
-            session.add(wallet)
-            await session.flush()
+            try:
+                async with session.begin_nested():
+                    session.add(wallet)
+                    await session.flush()
+            except IntegrityError:
+                result = await session.execute(stmt)
+                wallet = result.scalar_one()
 
         return wallet
 
@@ -81,6 +88,103 @@ class LedgerService:
         session.add(tx)
         await session.flush()
         return tx
+
+    @classmethod
+    async def settle_payment(
+        cls,
+        session: AsyncSession,
+        wallet: Wallet,
+        amount: Decimal,
+        payment_intent_id: uuid.UUID,
+        description: str | None = None,
+    ) -> LedgerTransaction:
+        """Atomically and idempotently credits wallet for payment settlement.
+
+        Database unique partial index (uq_settlement_idempotency) guarantees exactly
+        one settlement transaction can ever exist for (wallet_id, PAYMENT_SETTLEMENT, payment_intent_id).
+        """
+        if amount <= Decimal("0.00"):
+            raise ValueError("Settlement amount must be strictly positive.")
+
+        wallet_id = wallet.id
+        ref_id = str(payment_intent_id)
+        ref_type = CANONICAL_SETTLEMENT_TYPE
+
+        # 1. Fast-path application-level optimization lookup
+        stmt = select(LedgerTransaction).where(
+            LedgerTransaction.wallet_id == wallet_id,
+            LedgerTransaction.transaction_type == TransactionType.CREDIT,
+            LedgerTransaction.reference_type == ref_type,
+            LedgerTransaction.reference_id == ref_id,
+        )
+        existing_tx = (await session.execute(stmt)).scalars().first()
+        if existing_tx is not None:
+            if existing_tx.amount != amount:
+                raise LedgerIntegrityError(
+                    f"Payment settlement amount mismatch for intent {ref_id}: "
+                    f"existing={existing_tx.amount}, requested={amount}."
+                )
+            logger.warning(
+                "Idempotent settlement hit: settlement for intent %s already exists. Skipping duplicate credit.",
+                ref_id,
+            )
+            return existing_tx
+
+        # 2. Database-enforced atomic credit via savepoint
+        try:
+            async with session.begin_nested():
+                balance_before = wallet.balance
+                balance_after = balance_before + amount
+                wallet.balance = balance_after
+
+                tx = LedgerTransaction(
+                    tenant_id=wallet.tenant_id,
+                    wallet_id=wallet_id,
+                    transaction_type=TransactionType.CREDIT,
+                    amount=amount,
+                    balance_before=balance_before,
+                    balance_after=balance_after,
+                    reference_id=ref_id,
+                    reference_type=ref_type,
+                    description=description or f"Payment settlement for intent {ref_id}",
+                )
+                session.add(tx)
+                await session.flush()
+            return tx
+        except IntegrityError as exc:
+            # Cleanly rollback wallet balance
+            try:
+                await session.refresh(wallet)
+            except Exception:  # noqa: BLE001
+                session.expire(wallet)
+
+            stmt = select(LedgerTransaction).where(
+                LedgerTransaction.wallet_id == wallet_id,
+                LedgerTransaction.transaction_type == TransactionType.CREDIT,
+                LedgerTransaction.reference_type == ref_type,
+                LedgerTransaction.reference_id == ref_id,
+            )
+            existing_tx = (await session.execute(stmt)).scalars().first()
+            if existing_tx is None:
+                for _ in range(20):
+                    await asyncio.sleep(0.05)
+                    existing_tx = (await session.execute(stmt)).scalars().first()
+                    if existing_tx is not None:
+                        break
+
+            if existing_tx is not None:
+                if existing_tx.amount != amount:
+                    raise LedgerIntegrityError(
+                        f"Payment settlement amount mismatch for intent {ref_id}: "
+                        f"existing={existing_tx.amount}, requested={amount}."
+                    ) from exc
+                logger.warning(
+                    "Concurrent race resolved: settlement for intent %s caught by DB unique constraint.",
+                    ref_id,
+                )
+                return existing_tx
+
+            raise
 
     @classmethod
     async def debit(

@@ -29,17 +29,19 @@ Every AI coding agent working in this repository is strictly bound by these immu
 - Never stop, modify, restart, or delete existing host Docker containers or Cloudflare Tunnels.
 - Always work cleanly in `/home/it/Coding/gh-bot-factory` (symlinked from `/opt/gh-bot-factory`).
 
-### Law 5: Double-Entry Financial Invariance & Database-Enforced Refund Idempotency
-- Customer wallet balances must **NEVER** be updated directly. All balance mutations must pass through `LedgerService` (`credit()`, `debit()`, `refund()`, `adjust()`).
+### Law 5: Double-Entry Financial Invariance, Database-Enforced Refund & Settlement Idempotency
+- Customer wallet balances must **NEVER** be updated directly. All balance mutations must pass through `LedgerService` (`credit()`, `debit()`, `refund()`, `settle_payment()`, `adjust()`).
 - Every wallet debit must produce an auditable, immutable `LedgerTransaction` record.
-- **Database-Enforced Refund Idempotency:** Refund idempotency is database-enforced. Application-level lookup is an optimization; PostgreSQL uniqueness (`uq_refund_idempotency` on `(wallet_id, reference_type, reference_id)` WHERE `transaction_type = 'REFUND'`) is the authoritative concurrency guarantee.
-- **Single Refund Invariant:** `same wallet + same canonical refund reference + REFUND transaction = at most one ledger transaction`.
-- Under concurrent race conditions, the losing transaction hits the database partial unique index, rolls back cleanly via SQL savepoint, verifies amount consistency, and returns the existing transaction without double-crediting.
+- **Database-Enforced Refund Idempotency:** Refund idempotency is database-enforced. Application-level lookup is an optimization; PostgreSQL/SQLite uniqueness (`uq_refund_idempotency` on `(wallet_id, reference_type, reference_id)` WHERE `transaction_type = 'REFUND'`) is the authoritative concurrency guarantee.
+- **Database-Enforced Settlement Idempotency:** Partial unique index `uq_settlement_idempotency` on `ledger_transactions(wallet_id, reference_type, reference_id)` WHERE `transaction_type = 'CREDIT' AND reference_type = 'PAYMENT_SETTLEMENT' AND reference_id IS NOT NULL`. Exactly one wallet credit can ever occur for a settled payment intent.
+- **Distinct Accounting Separation:** External gateway payment refunds (`PAYMENT_REFUND`) are strictly segregated from order fulfillment failure refunds (`ORDER_FULFILLMENT_REFUND`).
+- Under concurrent race conditions (webhook vs user return), the losing transaction hits the database partial unique index, rolls back cleanly via SQL savepoint, verifies amount consistency, and returns the existing transaction without double-crediting.
 - If an order permanently fails to fulfill, an automated ledger refund must restore user funds exactly once.
 
-### Law 6: Authoritative Pricing (Never Trust the Client)
-- Prices sent from client interfaces, web forms, or Telegram inline buttons are untrusted.
+### Law 6: Authoritative Pricing & Payment Amounts (Never Trust the Client)
+- Prices and payment amounts sent from client interfaces, web forms, or Telegram inline buttons are untrusted.
 - `CheckoutService` **MUST** query the authoritative database record for `ProductVariant.price` scoped to `tenant_id`. Client-supplied amounts are strictly rejected.
+- `PaymentService.create_payment_intent()` **MUST** derive amounts strictly from the server-authoritative `Order.total_amount`.
 
 ### Law 7: Fulfillment Idempotency & Durability
 - Every fulfillment attempt **MUST** specify an explicit attempt-scoped idempotency key:
@@ -48,13 +50,18 @@ Every AI coding agent working in this repository is strictly bound by these immu
 - **Never notify the customer that their wallet was refunded unless the ledger refund transaction has already succeeded.**
 - Background jobs must be stored durably in the database (`FulfillmentJobRecord`) to survive process crashes and power loss. On restart, workers must call `recover_pending_jobs()`.
 
-### Law 8: Quality & Verification Gates
+### Law 8: Cryptographic Telegram Mini App Authentication Boundary
+- Telegram Mini App `initData` must be cryptographically validated server-side using Telegram's official HMAC-SHA256 signature algorithm against `HMAC_SHA256("WebAppData", bot_token)`.
+- Rejects expired `auth_date` (> 86400s) and future timestamps (> 300s).
+- Tenant scoping must be derived authoritatively from the owning `Bot` record. Client-supplied tenant overrides are strictly rejected.
+
+### Law 9: Quality & Verification Gates
 - Before any milestone commit or push:
   1. All database migrations must be applied cleanly (`alembic upgrade head`).
   2. The test suite must pass with 100% success (`.venv/bin/pytest -v`).
   3. The codebase must be completely clean of linter errors (`.venv/bin/ruff check .`).
 
-### Law 9: Version Control & Remote Sync
+### Law 10: Version Control & Remote Sync
 - Every coherent milestone must be committed to Git and pushed to remote `git@github.com:GH-ZX/GH-Bot-Factory.git` on branch `main` using SSH key `~/.ssh/id_ed25519_ghzx`.
 
 ---
@@ -64,37 +71,39 @@ Every AI coding agent working in this repository is strictly bound by these immu
 ```
 GH-Bot-Factory Root
 ├── apps/
-│   └── api/                  # FastAPI web server, health checks, webhook endpoints
+│   ├── api/                  # FastAPI web server, health checks, webhook endpoints
+│   │   └── v1/               # Version 1 modular routers (/payments, /auth)
 ├── packages/
 │   ├── core/                 # Shared Base database model, UUID/Timestamp mixins, global exceptions
 │   ├── tenants/              # Tenant, User, Membership (RBAC: OWNER, ADMIN, STAFF, CUSTOMER)
 │   ├── commerce/             # Category, Product, ProductVariant, Order, OrderItem, StateMachine, Checkout
-│   ├── payments/             # Wallet, LedgerTransaction, LedgerService (Double-entry accounting)
-│   ├── telegram/             # Aiogram 3 multi-tenant runtime, Bot Registry, Middlewares, Routers, FSM
+│   ├── payments/             # PaymentIntent, PaymentTransaction, PaymentProviderConfig, Webhooks, Ledger
+│   ├── telegram/             # Aiogram 3 multi-tenant runtime, Bot Registry, Middlewares, Routers, TMA Auth
 │   ├── providers/            # Provider Protocol, Client Registry, Mock & Digital Providers, ProviderRouter
 │   ├── fulfillment/          # FulfillmentService, Worker (durable queue), ReconciliationService, Models
 │   └── notifications/        # Decoupled notification transport system (Telegram/Audit)
 ├── migrations/               # Alembic database schema revisions
-├── tests/                    # Pytest async test suite (45/45 passing)
+├── tests/                    # Pytest async test suite (86/86 passing)
 ├── docs/
 │   ├── architecture/         # System architecture deep-dives & sequence diagrams
-│   ├── decisions/            # Architecture Decision Records (ADR-001 through ADR-005)
+│   ├── decisions/            # Architecture Decision Records (ADR-001 through ADR-006)
 │   └── prompts/              # Complete historical archive of all user prompts and instructions
 └── .agents/
     └── skills/               # Antigravity agent skills repository
 ```
 
 ### Module Responsibilities & Core Classes:
-| Package | Primary Classes | Key Role |
+| Package / App | Primary Classes / Routers | Key Role |
 | :--- | :--- | :--- |
 | `packages.core` | `Base`, `UUIDMixin`, `TimestampMixin` | Foundation DB base, async engine, session makers |
 | `packages.tenants` | `Tenant`, `User`, `Membership`, `Role` | Tenant scoping, customer authentication, RBAC |
 | `packages.commerce` | `Order`, `OrderItem`, `Product`, `ProductVariant`, `OrderStateMachine`, `CheckoutService` | Catalog, legal state transitions, cart checkout |
-| `packages.payments` | `Wallet`, `LedgerTransaction`, `LedgerService` | Mathematical balance audits, immutable ledger entries, idempotent refunds |
-| `packages.telegram` | `Bot`, `TenantTelegramUser`, `BotRuntimeManager`, `TenantResolutionMiddleware` | Multi-bot runtime, secret storage, tenant resolution, FSM isolation |
+| `packages.payments` | `PaymentIntent`, `PaymentTransaction`, `PaymentProviderConfig`, `PaymentWebhookEvent`, `PaymentService`, `PaymentProviderRegistry`, `PaymentReconciliationService`, `Wallet`, `LedgerTransaction`, `LedgerService` | Provider-agnostic payment gateway abstraction, durable PaymentIntents, webhook security, settlement idempotency, double-entry wallet ledger |
+| `packages.telegram` | `Bot`, `TenantTelegramUser`, `TelegramMiniAppAuthService`, `BotRuntimeManager`, `TenantResolutionMiddleware` | Multi-bot runtime, secret storage, tenant resolution, FSM isolation, TMA initData HMAC auth |
 | `packages.providers` | `Provider`, `ProviderCredential`, `ProviderProductMapping`, `ProviderRouter`, `MockProvider` | Supplier protocol, failover routing, credential safety |
 | `packages.fulfillment` | `FulfillmentAttempt`, `FulfillmentJobRecord`, `FulfillmentService`, `FulfillmentWorker`, `ReconciliationService` | Durable execution, retry backoff, crash recovery, out-of-band reconciliation |
 | `packages.notifications`| `NotificationService`, `NotificationPayload`, `MockNotificationTransport` | Asynchronous post-checkout customer alerting |
+| `apps.api.v1` | `payments_router`, `auth_router` | Multi-client REST endpoints: Payment intent lifecycle, webhook ingestion, TMA HMAC validation |
 
 ---
 
@@ -152,6 +161,7 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 6. **Milestone 6 (Coding Agent Map & Skill):** Creation of `AGENT_MAP.md`, `.agents/skills/gh-bot-factory-core/SKILL.md`, and `docs/prompts/prompt_history.md`. Commit: `aa0f7ab`.
 7. **Milestone 7 (Phase 4.2 Fulfillment Integrity Hardening):** Canonical refund idempotency (`CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"`), fail-closed durable enqueue, atomic conditional job claim, and frozen catalog refund protection. 50/50 tests passing. Commit: `6d750b7`.
 8. **Milestone 8 (Phase 4.3 Database-Enforced Refund Idempotency):** Schema-level partial unique index (`uq_refund_idempotency`), Alembic migration `867840fa9063` with legacy duplicate safety check, concurrency-safe `LedgerService.refund()`, amount mismatch guard (`LedgerIntegrityError`), and 59/59 tests passing. Commit: `79b5ba0`.
+9. **Milestone 9 (Phase 5 Payment Infrastructure & Multi-Client API Foundation):** Provider-agnostic payment gateway abstraction (`packages.payments`), durable `PaymentIntent` with server-authoritative amounts, `PaymentStateMachine`, `PaymentProvider` protocol and registry, database-enforced settlement idempotency (`uq_settlement_idempotency`), distinct `PAYMENT_REFUND` accounting, webhook verification and deduplication, `PaymentReconciliationService`, server-side Telegram Mini App HMAC-SHA256 authentication (`TelegramMiniAppAuthService`), FastAPI REST endpoints (`/api/v1/payments`, `/api/v1/auth`), reversible Alembic migration `a8d5f418df6f`, and 86/86 tests passing. Prompts handled: initial Phase 5 specification and continuation directive *"sorry forvunteruption, use more agents and resume"*. Commit: Pending.
 
 ---
 

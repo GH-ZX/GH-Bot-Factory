@@ -229,4 +229,89 @@ This document serves as the historical record of all user prompts, architectural
    - Total tests: **59/59 passing (100% pass rate)**.
    - Codebase 100% clean under `ruff check .`.
 
+---
+
+## Milestone 9: Phase 5 — Payment Infrastructure & Multi-Client API Foundation
+
+- **Date:** 2026-09-15
+- **Status:** Completed
+- **Commit:** Pending
+
+### User Request / Prompts:
+
+#### Initial Phase 5 Prompt:
+> "Phase 5 — Payment Infrastructure & Multi-Client API Foundation
+> Objective: Implement the production-grade Payment Infrastructure for GH-Bot-Factory.
+> Establish a provider-agnostic payment architecture consumed by:
+> 1. Telegram Bot
+> 2. Telegram Mini App
+> 3. Admin Panel
+> 4. Future external clients/integrations
+> Requirements:
+> 1. Inspect existing architecture first (authoritative wallet/ledger/order logic).
+> 2. Payment domain under packages/payments/ with PaymentIntent, PaymentTransaction, PaymentProviderConfig, PaymentWebhookEvent.
+> 3. Durable PaymentIntent representing authoritative payment attempt, amount strictly server-authoritative from Order.
+> 4. Payment state machine with explicit legal transitions (CREATED, PENDING, PROCESSING, SUCCEEDED, FAILED, EXPIRED, UNKNOWN, CANCELLED).
+> 5. Payment provider protocol & mock payment provider with capability flags.
+> 6. Multi-tenant Payment Provider Registry with SecretStorage integration.
+> 7. Database-enforced payment idempotency (unique constraints and active intent partial unique index).
+> 8. PaymentWebhookEvent model with tenant_id + provider + provider_event_id uniqueness.
+> 9. Webhook security & cryptographic signature verification pipeline.
+> 10. Payment -> Ledger integration with database-enforced settlement idempotency (uq_settlement_idempotency).
+> 11. Webhook-first and user-return race safety.
+> 12. Server-authoritative amount and currency integrity checks.
+> 13. Payment reconciliation service for uncertain (UNKNOWN, PENDING, PROCESSING) states.
+> 14. Distinct accounting reference types: PAYMENT_REFUND vs ORDER_FULFILLMENT_REFUND.
+> 15. Provider-agnostic API foundation under apps/api/ (/api/v1/payments).
+> 16. Telegram Mini App server-side HMAC-SHA256 initData authentication with tenant resolution.
+> 17. Multi-client architecture sharing single service backend.
+> 18. Strict multi-tenant isolation tests.
+> 19. Clean, reversible Alembic migrations.
+> 20. Dedicated test suite covering all required scenarios."
+
+#### Verbatim Continuation / Interruption Prompt:
+> "sorry forvunteruption, use more agents and resume"
+>
+> *(Directive: User requested multi-agent parallelism to accelerate and complete Phase 5 development, validation, documentation, and testing.)*
+
+### Deliverables & Implementation:
+1. **Domain Models ([`packages/payments/models.py`](file:///home/it/Coding/gh-bot-factory/packages/payments/models.py)):**
+   - [`PaymentIntent`](file:///home/it/Coding/gh-bot-factory/packages/payments/models.py#L130): Durable payment attempt with server-authoritative amount and currency, bound to `Order`.
+   - [`PaymentTransaction`](file:///home/it/Coding/gh-bot-factory/packages/payments/models.py#L194): Gateway action audit ledger (`AUTHORIZATION`, `CAPTURE`, `SETTLEMENT`, `REFUND`, `VOID`).
+   - [`PaymentProviderConfig`](file:///home/it/Coding/gh-bot-factory/packages/payments/models.py#L231): Tenant-scoped gateway config pointing to secure `SecretStorage` references.
+   - [`PaymentWebhookEvent`](file:///home/it/Coding/gh-bot-factory/packages/payments/models.py#L258): Audit and deduplication log for webhook events with unique constraint `uq_webhook_tenant_provider_event` on `(tenant_id, provider, provider_event_id)`.
+   - `uq_settlement_idempotency`: Partial unique index on `ledger_transactions(wallet_id, reference_type, reference_id)` WHERE `transaction_type = 'CREDIT' AND reference_type = 'PAYMENT_SETTLEMENT' AND reference_id IS NOT NULL`.
+   - `uq_active_order_payment_intent`: Partial unique index on `payment_intents(tenant_id, order_id)` WHERE `status IN ('CREATED', 'PENDING', 'PROCESSING')`.
+2. **Payment State Machine ([`packages/payments/state_machine.py`](file:///home/it/Coding/gh-bot-factory/packages/payments/state_machine.py)):**
+   - Explicit transition validation across `CREATED`, `PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `EXPIRED`, `UNKNOWN`, `CANCELLED`.
+   - Terminal status immutability enforcement.
+3. **Provider Abstraction ([`packages/payments/providers/`](file:///home/it/Coding/gh-bot-factory/packages/payments/providers/)):**
+   - [`PaymentProvider`](file:///home/it/Coding/gh-bot-factory/packages/payments/providers/interface.py#L67) protocol with runtime capability flags (`supports_idempotency_keys`, `supports_payment_lookup`, `supports_webhooks`, `supports_refunds`, `supports_partial_refunds`).
+   - [`MockPaymentProvider`](file:///home/it/Coding/gh-bot-factory/packages/payments/providers/mock.py#L15): Deterministic, configurable gateway adapter for test simulation.
+   - [`PaymentProviderRegistry`](file:///home/it/Coding/gh-bot-factory/packages/payments/providers/registry.py#L22): Multi-tenant provider resolution with credentials retrieved securely via `SecretStorage`.
+4. **Core Services ([`packages/payments/`](file:///home/it/Coding/gh-bot-factory/packages/payments/)):**
+   - [`PaymentService`](file:///home/it/Coding/gh-bot-factory/packages/payments/payment_service.py#L54): Intent creation, webhook verification & processing, settlement, and gateway refunds.
+   - [`PaymentReconciliationService`](file:///home/it/Coding/gh-bot-factory/packages/payments/reconciliation.py#L19): Automatic recovery and gateway synchronization for uncertain payments.
+   - [`LedgerService.settle_payment()`](file:///home/it/Coding/gh-bot-factory/packages/payments/service.py#L93): Concurrency-safe atomic wallet settlement with savepoint rollback.
+   - `CANONICAL_SETTLEMENT_TYPE = "PAYMENT_SETTLEMENT"` and `CANONICAL_PAYMENT_REFUND_TYPE = "PAYMENT_REFUND"` ensuring accounting separation from `ORDER_FULFILLMENT_REFUND`.
+5. **Telegram Mini App Authentication ([`packages/telegram/miniapp.py`](file:///home/it/Coding/gh-bot-factory/packages/telegram/miniapp.py)):**
+   - [`TelegramMiniAppAuthService`](file:///home/it/Coding/gh-bot-factory/packages/telegram/miniapp.py#L29): Server-side HMAC-SHA256 verification of `initData` against `WebAppData` key and bot token.
+   - Tenant context resolution derived from owning `Bot`, preventing client-side tenant spoofing.
+6. **FastAPI Endpoints ([`apps/api/v1/payments.py`](file:///home/it/Coding/gh-bot-factory/apps/api/v1/payments.py), [`apps/api/v1/auth.py`](file:///home/it/Coding/gh-bot-factory/apps/api/v1/auth.py)):**
+   - `POST /api/v1/payments/intents`: Creates intent from order.
+   - `GET /api/v1/payments/intents/{id}`: Fetches tenant-scoped intent.
+   - `POST /api/v1/payments/intents/{id}/cancel`: Cancels intent.
+   - `POST /api/v1/payments/intents/{id}/reconcile`: Reconciles intent.
+   - `POST /api/v1/payments/webhooks/{provider_name}`: Verifies and ingests webhooks.
+   - `POST /api/v1/auth/telegram-miniapp`: Authenticates TMA `initData`.
+7. **Reversible Alembic Migration ([`migrations/versions/a8d5f418df6f_add_payment_infrastructure_and_.py`](file:///home/it/Coding/gh-bot-factory/migrations/versions/a8d5f418df6f_add_payment_infrastructure_and_.py)):**
+   - Creates all payment tables and partial unique indexes. Verified reversible.
+8. **Documentation & Architecture Decisions:**
+   - [`docs/decisions/ADR-006-payment-abstraction.md`](file:///home/it/Coding/gh-bot-factory/docs/decisions/ADR-006-payment-abstraction.md): Architectural Decision Record for Phase 5.
+   - [`docs/architecture/payment-architecture.md`](file:///home/it/Coding/gh-bot-factory/docs/architecture/payment-architecture.md): Deep-dive architecture and REST API specification.
+   - [`AGENT_MAP.md`](file:///home/it/Coding/gh-bot-factory/AGENT_MAP.md): Sovereign Laws updated with settlement idempotency and TMA HMAC boundary.
+   - [`.agents/skills/gh-bot-factory-core/SKILL.md`](file:///home/it/Coding/gh-bot-factory/.agents/skills/gh-bot-factory-core/SKILL.md): Agent skill guidelines updated with Phase 5 operational instructions.
+9. **Verification & Testing:**
+   - **86/86 tests passing (100% pass rate)** across entire repository test suite (59 prior tests + 21 payment domain tests + 6 API integration tests).
+   - Zero lint errors under `ruff check .`.
 
