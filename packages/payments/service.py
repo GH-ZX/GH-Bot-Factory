@@ -1,3 +1,4 @@
+import logging
 import uuid
 from decimal import Decimal
 
@@ -10,6 +11,8 @@ from packages.core.exceptions import (
     TenantAccessViolationError,
 )
 from packages.payments.models import LedgerTransaction, TransactionType, Wallet
+
+logger = logging.getLogger("payments.ledger")
 
 
 class LedgerService:
@@ -124,6 +127,23 @@ class LedgerService:
     ) -> LedgerTransaction:
         if amount <= Decimal("0.00"):
             raise ValueError("Refund amount must be strictly positive.")
+
+        # Strict idempotency check: prevent duplicate refunds for same reference
+        if reference_id and reference_type:
+            stmt = select(LedgerTransaction).where(
+                LedgerTransaction.wallet_id == wallet.id,
+                LedgerTransaction.transaction_type == TransactionType.REFUND,
+                LedgerTransaction.reference_id == reference_id,
+                LedgerTransaction.reference_type == reference_type,
+            )
+            existing_tx = (await session.execute(stmt)).scalars().first()
+            if existing_tx:
+                logger.warning(
+                    "Idempotent refund hit: refund for ref_id=%s ref_type=%s already exists. Skipping duplicate credit.",
+                    reference_id,
+                    reference_type,
+                )
+                return existing_tx
 
         balance_before = wallet.balance
         balance_after = balance_before + amount

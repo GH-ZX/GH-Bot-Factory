@@ -136,7 +136,8 @@ class MockProvider(BaseProviderClient):
         )
 
     async def get_order(self, external_order_id: str) -> ProviderOrderCheckResponse:
-        data = self.orders.get(external_order_id)
+        target_id = self.idempotency_map.get(external_order_id, external_order_id)
+        data = self.orders.get(target_id)
         if not data:
             return ProviderOrderCheckResponse(
                 external_order_id=external_order_id,
@@ -147,10 +148,11 @@ class MockProvider(BaseProviderClient):
             )
 
         is_completed = data["status"] == "COMPLETED"
+        is_failed = data["status"] in ("FAILED", "CANCELLED", "REJECTED")
         return ProviderOrderCheckResponse(
-            external_order_id=external_order_id,
+            external_order_id=data.get("external_order_id", target_id),
             status=data["status"],
             is_completed=is_completed,
-            is_failed=False,
+            is_failed=is_failed,
             raw_data=data,
         )

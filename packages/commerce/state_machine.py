@@ -34,11 +34,14 @@ LEGAL_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
         OrderStatus.PROCESSING,
         OrderStatus.REFUNDED,
         OrderStatus.CANCELLED,
+        OrderStatus.FAILED,
     },
     OrderStatus.PROCESSING: {
         OrderStatus.PARTIALLY_FULFILLED,
         OrderStatus.FULFILLED,
         OrderStatus.FAILED,
+        OrderStatus.CANCELLED,
+        OrderStatus.REFUNDED,
     },
     OrderStatus.PARTIALLY_FULFILLED: {
         OrderStatus.FULFILLED,

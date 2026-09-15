@@ -16,7 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from packages.commerce.models import Order
+from packages.commerce.models import Order, OrderItem
 from packages.core.database import Base, TimestampMixin, UUIDMixin
 from packages.providers.models import Provider
 from packages.tenants.models import JSON_TYPE, Tenant
@@ -27,6 +27,7 @@ class FulfillmentStatus(str, enum.Enum):
     PROCESSING = "PROCESSING"
     SUCCEEDED = "SUCCEEDED"
     RETRYING = "RETRYING"
+    UNKNOWN = "UNKNOWN"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
 
@@ -49,6 +50,11 @@ class FulfillmentAttempt(Base, UUIDMixin, TimestampMixin):
     order_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("orders.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+    order_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("order_items.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
     provider_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -94,4 +100,49 @@ class FulfillmentAttempt(Base, UUIDMixin, TimestampMixin):
 
     tenant: Mapped["Tenant"] = relationship("Tenant")
     order: Mapped["Order"] = relationship("Order")
+    order_item: Mapped["OrderItem | None"] = relationship("OrderItem")
     provider: Mapped["Provider | None"] = relationship("Provider")
+
+
+class FulfillmentJobStatus(str, enum.Enum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    DEAD_LETTER = "DEAD_LETTER"
+
+
+class FulfillmentJobRecord(Base, UUIDMixin, TimestampMixin):
+    """Durable fulfillment job record persisted in database to survive process crashes."""
+
+    __tablename__ = "fulfillment_jobs"
+    __table_args__ = (
+        Index("ix_fulfillment_jobs_tenant_status", "tenant_id", "status"),
+        Index("ix_fulfillment_jobs_order", "order_id"),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    recipient: Mapped[str] = mapped_column(String(255), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    status: Mapped[FulfillmentJobStatus] = mapped_column(
+        Enum(FulfillmentJobStatus, name="fulfillment_job_status_enum", native_enum=False),
+        default=FulfillmentJobStatus.QUEUED,
+        nullable=False,
+        index=True,
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+    order: Mapped["Order"] = relationship("Order")

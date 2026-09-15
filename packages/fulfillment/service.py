@@ -17,7 +17,7 @@ from packages.notifications.service import (
     NotificationService,
 )
 from packages.payments.service import LedgerService
-from packages.providers.exceptions import ProviderError
+from packages.providers.exceptions import ProviderError, ProviderTimeoutError
 from packages.providers.router import ProviderRouter
 
 logger = logging.getLogger("fulfillment.service")
@@ -117,31 +117,48 @@ class FulfillmentService:
             )
         )
 
-        # 4. Route through provider router (handling primary order item)
-        primary_item = order.items[0] if order.items else None
-        if not primary_item:
+        # 4. Route through provider router (handling multi-item orders)
+        if not order.items:
             attempt.status = FulfillmentStatus.FAILED
             attempt.error_classification = "EMPTY_ORDER_ITEMS"
             attempt.completed_at = datetime.now(UTC)
             await session.commit()
             return attempt
 
+        primary_item = order.items[0]
+        attempt.order_item_id = primary_item.id
+
         try:
-            provider, _mapping, response = await self.router.route_and_execute_order(
-                session=session,
-                tenant_id=order.tenant_id,
-                product_id=primary_item.product_variant_id,  # Product/Variant ID
-                quantity=primary_item.quantity,
-                recipient=recipient,
-                idempotency_key=idempotency_key,
-                variant_id=primary_item.product_variant_id,
-            )
+            responses = []
+            last_provider = None
+            total_provider_cost = Decimal("0.00")
+
+            for item in order.items:
+                item_key = (
+                    idempotency_key
+                    if len(order.items) == 1
+                    else f"{idempotency_key}:item:{item.id}"
+                )
+                provider, _mapping, response = await self.router.route_and_execute_order(
+                    session=session,
+                    tenant_id=order.tenant_id,
+                    product_id=item.product_variant_id,
+                    quantity=item.quantity,
+                    recipient=recipient,
+                    idempotency_key=item_key,
+                    variant_id=item.product_variant_id,
+                )
+                responses.append(response)
+                last_provider = provider
+                total_provider_cost += response.cost
 
             # 5. Success Flow
-            attempt.provider_id = provider.id
-            attempt.external_order_id = response.external_order_id
-            attempt.cost_amount = response.cost
-            attempt.response_payload = _to_json_safe(response.raw_data)
+            attempt.provider_id = last_provider.id if last_provider else None
+            attempt.external_order_id = responses[0].external_order_id
+            attempt.cost_amount = total_provider_cost
+            attempt.response_payload = _to_json_safe(
+                responses[0].raw_data if len(responses) == 1 else [r.raw_data for r in responses]
+            )
             attempt.status = FulfillmentStatus.SUCCEEDED
             attempt.completed_at = datetime.now(UTC)
 
@@ -152,8 +169,8 @@ class FulfillmentService:
             logger.info(
                 "Fulfillment SUCCEEDED for order #%s via provider '%s' (ext_id=%s)",
                 order.order_number,
-                provider.name,
-                response.external_order_id,
+                last_provider.name if last_provider else "N/A",
+                attempt.external_order_id,
             )
 
             await self.notifications.notify(
@@ -164,7 +181,7 @@ class FulfillmentService:
                     order_id=order.id,
                     order_number=order.order_number,
                     message=f"🎉 Order #{order.order_number} fulfilled successfully!",
-                    metadata={"external_order_id": response.external_order_id},
+                    metadata={"external_order_id": attempt.external_order_id},
                 )
             )
             return attempt
@@ -173,22 +190,47 @@ class FulfillmentService:
             # 6. Failure Flow & Financial Compensation Invariant
             error_type = type(exc).__name__
             is_retryable = getattr(exc, "is_retryable", False)
+            if hasattr(exc, "__cause__") and getattr(exc.__cause__, "is_retryable", False):
+                is_retryable = True
+            is_timeout = isinstance(exc, (ProviderTimeoutError, TimeoutError)) or (
+                hasattr(exc, "__cause__") and isinstance(exc.__cause__, (ProviderTimeoutError, TimeoutError))
+            )
 
-            attempt.status = FulfillmentStatus.FAILED
             attempt.error_classification = error_type
             attempt.response_payload = _to_json_safe({"error": str(exc), "retryable": is_retryable})
             attempt.completed_at = datetime.now(UTC)
 
             logger.error(
-                "Fulfillment attempt failed for order #%s: %s (type=%s, retryable=%s)",
+                "Fulfillment attempt %d failed for order #%s: %s (type=%s, retryable=%s)",
+                attempt_number,
                 order.order_number,
                 exc,
                 error_type,
                 is_retryable,
             )
 
-            # Permanent failure: trigger automatic financial refund through LedgerService
-            if not is_retryable or attempt_number >= 3:
+            if is_retryable and attempt_number < 3:
+                # Transient error: mark RETRYING (or UNKNOWN for network timeout)
+                attempt.status = FulfillmentStatus.UNKNOWN if is_timeout else FulfillmentStatus.RETRYING
+                await session.commit()
+
+                # Notify progress, NEVER premature refund
+                await self.notifications.notify(
+                    NotificationPayload(
+                        event_type=NotificationEventType.FULFILLMENT_STARTED,
+                        tenant_id=order.tenant_id,
+                        recipient=recipient,
+                        order_id=order.id,
+                        order_number=order.order_number,
+                        message=f"Order #{order.order_number} fulfillment is temporarily delayed. Our system is retrying automatically.",
+                        metadata={"attempt": attempt_number},
+                    )
+                )
+            else:
+                # Permanent failure: trigger automatic financial refund through LedgerService
+                attempt.status = FulfillmentStatus.FAILED
+                refund_successful = False
+
                 logger.warning(
                     "Executing automated ledger refund for failed order #%s",
                     order.order_number,
@@ -209,22 +251,38 @@ class FulfillmentService:
                         description=f"Automated refund for unfulfilled order #{order.order_number}",
                     )
                     order.transition_to(OrderStatus.FAILED)
+                    refund_successful = True
                 except Exception as refund_err:  # noqa: BLE001
                     logger.critical("Failed to process ledger refund for order #%s: %s", order.id, refund_err)
 
-            await session.commit()
+                await session.commit()
 
-            await self.notifications.notify(
-                NotificationPayload(
-                    event_type=NotificationEventType.FULFILLMENT_FAILED,
-                    tenant_id=order.tenant_id,
-                    recipient=recipient,
-                    order_id=order.id,
-                    order_number=order.order_number,
-                    message=f"⚠️ Order #{order.order_number} fulfillment could not be completed. Your wallet has been refunded.",
-                    metadata={"error": str(exc)},
-                )
-            )
+                # ONLY send refund notification if refund was ACTUALLY executed!
+                # Do NOT leak raw str(exc) to user!
+                if refund_successful:
+                    await self.notifications.notify(
+                        NotificationPayload(
+                            event_type=NotificationEventType.ORDER_REFUNDED,
+                            tenant_id=order.tenant_id,
+                            recipient=recipient,
+                            order_id=order.id,
+                            order_number=order.order_number,
+                            message=f"⚠️ Order #{order.order_number} could not be fulfilled. Your balance has been refunded.",
+                            metadata={"order_number": order.order_number},
+                        )
+                    )
+                else:
+                    await self.notifications.notify(
+                        NotificationPayload(
+                            event_type=NotificationEventType.FULFILLMENT_FAILED,
+                            tenant_id=order.tenant_id,
+                            recipient=recipient,
+                            order_id=order.id,
+                            order_number=order.order_number,
+                            message=f"⚠️ Order #{order.order_number} fulfillment could not be completed. Please contact support.",
+                            metadata={"order_number": order.order_number},
+                        )
+                    )
 
             if isinstance(exc, ProviderError):
                 raise

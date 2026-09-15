@@ -9,6 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from packages.commerce.models import Order
 from packages.commerce.state_machine import OrderStatus
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
+from packages.notifications.service import (
+    NotificationEventType,
+    NotificationPayload,
+    NotificationService,
+)
+from packages.payments.service import LedgerService
 from packages.providers.clients.registry import ProviderClientRegistry, provider_registry
 from packages.providers.models import Provider
 
@@ -28,8 +34,13 @@ class ReconciliationDiscrepancy:
 class ReconciliationService:
     """Detects and resolves discrepancies between internal order states and external provider statuses."""
 
-    def __init__(self, registry: ProviderClientRegistry | None = None) -> None:
+    def __init__(
+        self,
+        registry: ProviderClientRegistry | None = None,
+        notification_service: NotificationService | None = None,
+    ) -> None:
         self.registry = registry or provider_registry
+        self.notifications = notification_service or NotificationService()
 
     async def scan_and_reconcile_tenant(
         self,
@@ -42,7 +53,11 @@ class ReconciliationService:
             .where(
                 FulfillmentAttempt.tenant_id == tenant_id,
                 FulfillmentAttempt.status.in_(
-                    [FulfillmentStatus.PROCESSING, FulfillmentStatus.RETRYING]
+                    [
+                        FulfillmentStatus.PROCESSING,
+                        FulfillmentStatus.RETRYING,
+                        FulfillmentStatus.UNKNOWN,
+                    ]
                 ),
             )
         )
@@ -56,12 +71,14 @@ class ReconciliationService:
             if not order:
                 continue
 
-            # Case 1: External order was placed, but internal state remained PROCESSING
-            if attempt.external_order_id and attempt.provider_id:
+            query_target = attempt.external_order_id or attempt.idempotency_key
+            provider_record = None
+            if attempt.provider_id:
                 provider_record = await session.get(Provider, attempt.provider_id)
-                if not provider_record:
-                    continue
+            elif attempt.request_payload and "provider_id" in attempt.request_payload:
+                provider_record = await session.get(Provider, uuid.UUID(attempt.request_payload["provider_id"]))
 
+            if query_target and provider_record:
                 client = self.registry.get_client(
                     provider_type=provider_record.provider_type,
                     provider_name=provider_record.name,
@@ -69,44 +86,86 @@ class ReconciliationService:
                 )
 
                 try:
-                    check_res = await client.get_order(attempt.external_order_id)
+                    check_res = await client.get_order(query_target)
                     if check_res.is_completed:
                         attempt.status = FulfillmentStatus.SUCCEEDED
+                        if check_res.external_order_id:
+                            attempt.external_order_id = check_res.external_order_id
                         if order.status != OrderStatus.FULFILLED:
                             order.transition_to(OrderStatus.FULFILLED)
                         await session.commit()
+
+                        await self.notifications.notify(
+                            NotificationPayload(
+                                event_type=NotificationEventType.FULFILLMENT_SUCCEEDED,
+                                tenant_id=order.tenant_id,
+                                recipient="customer",
+                                order_id=order.id,
+                                order_number=order.order_number,
+                                message=f"🎉 Order #{order.order_number} verified and completed successfully!",
+                                metadata={"external_order_id": attempt.external_order_id},
+                            )
+                        )
 
                         discrepancies.append(
                             ReconciliationDiscrepancy(
                                 order_id=order.id,
                                 order_number=order.order_number,
                                 issue_type="OUT_OF_SYNC_RESOLVED",
-                                details=f"External order {attempt.external_order_id} was completed upstream.",
+                                details=f"External order {query_target} was completed upstream.",
                                 action_taken="Synchronized internal attempt and marked order FULFILLED",
                             )
                         )
                     elif check_res.is_failed:
                         attempt.status = FulfillmentStatus.FAILED
                         attempt.error_classification = "UPSTREAM_FAILED_RECONCILED"
+                        order.transition_to(OrderStatus.FAILED)
+
+                        # Automated financial refund invariant
+                        wallet = await LedgerService.get_or_create_wallet(
+                            session=session,
+                            tenant_id=order.tenant_id,
+                            user_id=order.user_id,
+                            currency=order.currency,
+                        )
+                        await LedgerService.refund(
+                            session=session,
+                            wallet=wallet,
+                            amount=order.total_amount,
+                            reference_id=str(order.id),
+                            reference_type="RECONCILIATION_FAILURE_REFUND",
+                            description=f"Automated refund via reconciliation for failed order #{order.order_number}",
+                        )
                         await session.commit()
+
+                        await self.notifications.notify(
+                            NotificationPayload(
+                                event_type=NotificationEventType.ORDER_REFUNDED,
+                                tenant_id=order.tenant_id,
+                                recipient="customer",
+                                order_id=order.id,
+                                order_number=order.order_number,
+                                message=f"⚠️ Order #{order.order_number} failed upstream. Your balance has been refunded.",
+                                metadata={"order_number": order.order_number},
+                            )
+                        )
 
                         discrepancies.append(
                             ReconciliationDiscrepancy(
                                 order_id=order.id,
                                 order_number=order.order_number,
                                 issue_type="UPSTREAM_FAILED_RESOLVED",
-                                details=f"External order {attempt.external_order_id} failed upstream.",
-                                action_taken="Marked attempt FAILED for refund handling",
+                                details=f"External order {query_target} failed upstream.",
+                                action_taken="Marked attempt FAILED and executed automated ledger refund",
                             )
                         )
                 except Exception as query_err:  # noqa: BLE001
                     logger.warning(
-                        "Reconciliation query failed for external_order %s: %s",
-                        attempt.external_order_id,
+                        "Reconciliation query failed for query_target %s: %s",
+                        query_target,
                         query_err,
                     )
 
-            # Case 2: Stuck in PROCESSING without external order id
             elif not attempt.external_order_id:
                 discrepancies.append(
                     ReconciliationDiscrepancy(

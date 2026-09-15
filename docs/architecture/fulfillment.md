@@ -2,10 +2,11 @@
 
 ## 1. Overview & Objectives
 
-The **Fulfillment Engine** is responsible for fulfilling paid customer orders through upstream suppliers. It guarantees:
-1. **At-Most-Once Execution:** Strict idempotency preventing duplicate orders or multiple external charges for the same order.
-2. **Financial Invariance:** Absolute reconciliation between orders, external supplier expenses, and customer wallets. If fulfillment permanently fails, the system automatically executes a compensatory refund in the double-entry ledger.
-3. **Resilient Asynchronous Processing:** Background worker queues with exponential backoff and dead-letter handling to withstand upstream vendor outages.
+The **Fulfillment Engine** is responsible for fulfilling paid customer orders through upstream suppliers. Following **Phase 4.1 Production Hardening**, it guarantees:
+1. **At-Most-Once Execution:** Strict idempotency preventing duplicate orders or multiple external charges for the same order, including crash-after-acceptance scenarios.
+2. **Durable Asynchronous Processing:** Database-backed job queue (`fulfillment_jobs`) surviving application restarts and crashes with automated startup recovery.
+3. **Financial Invariance & Refund Idempotency:** Absolute reconciliation between orders, supplier charges, and customer wallets. If fulfillment permanently fails, an automated refund is executed in the double-entry ledger. Duplicate refunds are strictly prevented.
+4. **Transparent States & Honest Notifications:** Transient timeouts transition to `UNKNOWN` or `RETRYING` without premature failure or misleading refund notices.
 
 ---
 
@@ -14,57 +15,65 @@ The **Fulfillment Engine** is responsible for fulfilling paid customer orders th
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Order Placed & Paid
-    PENDING --> IN_PROGRESS: Worker Enqueues / Dispatches
+    PENDING --> PROCESSING: Worker Dispatches
     
-    IN_PROGRESS --> SUCCEEDED: Upstream API returns COMPLETED
-    IN_PROGRESS --> FAILED: Upstream returns Error / Retries exhausted
+    PROCESSING --> SUCCEEDED: Upstream returns COMPLETED
+    PROCESSING --> RETRYING: Transient Rate Limit (attempt < 3)
+    PROCESSING --> UNKNOWN: Network Timeout in-flight
     
-    FAILED --> PENDING: Retryable failure (attempt < max_retries)
-    FAILED --> CompensatedRefund: Non-retryable or max retries exceeded
+    UNKNOWN --> SUCCEEDED: Reconciliation verifies Upstream COMPLETED
+    UNKNOWN --> FAILED: Retries exhausted / Upstream FAILED
     
+    RETRYING --> PROCESSING: Worker Retries
+    
+    PROCESSING --> FAILED: Non-retryable error / Max retries reached
+    
+    FAILED --> CompensatedRefund: Exactly-Once Ledger Refund
     CompensatedRefund --> [*]
     SUCCEEDED --> [*]
 ```
 
 ### FulfillmentAttempt Statuses:
 - `PENDING`: Initial state upon job enqueueing.
-- `IN_PROGRESS`: Currently being processed by `FulfillmentService` and transmitted to the provider.
+- `PROCESSING`: In flight to the provider.
 - `SUCCEEDED`: Confirmed completed upstream with external reference ID and cost amount recorded.
-- `FAILED`: Aborted due to error. If non-retryable or retries exceeded, marks order as `CANCELLED` and issues ledger refund.
+- `RETRYING`: Transient error occurred; scheduled for exponential backoff retry.
+- `UNKNOWN`: In-flight network timeout; awaiting provider status verification or reconciliation.
+- `FAILED`: Aborted due to permanent error or exhausted retries. Triggers automated ledger refund.
 
 ---
 
-## 3. Worker Architecture & Backoff Strategy
+## 3. Worker Architecture & Crash Recovery
 
-The `FulfillmentWorker` executes in an asynchronous background event loop:
+The `FulfillmentWorker` combines durable database tracking with asynchronous in-memory dispatch:
 
-1. **Job Queue:** New orders requiring fulfillment are placed into an in-memory queue (`asyncio.Queue[FulfillmentJob]`).
-2. **Exponential Backoff:** If an attempt fails with a retryable exception (`ProviderTimeoutError` or `ProviderRateLimitError`), the worker calculates delay using exponential backoff:
+1. **Transactional Outbox / Durable Storage:** Every `enqueue()` call persists a `FulfillmentJobRecord` in `fulfillment_jobs` with status `QUEUED`.
+2. **Crash Recovery (`recover_pending_jobs`):** When the application restarts after an unexpected termination or server crash, the worker scans for any abandoned jobs in `QUEUED` or `RUNNING` status and safely restores them into the active queue.
+3. **Exponential Backoff:** If an attempt fails retryably, delay is calculated as:
    $$\text{Delay} = \text{base\_backoff} \times 2^{\text{attempt} - 1}$$
-3. **Dead Letter Queue:** If attempts exceed `max_retries` (default: 3), the job is moved to `dead_letter_queue` for operator inspection, and the order is permanently failed and refunded.
+4. **Dead Letter Queue:** If attempts exceed `max_retries` (default: 3), the job record is marked `DEAD_LETTER` with error details for operator inspection.
 
 ---
 
-## 4. Double-Entry Ledger Compensation Invariant
+## 4. Double-Entry Ledger Compensation & Refund Idempotency
 
 The platform enforces a strict accounting invariant:
 
-> **The customer must never be charged for an order that cannot be fulfilled.**
+> **The customer must never be charged for an order that cannot be fulfilled, and no refund may ever be credited more than once.**
 
-When an order fulfillment encounters a terminal failure (such as invalid recipient, out of stock across all providers, or exhausted retries):
-
-1. **Order Transition:** The `Order` transitions from `PAID` $\rightarrow$ `CANCELLED`.
-2. **Ledger Compensation:** `LedgerService.refund()` executes within the same atomic database transaction:
-   - A new credit ledger transaction is written to the customer's wallet.
-   - The user's wallet balance increases back to its pre-purchase amount.
-   - The double-entry transaction record explicitly references `order_id` and reason `"Fulfillment failed"`.
-3. **Customer Notification:** An automated `ORDER_REFUNDED` notification is dispatched to the customer via Telegram or active notification transport.
+When an order fulfillment encounters a terminal failure (in `FulfillmentService` or `ReconciliationService`):
+1. **Order Transition:** The `Order` transitions to `OrderStatus.FAILED`.
+2. **Idempotent Refund:** `LedgerService.refund()` executes with unique `reference_id=str(order.id)` and `reference_type="FULFILLMENT_FAILURE_REFUND"`.
+   - If this refund transaction already exists in the database, the existing record is returned without modifying wallet balances.
+   - If not yet processed, the user's wallet is credited, restoring funds.
+3. **Customer Notification:** The customer receives a clean, user-friendly notification (`ORDER_REFUNDED`). Raw internal exception strings (`str(exc)`) are strictly excluded.
 
 ---
 
 ## 5. Reconciliation Service
 
-For real-world distributed architectures where workers might restart or external provider callbacks may be delayed, `ReconciliationService` runs periodic checks:
-- Queries for orders in `PAID` state with no successful fulfillment attempt older than a threshold (e.g., 5 minutes).
-- Queries upstream providers via `provider.get_order(external_id)` to synchronize out-of-band status updates.
-- If verified completed upstream, marks order as `FULFILLED`. If verified cancelled or rejected upstream, triggers automatic ledger refund.
+For real-world distributed architectures where workers restart or network partitions obscure API responses:
+- `ReconciliationService.scan_and_reconcile_tenant()` queries attempts in `PROCESSING`, `RETRYING`, or `UNKNOWN`.
+- Supports querying upstream providers by `external_order_id` OR `idempotency_key` (recovering orders when the app crashed before recording the external order ID).
+- If upstream completed: sets attempt `SUCCEEDED` and order `FULFILLED`.
+- If upstream failed: sets attempt `FAILED`, order `FAILED`, and triggers automatic ledger refund.

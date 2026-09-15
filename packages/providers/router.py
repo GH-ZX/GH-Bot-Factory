@@ -196,6 +196,9 @@ class ProviderRouter:
                 raise ProviderError(f"Unexpected provider execution failure: {unhandled_err}") from unhandled_err
 
         # If all providers were exhausted
-        raise ProviderError(
+        is_retry = getattr(last_exception, "is_retryable", False) if last_exception else False
+        err = ProviderError(
             f"All eligible providers exhausted for product {product_id}. Last error: {last_exception}"
         )
+        err.is_retryable = is_retry
+        raise err from last_exception
