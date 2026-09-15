@@ -1,0 +1,16 @@
+[project]
+name = "gh-bot-factory"
+version = "0.1.0"
+description = "Multi-tenant Telegram commerce Bot Factory"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "redis>=5.0",
+    "pydantic-settings>=2.0",
+    "aiogram>=3.0",
+]
