@@ -16,7 +16,7 @@ from packages.notifications.service import (
     NotificationPayload,
     NotificationService,
 )
-from packages.payments.service import LedgerService
+from packages.payments.service import CANONICAL_REFUND_TYPE, LedgerService
 from packages.providers.exceptions import ProviderError, ProviderTimeoutError
 from packages.providers.router import ProviderRouter
 
@@ -247,7 +247,7 @@ class FulfillmentService:
                         wallet=wallet,
                         amount=order.total_amount,
                         reference_id=str(order.id),
-                        reference_type="FULFILLMENT_FAILURE_REFUND",
+                        reference_type=CANONICAL_REFUND_TYPE,
                         description=f"Automated refund for unfulfilled order #{order.order_number}",
                     )
                     order.transition_to(OrderStatus.FAILED)

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from packages.commerce.models import Order
@@ -27,6 +27,7 @@ class FulfillmentJob:
     recipient: str
     attempt_number: int = 1
     metadata: dict[str, Any] | None = None
+    job_id: uuid.UUID | None = None
 
 
 class FulfillmentWorker:
@@ -48,6 +49,28 @@ class FulfillmentWorker:
         self._worker_task: asyncio.Task | None = None
         self._is_running = False
 
+    @classmethod
+    async def claim_job(cls, session: AsyncSession, job_record_id: uuid.UUID) -> bool:
+        """Atomically claim a queued job record using conditional UPDATE.
+
+        UPDATE fulfillment_jobs SET status='RUNNING', locked_at=:now WHERE id=:id AND status='QUEUED'
+        Returns True if claimed by this caller (1 row updated), False if already claimed or not queued (0 rows).
+        """
+        stmt = (
+            update(FulfillmentJobRecord)
+            .where(
+                FulfillmentJobRecord.id == job_record_id,
+                FulfillmentJobRecord.status == FulfillmentJobStatus.QUEUED,
+            )
+            .values(
+                status=FulfillmentJobStatus.RUNNING,
+                locked_at=datetime.now(UTC),
+            )
+        )
+        res = await session.execute(stmt)
+        await session.commit()
+        return bool(res.rowcount and res.rowcount > 0)
+
     async def enqueue(
         self,
         order_id: uuid.UUID,
@@ -55,12 +78,17 @@ class FulfillmentWorker:
         attempt_number: int = 1,
         metadata: dict[str, Any] | None = None,
         persist_db: bool = True,
+        job_id: uuid.UUID | None = None,
     ) -> FulfillmentJob:
+        if job_id is None and persist_db:
+            job_id = uuid.uuid4()
+
         job = FulfillmentJob(
             order_id=order_id,
             recipient=recipient,
             attempt_number=attempt_number,
             metadata=metadata,
+            job_id=job_id,
         )
 
         if persist_db:
@@ -69,6 +97,7 @@ class FulfillmentWorker:
                     order = await session.get(Order, order_id)
                     tenant_id = order.tenant_id if order else uuid.uuid4()
                     record = FulfillmentJobRecord(
+                        id=job_id,
                         tenant_id=tenant_id,
                         order_id=order_id,
                         recipient=recipient,
@@ -78,8 +107,15 @@ class FulfillmentWorker:
                     )
                     session.add(record)
                     await session.commit()
-            except Exception as e:  # noqa: BLE001
-                logger.warning("Failed to persist durable FulfillmentJobRecord for order %s: %s", order_id, e)
+            except Exception as e:
+                logger.error(
+                    "Failed to persist durable FulfillmentJobRecord for order %s: %s. Aborting enqueue to fail closed.",
+                    order_id,
+                    e,
+                )
+                raise RuntimeError(
+                    f"Durable enqueue failed for order {order_id}: database persistence failed ({e})"
+                ) from e
 
         await self.queue.put(job)
         logger.info("Enqueued fulfillment job for order %s (attempt=%d)", order_id, attempt_number)
@@ -100,6 +136,7 @@ class FulfillmentWorker:
                 recipient=rec.recipient,
                 attempt_number=rec.attempt_number,
                 metadata=rec.payload,
+                job_id=rec.id,
             )
             await self.queue.put(job)
             count += 1
@@ -136,17 +173,29 @@ class FulfillmentWorker:
 
     async def _process_job(self, job: FulfillmentJob) -> FulfillmentAttempt | None:
         logger.info("Processing fulfillment job for order %s [attempt %d]", job.order_id, job.attempt_number)
+        rec_id: uuid.UUID | None = job.job_id
+
         async with self.session_factory() as session:
-            # Update durable status to RUNNING
-            stmt_rec = select(FulfillmentJobRecord).where(
-                FulfillmentJobRecord.order_id == job.order_id,
-                FulfillmentJobRecord.status == FulfillmentJobStatus.QUEUED,
-            ).order_by(FulfillmentJobRecord.created_at.desc())
-            rec = (await session.execute(stmt_rec)).scalars().first()
-            if rec:
-                rec.status = FulfillmentJobStatus.RUNNING
-                rec.locked_at = datetime.now(UTC)
-                await session.commit()
+            if rec_id is None:
+                # Fallback: locate latest QUEUED record for this order
+                stmt_rec = (
+                    select(FulfillmentJobRecord.id)
+                    .where(
+                        FulfillmentJobRecord.order_id == job.order_id,
+                        FulfillmentJobRecord.status == FulfillmentJobStatus.QUEUED,
+                    )
+                    .order_by(FulfillmentJobRecord.created_at.desc())
+                )
+                rec_id = (await session.execute(stmt_rec)).scalars().first()
+
+            if rec_id is not None:
+                claimed = await self.claim_job(session, rec_id)
+                if not claimed:
+                    logger.warning(
+                        "Job %s was already claimed by another worker or is not in QUEUED state. Skipping.",
+                        rec_id,
+                    )
+                    return None
 
             try:
                 attempt = await self.service.execute_order_fulfillment(
@@ -155,10 +204,12 @@ class FulfillmentWorker:
                     recipient=job.recipient,
                     attempt_number=job.attempt_number,
                 )
-                if rec:
-                    rec.status = FulfillmentJobStatus.COMPLETED
-                    rec.completed_at = datetime.now(UTC)
-                    await session.commit()
+                if rec_id:
+                    rec = await session.get(FulfillmentJobRecord, rec_id)
+                    if rec:
+                        rec.status = FulfillmentJobStatus.COMPLETED
+                        rec.completed_at = datetime.now(UTC)
+                        await session.commit()
                 return attempt
 
             except ProviderError as prov_err:
@@ -171,11 +222,13 @@ class FulfillmentWorker:
                         backoff,
                         job.attempt_number + 1,
                     )
-                    if rec:
-                        rec.status = FulfillmentJobStatus.QUEUED
-                        rec.attempt_number = job.attempt_number + 1
-                        rec.last_error = str(prov_err)
-                        await session.commit()
+                    if rec_id:
+                        rec = await session.get(FulfillmentJobRecord, rec_id)
+                        if rec:
+                            rec.status = FulfillmentJobStatus.QUEUED
+                            rec.attempt_number = job.attempt_number + 1
+                            rec.last_error = str(prov_err)
+                            await session.commit()
 
                     await asyncio.sleep(backoff)
                     await self.enqueue(
@@ -184,6 +237,7 @@ class FulfillmentWorker:
                         attempt_number=job.attempt_number + 1,
                         metadata=job.metadata,
                         persist_db=False,
+                        job_id=rec_id,
                     )
                 else:
                     logger.error(
@@ -192,19 +246,23 @@ class FulfillmentWorker:
                         self.max_retries,
                         prov_err,
                     )
-                    if rec:
-                        rec.status = FulfillmentJobStatus.DEAD_LETTER
-                        rec.last_error = str(prov_err)
-                        await session.commit()
+                    if rec_id:
+                        rec = await session.get(FulfillmentJobRecord, rec_id)
+                        if rec:
+                            rec.status = FulfillmentJobStatus.DEAD_LETTER
+                            rec.last_error = str(prov_err)
+                            await session.commit()
                     self.dead_letter_queue.append(job)
                 return None
 
             except Exception as e:
                 logger.exception("Job for order %s encountered unhandled error", job.order_id)
-                if rec:
-                    rec.status = FulfillmentJobStatus.DEAD_LETTER
-                    rec.last_error = str(e)
-                    await session.commit()
+                if rec_id:
+                    rec = await session.get(FulfillmentJobRecord, rec_id)
+                    if rec:
+                        rec.status = FulfillmentJobStatus.DEAD_LETTER
+                        rec.last_error = str(e)
+                        await session.commit()
                 self.dead_letter_queue.append(job)
                 return None
 

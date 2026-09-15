@@ -22,7 +22,7 @@ from packages.notifications.service import (
     NotificationService,
 )
 from packages.payments.models import LedgerTransaction, TransactionType
-from packages.payments.service import LedgerService
+from packages.payments.service import CANONICAL_REFUND_TYPE, LedgerService
 from packages.providers.clients.mock import MockProvider
 from packages.providers.clients.registry import ProviderClientRegistry
 from packages.providers.exceptions import (
@@ -138,7 +138,7 @@ async def test_refund_strict_idempotency_prevents_double_crediting(db_session: A
         wallet=wallet,
         amount=Decimal("25.00"),
         reference_id=order_ref,
-        reference_type="FULFILLMENT_FAILURE_REFUND",
+        reference_type=CANONICAL_REFUND_TYPE,
         description="First refund execution",
     )
     await db_session.commit()
@@ -151,7 +151,7 @@ async def test_refund_strict_idempotency_prevents_double_crediting(db_session: A
         wallet=wallet,
         amount=Decimal("25.00"),
         reference_id=order_ref,
-        reference_type="FULFILLMENT_FAILURE_REFUND",
+        reference_type=CANONICAL_REFUND_TYPE,
         description="Duplicate retry refund execution",
     )
     await db_session.commit()

@@ -147,7 +147,8 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 3. **Phase 3 (Telegram Runtime):** Multi-tenant Aiogram 3 bot manager, secret refs, tenant resolution middleware, isolated FSM. Commit: `8520386`.
 4. **Phase 4 (Provider Engine & Fulfillment):** Supplier protocol, client registry, resilient router, checkout & fulfillment services. Commits: `5eae8c5`, `d9a8baa`, `5c992a2`, `15a4882`.
 5. **Phase 4.1 (Production Hardening):** `UNKNOWN`/`RETRYING` states, durable DB queue (`fulfillment_jobs`), startup crash recovery, strict refund idempotency, multi-item fulfillment, zero raw exception leaks. Commit: `bcee3a1`.
-6. **Phase 4.2 (Coding Agent Map & Skill):** Creation of `AGENT_MAP.md`, `.agents/skills/gh-bot-factory-core/SKILL.md`, and `docs/prompts/prompt_history.md`.
+6. **Milestone 6 (Coding Agent Map & Skill):** Creation of `AGENT_MAP.md`, `.agents/skills/gh-bot-factory-core/SKILL.md`, and `docs/prompts/prompt_history.md`. Commit: `aa0f7ab`.
+7. **Milestone 7 (Phase 4.2 Fulfillment Integrity Hardening):** Canonical refund idempotency (`CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"`), fail-closed durable enqueue, atomic conditional job claim, and frozen catalog refund protection. 50/50 tests passing. Commit: `49f99f1`.
 
 ---
 

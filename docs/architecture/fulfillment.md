@@ -63,8 +63,8 @@ The platform enforces a strict accounting invariant:
 
 When an order fulfillment encounters a terminal failure (in `FulfillmentService` or `ReconciliationService`):
 1. **Order Transition:** The `Order` transitions to `OrderStatus.FAILED`.
-2. **Idempotent Refund:** `LedgerService.refund()` executes with unique `reference_id=str(order.id)` and `reference_type="FULFILLMENT_FAILURE_REFUND"`.
-   - If this refund transaction already exists in the database, the existing record is returned without modifying wallet balances.
+2. **Idempotent Refund:** `LedgerService.refund()` executes with unique `reference_id=str(order.id)` and canonical `reference_type=CANONICAL_REFUND_TYPE` (`"ORDER_FULFILLMENT_REFUND"`).
+   - If this refund transaction already exists in the database (whether triggered by fulfillment failure or reconciliation), the existing record is returned without modifying wallet balances.
    - If not yet processed, the user's wallet is credited, restoring funds.
 3. **Customer Notification:** The customer receives a clean, user-friendly notification (`ORDER_REFUNDED`). Raw internal exception strings (`str(exc)`) are strictly excluded.
 

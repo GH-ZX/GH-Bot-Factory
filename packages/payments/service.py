@@ -14,6 +14,8 @@ from packages.payments.models import LedgerTransaction, TransactionType, Wallet
 
 logger = logging.getLogger("payments.ledger")
 
+CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"
+
 
 class LedgerService:
     """Provides auditable double-entry balance modifications and reconciliation."""

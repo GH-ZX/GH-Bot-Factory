@@ -14,7 +14,7 @@ from packages.notifications.service import (
     NotificationPayload,
     NotificationService,
 )
-from packages.payments.service import LedgerService
+from packages.payments.service import CANONICAL_REFUND_TYPE, LedgerService
 from packages.providers.clients.registry import ProviderClientRegistry, provider_registry
 from packages.providers.models import Provider
 
@@ -133,7 +133,7 @@ class ReconciliationService:
                             wallet=wallet,
                             amount=order.total_amount,
                             reference_id=str(order.id),
-                            reference_type="RECONCILIATION_FAILURE_REFUND",
+                            reference_type=CANONICAL_REFUND_TYPE,
                             description=f"Automated refund via reconciliation for failed order #{order.order_number}",
                         )
                         await session.commit()

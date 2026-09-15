@@ -141,7 +141,8 @@ This document serves as the historical record of all user prompts, architectural
 ## Milestone 6: Coding Agent Map & Project Knowledge Base
 
 - **Date:** 2026-09-15
-- **Status:** In Progress
+- **Status:** Completed
+- **Commit:** `aa0f7ab`
 
 ### User Request / Prompt:
 > "add a coding agent map file md , a skill so coding agents knows everything and what happened so easly access everything, inside it all the laws of this project, and inside this skill, how things done, and my prompts, every update should be typed there or in a file so skill redirect to it so this file is mapping all, including my prompts"
@@ -151,3 +152,37 @@ This document serves as the historical record of all user prompts, architectural
 - Created Antigravity Skill `.agents/skills/gh-bot-factory-core/SKILL.md`.
 - Created `docs/prompts/prompt_history.md` (this ledger).
 - Created `AGENTS.md` and `GEMINI.md` root rules to activate agent guidelines automatically.
+
+---
+
+## Milestone 7: Phase 4.2 — Final Fulfillment Integrity Hardening
+
+- **Date:** 2026-09-15
+- **Status:** Completed
+- **Commit:** `49f99f1`
+
+### User Request / Code Review Findings:
+> Code review of main identified 3 critical financial & concurrency issues before Phase 5:
+> 1. Canonical Refund Idempotency: FulfillmentService and ReconciliationService used mismatched reference_type ("FULFILLMENT_FAILURE_REFUND" vs "RECONCILIATION_FAILURE_REFUND"), risking duplicate credits.
+> 2. Durable Enqueue Fail-Closed: When persist_db=True, a database insert error logged a warning but still placed the job in the in-memory queue, risking memory-only stranded jobs.
+> 3. Atomic Worker Job Claim: Worker claimed jobs with non-atomic select-then-update, vulnerable to race conditions under concurrent workers.
+> 4. Refund Amount Integrity: Ensure refund amount strictly uses order.total_amount, never recalculating against mutable catalog variant prices.
+
+### Deliverables & Implementation:
+1. **Canonical Refund Idempotency (`packages/payments/service.py`, `packages/fulfillment/service.py`, `packages/fulfillment/reconciliation.py`):**
+   - Exported `CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"`.
+   - Unified both `FulfillmentService` and `ReconciliationService` to use `CANONICAL_REFUND_TYPE` and `reference_id=str(order.id)`.
+   - Guaranteed that sequential or concurrent refund attempts on the same order result in strictly ONE wallet credit.
+2. **Fail-Closed Durable Enqueue (`packages/fulfillment/worker.py`):**
+   - In `enqueue(..., persist_db=True)`, database persistence failure now raises `RuntimeError` and aborts before `queue.put()`.
+   - Jobs are never stranded exclusively in RAM when durability is requested.
+3. **Atomic Worker Job Claim (`packages/fulfillment/worker.py`):**
+   - Implemented `claim_job(session, job_id) -> bool` using conditional `UPDATE fulfillment_jobs SET status='RUNNING', locked_at=:now WHERE id=:id AND status='QUEUED'`.
+   - In `_process_job()`, only the worker receiving `rowcount == 1` proceeds; competing workers receiving `rowcount == 0` skip immediately.
+4. **Frozen Order Total Refund Integrity (`packages/commerce/checkout.py`, `tests/test_phase4_2_integrity.py`):**
+   - Verified that refunds strictly credit `order.total_amount` (the frozen checkout amount), invariant even after product catalog price modifications.
+5. **Test Suite & Verification (`tests/test_phase4_2_integrity.py`):**
+   - Added 5 comprehensive test scenarios covering cross-service refund idempotency, fail-closed DB enqueue, concurrent worker atomic claim, catalog price hike immunity, and worker skip on already-claimed jobs.
+   - Total test count: **50/50 passing (100% pass rate)**.
+   - Codebase 100% clean under `ruff check .`.
+
