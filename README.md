@@ -2,41 +2,39 @@
 
 Multi-tenant Telegram commerce Bot Factory.
 
-## Project Structure
+## Architecture
 
-```
-.
-├── apps/
-│   ├── admin/
-│   ├── api/
-│   ├── bot-runtime/
-│   └── worker/
-├── packages/
-│   ├── commerce/
-│   ├── core/
-│   ├── factory/
-│   ├── payments/
-│   ├── providers/
-│   ├── telegram/
-│   └── tenants/
-├── infra/
-│   └── docker/
-├── docs/
-│   ├── architecture/
-│   └── decisions/
-├── scripts/
-└── tests/
+The platform separates the business core from Telegram presentation.
+
+```text
+Telegram Bots
+      |
+      v
+Bot Runtime
+      |
+      v
+Commerce Core
+      |
+      +---- Tenants
+      +---- Products
+      +---- Orders
+      +---- Payments
+      +---- Providers
+      +---- Fulfillment
+      |
+      +---- PostgreSQL
+      +---- Redis
 ```
 
-## Getting Started
+## Roadmap
 
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Set up virtual environment and install dependencies:
-   ```bash
-   uv venv
-   source .venv/bin/activate
-   uv pip install -e .
-   ```
+1. Foundation
+2. Multi-tenancy
+3. Commerce domain
+4. Telegram runtime
+5. Provider engine
+6. Fulfillment
+7. Payments
+8. Admin
+9. Bot provisioning
+10. White-label SaaS

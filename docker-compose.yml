@@ -1,0 +1,38 @@
+services:
+  api:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: >
+      sh -c "pip install --no-cache-dir
+      fastapi uvicorn sqlalchemy asyncpg alembic redis pydantic-settings aiogram &&
+      uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: gh_bot_factory
+      POSTGRES_USER: gh_bot_factory
+      POSTGRES_PASSWORD: CHANGE_ME
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
