@@ -1,6 +1,8 @@
 import logging
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +21,21 @@ from packages.providers.exceptions import ProviderError
 from packages.providers.router import ProviderRouter
 
 logger = logging.getLogger("fulfillment.service")
+
+
+def _to_json_safe(val: Any) -> Any:
+    """Recursively convert Decimals, UUIDs, and datetimes into JSON-serializable primitives."""
+    if isinstance(val, dict):
+        return {str(k): _to_json_safe(v) for k, v in val.items()}
+    if isinstance(val, (list, tuple, set)):
+        return [_to_json_safe(v) for v in val]
+    if isinstance(val, Decimal):
+        return str(val)
+    if isinstance(val, uuid.UUID):
+        return str(val)
+    if isinstance(val, datetime):
+        return val.isoformat()
+    return val
 
 
 class FulfillmentService:
@@ -124,7 +141,7 @@ class FulfillmentService:
             attempt.provider_id = provider.id
             attempt.external_order_id = response.external_order_id
             attempt.cost_amount = response.cost
-            attempt.response_payload = response.raw_data
+            attempt.response_payload = _to_json_safe(response.raw_data)
             attempt.status = FulfillmentStatus.SUCCEEDED
             attempt.completed_at = datetime.now(UTC)
 
@@ -159,7 +176,7 @@ class FulfillmentService:
 
             attempt.status = FulfillmentStatus.FAILED
             attempt.error_classification = error_type
-            attempt.response_payload = {"error": str(exc), "retryable": is_retryable}
+            attempt.response_payload = _to_json_safe({"error": str(exc), "retryable": is_retryable})
             attempt.completed_at = datetime.now(UTC)
 
             logger.error(

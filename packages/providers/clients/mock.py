@@ -119,7 +119,7 @@ class MockProvider(BaseProviderClient):
         order_record = {
             "external_order_id": ext_order_id,
             "status": "COMPLETED",
-            "cost": total_cost,
+            "cost": str(total_cost),
             "recipient": request.recipient,
             "quantity": request.quantity,
             "idempotency_key": request.idempotency_key,

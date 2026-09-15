@@ -28,8 +28,10 @@ class CheckoutService:
         fulfillment_service: FulfillmentService | None = None,
         notification_service: NotificationService | None = None,
     ) -> None:
-        self.fulfillment = fulfillment_service or FulfillmentService()
         self.notifications = notification_service or NotificationService()
+        self.fulfillment = fulfillment_service or FulfillmentService(
+            notification_service=self.notifications
+        )
 
     async def checkout(
         self,
