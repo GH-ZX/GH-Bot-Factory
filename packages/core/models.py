@@ -3,8 +3,15 @@
 from packages.commerce.models import Category, Order, OrderItem, Product, ProductVariant
 from packages.commerce.state_machine import OrderStatus
 from packages.core.database import Base
+from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
 from packages.payments.models import LedgerTransaction, TransactionType, Wallet
-from packages.providers.models import ProviderModel, TenantProviderConfig
+from packages.providers.models import (
+    Provider,
+    ProviderCredential,
+    ProviderHealthStatus,
+    ProviderModel,
+    ProviderProductMapping,
+)
 from packages.telegram.models import Bot, TenantTelegramUser
 from packages.tenants.models import AuditLog, Membership, Role, Tenant, User
 
@@ -13,6 +20,8 @@ __all__ = [
     "Base",
     "Bot",
     "Category",
+    "FulfillmentAttempt",
+    "FulfillmentStatus",
     "LedgerTransaction",
     "Membership",
     "Order",
@@ -20,13 +29,15 @@ __all__ = [
     "OrderStatus",
     "Product",
     "ProductVariant",
+    "Provider",
+    "ProviderCredential",
+    "ProviderHealthStatus",
     "ProviderModel",
+    "ProviderProductMapping",
     "Role",
     "Tenant",
-    "TenantProviderConfig",
     "TenantTelegramUser",
     "TransactionType",
     "User",
     "Wallet",
 ]
-
