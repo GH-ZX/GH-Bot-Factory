@@ -23,9 +23,13 @@ dev = [
     "mypy>=1.10",
 ]
 
+[tool.setuptools.packages.find]
+include = ["apps*", "packages*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
