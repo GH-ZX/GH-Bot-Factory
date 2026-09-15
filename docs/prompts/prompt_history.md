@@ -159,7 +159,7 @@ This document serves as the historical record of all user prompts, architectural
 
 - **Date:** 2026-09-15
 - **Status:** Completed
-- **Commit:** `49f99f1`
+- **Commit:** `6d750b7`
 
 ### User Request / Code Review Findings:
 > Code review of main identified 3 critical financial & concurrency issues before Phase 5:
@@ -185,4 +185,48 @@ This document serves as the historical record of all user prompts, architectural
    - Added 5 comprehensive test scenarios covering cross-service refund idempotency, fail-closed DB enqueue, concurrent worker atomic claim, catalog price hike immunity, and worker skip on already-claimed jobs.
    - Total test count: **50/50 passing (100% pass rate)**.
    - Codebase 100% clean under `ruff check .`.
+
+---
+
+## Milestone 8: Phase 4.3 — Database-Enforced Refund Idempotency
+
+- **Date:** 2026-09-15
+- **Status:** Completed
+- **Commit:** `46ee0fa`
+
+### User Request / Prompt:
+> "Phase 4.3 — Database-Enforced Refund Idempotency
+> Implement database-enforced idempotency for fulfillment refunds.
+> The database itself must enforce the invariant:
+> «For one wallet + canonical refund reference, at most ONE refund transaction may exist.»
+> 1. Database Constraint: Add PostgreSQL/SQLAlchemy partial unique index uq_refund_idempotency on (wallet_id, reference_type, reference_id) WHERE transaction_type = 'REFUND' AND reference_type IS NOT NULL AND reference_id IS NOT NULL.
+> 2. Alembic Migration: Reversible migration with safe legacy duplicate detection (fail cleanly without deleting financial records).
+> 3. Concurrency-Safe LedgerService.refund(): Handle UNIQUE constraint violations safely via savepoint/rollback without leaving wallet balance modified.
+> 4. Amount Consistency: Raise LedgerIntegrityError on conflicting amount requests.
+> 5. Concurrency Tests: Tests A-G covering sequential, concurrent (5-way), mixed services, different refs, different wallets, amount conflict, and non-refund isolation, plus schema verification."
+
+### Deliverables & Implementation:
+1. **Schema & Model Definition (`packages/payments/models.py`):**
+   - Defined partial unique index `uq_refund_idempotency` on `(wallet_id, reference_type, reference_id)` WHERE `transaction_type = 'REFUND' AND reference_type IS NOT NULL AND reference_id IS NOT NULL`.
+   - Configured both `postgresql_where` and `sqlite_where` clauses.
+2. **Alembic Migration (`migrations/versions/867840fa9063_add_refund_idempotency_unique_index.py`):**
+   - Reversible migration creating and dropping `uq_refund_idempotency` index.
+   - Includes safe legacy duplicate detection that halts execution with clear error if duplicates exist, strictly preventing silent data loss.
+3. **Concurrency-Safe Ledger (`packages/payments/service.py`):**
+   - Atomic savepoint (`session.begin_nested()`) encapsulates balance update and refund insert.
+   - On `IntegrityError`, savepoint rollback ensures wallet balance is never left modified.
+   - Queries winning transaction, enforces amount equality, and raises `LedgerIntegrityError` if amount mismatches.
+   - Unrelated integrity errors are strictly re-raised.
+4. **Comprehensive Test Suite (`tests/test_phase4_3_refund_idempotency.py`):**
+   - Test A: Sequential idempotency.
+   - Test B: True 5-worker concurrent race using WAL mode SQLite with busy timeout.
+   - Test C: Concurrent fulfillment & reconciliation services.
+   - Test D: Independent reference handling.
+   - Test E: Independent multi-wallet isolation.
+   - Test F: Amount mismatch raises `LedgerIntegrityError`.
+   - Test G: Unaffected non-refund transactions (CREDIT, DEBIT, ADJUSTMENT coexist).
+   - Schema Verification: Direct raw insert rejection and metadata index inspection.
+   - Total tests: **59/59 passing (100% pass rate)**.
+   - Codebase 100% clean under `ruff check .`.
+
 

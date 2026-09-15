@@ -10,6 +10,7 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -61,6 +62,19 @@ class LedgerTransaction(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_ledger_wallet_type", "wallet_id", "transaction_type"),
         Index("ix_ledger_tenant_ref", "tenant_id", "reference_type", "reference_id"),
+        Index(
+            "uq_refund_idempotency",
+            "wallet_id",
+            "reference_type",
+            "reference_id",
+            unique=True,
+            postgresql_where=text(
+                "transaction_type = 'REFUND' AND reference_type IS NOT NULL AND reference_id IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "transaction_type = 'REFUND' AND reference_type IS NOT NULL AND reference_id IS NOT NULL"
+            ),
+        ),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(

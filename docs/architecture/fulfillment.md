@@ -63,9 +63,20 @@ The platform enforces a strict accounting invariant:
 
 When an order fulfillment encounters a terminal failure (in `FulfillmentService` or `ReconciliationService`):
 1. **Order Transition:** The `Order` transitions to `OrderStatus.FAILED`.
-2. **Idempotent Refund:** `LedgerService.refund()` executes with unique `reference_id=str(order.id)` and canonical `reference_type=CANONICAL_REFUND_TYPE` (`"ORDER_FULFILLMENT_REFUND"`).
+2. **Database-Enforced Idempotent Refund:** `LedgerService.refund()` executes with unique `reference_id=str(order.id)` and canonical `reference_type=CANONICAL_REFUND_TYPE` (`"ORDER_FULFILLMENT_REFUND"`).
+   - **Database-Enforced Invariant:** Refund idempotency is database-enforced. Application-level lookup is an optimization; PostgreSQL uniqueness is the authoritative concurrency guarantee.
+   - **Partial Unique Index (`uq_refund_idempotency`):**
+     ```sql
+     CREATE UNIQUE INDEX uq_refund_idempotency
+     ON ledger_transactions (wallet_id, reference_type, reference_id)
+     WHERE transaction_type = 'REFUND'
+       AND reference_type IS NOT NULL
+       AND reference_id IS NOT NULL;
+     ```
+   - **Guaranteed Invariant:** `same wallet + same canonical refund reference + REFUND transaction = at most one ledger transaction`.
    - If this refund transaction already exists in the database (whether triggered by fulfillment failure or reconciliation), the existing record is returned without modifying wallet balances.
-   - If not yet processed, the user's wallet is credited, restoring funds.
+   - Under concurrent race conditions, the losing transaction hits the database partial unique index, rolls back cleanly via SQL savepoint, verifies that the requested amount matches the existing refund transaction, and returns the existing transaction without double-crediting the wallet.
+   - If a duplicate refund request supplies a conflicting amount, a `LedgerIntegrityError` is raised.
 3. **Customer Notification:** The customer receives a clean, user-friendly notification (`ORDER_REFUNDED`). Raw internal exception strings (`str(exc)`) are strictly excluded.
 
 ---

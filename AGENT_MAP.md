@@ -29,10 +29,12 @@ Every AI coding agent working in this repository is strictly bound by these immu
 - Never stop, modify, restart, or delete existing host Docker containers or Cloudflare Tunnels.
 - Always work cleanly in `/home/it/Coding/gh-bot-factory` (symlinked from `/opt/gh-bot-factory`).
 
-### Law 5: Double-Entry Financial Invariance & Refund Idempotency
+### Law 5: Double-Entry Financial Invariance & Database-Enforced Refund Idempotency
 - Customer wallet balances must **NEVER** be updated directly. All balance mutations must pass through `LedgerService` (`credit()`, `debit()`, `refund()`, `adjust()`).
 - Every wallet debit must produce an auditable, immutable `LedgerTransaction` record.
-- **Refund Idempotency:** Every refund must pass a unique `(reference_id, reference_type)` pair. Calling refund multiple times for the same order must return the existing transaction without double-crediting the wallet.
+- **Database-Enforced Refund Idempotency:** Refund idempotency is database-enforced. Application-level lookup is an optimization; PostgreSQL uniqueness (`uq_refund_idempotency` on `(wallet_id, reference_type, reference_id)` WHERE `transaction_type = 'REFUND'`) is the authoritative concurrency guarantee.
+- **Single Refund Invariant:** `same wallet + same canonical refund reference + REFUND transaction = at most one ledger transaction`.
+- Under concurrent race conditions, the losing transaction hits the database partial unique index, rolls back cleanly via SQL savepoint, verifies amount consistency, and returns the existing transaction without double-crediting.
 - If an order permanently fails to fulfill, an automated ledger refund must restore user funds exactly once.
 
 ### Law 6: Authoritative Pricing (Never Trust the Client)
@@ -148,7 +150,8 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 4. **Phase 4 (Provider Engine & Fulfillment):** Supplier protocol, client registry, resilient router, checkout & fulfillment services. Commits: `5eae8c5`, `d9a8baa`, `5c992a2`, `15a4882`.
 5. **Phase 4.1 (Production Hardening):** `UNKNOWN`/`RETRYING` states, durable DB queue (`fulfillment_jobs`), startup crash recovery, strict refund idempotency, multi-item fulfillment, zero raw exception leaks. Commit: `bcee3a1`.
 6. **Milestone 6 (Coding Agent Map & Skill):** Creation of `AGENT_MAP.md`, `.agents/skills/gh-bot-factory-core/SKILL.md`, and `docs/prompts/prompt_history.md`. Commit: `aa0f7ab`.
-7. **Milestone 7 (Phase 4.2 Fulfillment Integrity Hardening):** Canonical refund idempotency (`CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"`), fail-closed durable enqueue, atomic conditional job claim, and frozen catalog refund protection. 50/50 tests passing. Commit: `49f99f1`.
+7. **Milestone 7 (Phase 4.2 Fulfillment Integrity Hardening):** Canonical refund idempotency (`CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"`), fail-closed durable enqueue, atomic conditional job claim, and frozen catalog refund protection. 50/50 tests passing. Commit: `6d750b7`.
+8. **Milestone 8 (Phase 4.3 Database-Enforced Refund Idempotency):** Schema-level partial unique index (`uq_refund_idempotency`), Alembic migration `867840fa9063` with legacy duplicate safety check, concurrency-safe `LedgerService.refund()`, amount mismatch guard (`LedgerIntegrityError`), and 59/59 tests passing. Commit: `46ee0fa`.
 
 ---
 

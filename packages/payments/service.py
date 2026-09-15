@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import uuid
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.core.exceptions import (
@@ -130,16 +132,23 @@ class LedgerService:
         if amount <= Decimal("0.00"):
             raise ValueError("Refund amount must be strictly positive.")
 
-        # Strict idempotency check: prevent duplicate refunds for same reference
+        wallet_id = wallet.id
+
+        # 1. Fast-path application-level optimization lookup
         if reference_id and reference_type:
             stmt = select(LedgerTransaction).where(
-                LedgerTransaction.wallet_id == wallet.id,
+                LedgerTransaction.wallet_id == wallet_id,
                 LedgerTransaction.transaction_type == TransactionType.REFUND,
                 LedgerTransaction.reference_id == reference_id,
                 LedgerTransaction.reference_type == reference_type,
             )
             existing_tx = (await session.execute(stmt)).scalars().first()
             if existing_tx:
+                if existing_tx.amount != amount:
+                    raise LedgerIntegrityError(
+                        f"Refund amount mismatch for ref_id={reference_id} ref_type={reference_type}: "
+                        f"existing={existing_tx.amount}, requested={amount}."
+                    )
                 logger.warning(
                     "Idempotent refund hit: refund for ref_id=%s ref_type=%s already exists. Skipping duplicate credit.",
                     reference_id,
@@ -147,24 +156,69 @@ class LedgerService:
                 )
                 return existing_tx
 
-        balance_before = wallet.balance
-        balance_after = balance_before + amount
-        wallet.balance = balance_after
+        # 2. Database-enforced atomic refund execution via savepoint
+        # The database partial unique index (uq_refund_idempotency) guarantees that only
+        # ONE refund transaction may ever be committed for (wallet_id, reference_type, reference_id).
+        try:
+            async with session.begin_nested():
+                balance_before = wallet.balance
+                balance_after = balance_before + amount
+                wallet.balance = balance_after
 
-        tx = LedgerTransaction(
-            tenant_id=wallet.tenant_id,
-            wallet_id=wallet.id,
-            transaction_type=TransactionType.REFUND,
-            amount=amount,
-            balance_before=balance_before,
-            balance_after=balance_after,
-            reference_id=reference_id,
-            reference_type=reference_type,
-            description=description or "Refund",
-        )
-        session.add(tx)
-        await session.flush()
-        return tx
+                tx = LedgerTransaction(
+                    tenant_id=wallet.tenant_id,
+                    wallet_id=wallet_id,
+                    transaction_type=TransactionType.REFUND,
+                    amount=amount,
+                    balance_before=balance_before,
+                    balance_after=balance_after,
+                    reference_id=reference_id,
+                    reference_type=reference_type,
+                    description=description or "Refund",
+                )
+                session.add(tx)
+                await session.flush()
+            return tx
+
+        except IntegrityError as exc:
+            # Savepoint rollback cleanly reverts the pending INSERT and wallet balance modification.
+            try:
+                await session.refresh(wallet)
+            except Exception:  # noqa: BLE001
+                session.expire(wallet)
+
+            # Check if this IntegrityError was specifically the refund uniqueness conflict
+            if reference_id and reference_type:
+                stmt = select(LedgerTransaction).where(
+                    LedgerTransaction.wallet_id == wallet_id,
+                    LedgerTransaction.transaction_type == TransactionType.REFUND,
+                    LedgerTransaction.reference_id == reference_id,
+                    LedgerTransaction.reference_type == reference_type,
+                )
+                existing_tx = (await session.execute(stmt)).scalars().first()
+                if existing_tx is None:
+                    # In high-concurrency races, wait briefly if winning transaction is in-flight
+                    for _ in range(20):
+                        await asyncio.sleep(0.05)
+                        existing_tx = (await session.execute(stmt)).scalars().first()
+                        if existing_tx is not None:
+                            break
+
+                if existing_tx:
+                    if existing_tx.amount != amount:
+                        raise LedgerIntegrityError(
+                            f"Refund amount mismatch for ref_id={reference_id} ref_type={reference_type}: "
+                            f"existing={existing_tx.amount}, requested={amount}."
+                        ) from exc
+                    logger.warning(
+                        "Concurrent race resolved: refund for ref_id=%s ref_type=%s caught by DB unique constraint.",
+                        reference_id,
+                        reference_type,
+                    )
+                    return existing_tx
+
+            # Not an idempotency conflict: do NOT swallow unrelated IntegrityError!
+            raise
 
     @classmethod
     async def adjust(
