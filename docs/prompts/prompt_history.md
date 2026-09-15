@@ -321,33 +321,33 @@ This document serves as the historical record of all user prompts, architectural
 
 - **Date:** 2026-09-15
 - **Status:** Completed
-- **Commit:** `Pending / In-Tree`
+- **Commit:** `0628a31`
 
 ### User Request / Prompts:
 
-#### Verbatim Prompt:
-> "Phase 5.1 (API Authentication & Authorization Hardening):
-> 1. Create docs/decisions/ADR-007-api-authentication-hardening.md:
->    - Record decision to replace raw identity headers (X-Tenant-ID, X-User-ID) with server-signed Bearer JWT access tokens and AuthenticatedPrincipal.
->    - Document AuthTokenService, token_version session revocation, Mini App JWT issuance, RBAC, and distinct webhook authentication boundary.
-> 2. Update docs/architecture/payment-architecture.md:
->    - Add section on API Authentication & Authorization Architecture.
->    - Include diagram:
->      Telegram Mini App initData -> Cryptographic authentication -> Authenticated Principal -> Bearer access token -> Authorized API requests.
->    - Explicitly document: Customer authentication != payment provider webhook authentication (two separate trust boundaries).
->    - Document the 5 Security Invariants:
->      1. Identity Law: «Client-supplied user/tenant IDs are never authoritative.»
->      2. Authorization Law: «Every customer API operation is authorized against the authenticated principal.»
->      3. Mini App Law: «Telegram "initData" is authenticated cryptographically before deriving identity.»
->      4. Webhook Law: «Payment gateway webhooks are authenticated with provider-specific cryptographic verification and tenant/provider binding.»
->      5. Tenant Law: «Authenticated tenant context cannot be overridden by request headers/body/query parameters.»
-> 3. Update AGENT_MAP.md:
->    - Add the 5 Security Invariants to Inviolable Laws.
->    - Update codebase tree with packages/core/auth.py and apps/api/deps.py.
->    - Add Milestone 10 (Phase 5.1 API Authentication & Authorization Hardening).
-> 4. Update docs/prompts/prompt_history.md:
->    - Record Milestone 10 with the verbatim prompt from the user.
-> 5. Report your documentation updates."
+#### Verbatim User Prompt:
+> "Phase 5.1 — API Authentication & Authorization Hardening
+> 
+> Objective
+> Harden the Phase 5 REST API authentication and authorization boundary.
+> The current payment infrastructure and Telegram Mini App cryptographic authentication are implemented, but payment endpoints currently accept "X-Tenant-ID" and "X-User-ID" directly from HTTP headers.
+> This is NOT an acceptable final authentication architecture.
+> The authenticated principal must come from a server-verified credential/session, not from arbitrary client-supplied identity headers.
+> 
+> 1. Critical Finding: Payment routes accept X-Tenant-ID and X-User-ID as identity context. Mini App auth returns IDs but no reusable session. Fix without weakening payment or tenant invariants.
+> 2. Introduce AuthenticatedPrincipal: user_id, tenant_id, source: AuthSource, roles: frozenset[Role]. Consumed by routers/services instead of identity headers.
+> 3. Mini App Authentication Session: After initData validation, issue short-lived signed access token (sub, tenant_id, roles, iat, exp, token_version). No secrets in token, no client-supplied ID trust.
+> 4. Token Security: AuthTokenService (issue, verify), signature verification, exp/iss/aud validation, algorithm allow-list (HS256), reject malformed/expired tokens, secret from SecretStorage/config, never log raw tokens.
+> 5. FastAPI Dependency get_current_principal: Authorization Bearer header, verify token, resolve user/tenant from DB, reject inactive, check membership, return AuthenticatedPrincipal.
+> 6. Replace Payment Route Identity Headers: principal: AuthenticatedPrincipal = Depends(get_current_principal) in apps/api/v1/payments.py.
+> 7. Order Ownership: Enforce principal.tenant_id == order.tenant_id and principal.user_id == order.user_id for customers unless privileged role.
+> 8. RBAC: CUSTOMER, STAFF, ADMIN, OWNER permissions. Customer owns own payment intents; staff/admin manage tenant-scoped resources.
+> 9. Mini App Auth Endpoint: POST /api/v1/auth/telegram-miniapp returns access_token, token_type, expires_in, tenant_id, user_id.
+> 10. Telegram initData Replay Protection: Keep auth_date validation, no raw initData storage/logging.
+> 11. Webhook Authentication Is Different: Provider-specific cryptographic signature + tenant/provider configuration + provider event identity. No customer JWT. Path-based candidate tenant routing with signature verification.
+> 12-15. Comprehensive security test suite (missing header, malformed, expired, invalid sig, inactive user/tenant, spoofing, cross-tenant, customer ownership, RBAC, Mini App auth, token revocation).
+> 16. Token Version / Revocation: token_version in User model and claims; DB increment invalidates old sessions.
+> 17-18. Documentation and explicit Security Invariants (Identity Law, Authorization Law, Mini App Law, Webhook Law, Tenant Law)."
 
 ### Deliverables & Implementation:
 1. **Core Authentication Engine ([`packages/core/auth.py`](file:///home/it/Coding/gh-bot-factory/packages/core/auth.py)):**
