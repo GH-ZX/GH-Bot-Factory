@@ -43,7 +43,7 @@ class ServiceHeartbeat:
             while not self._stop.is_set():
                 try:
                     await client.set(heartbeat_key(self.service), "alive", ex=self.ttl_seconds)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - health boundary reports dependency failure
                     logger.warning("Service heartbeat update failed: %s", type(exc).__name__)
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=self.interval_seconds)

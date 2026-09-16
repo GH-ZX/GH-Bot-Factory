@@ -194,6 +194,6 @@ class WalletTopUpReversalWorker:
                     await asyncio.sleep(self.poll_interval_seconds)
             except asyncio.CancelledError:
                 break
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("Wallet top-up reversal worker poll failed")
                 await asyncio.sleep(self.poll_interval_seconds)

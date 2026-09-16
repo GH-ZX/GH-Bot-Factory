@@ -7,7 +7,7 @@ The **Provider Engine** decouples the Commerce Core and Telegram presentation la
 ### Core Architectural Invariants:
 1. **Tenant Isolation:** Providers, credentials, and product mappings are strictly scoped by `tenant_id`. Tenant A cannot access or route through Tenant B's upstream accounts.
 2. **Secret Safety:** Credentials store secret references (`credential_secret_ref`) rather than plaintext API keys or tokens. Real secrets are resolved at runtime via the `SecretStorage` abstraction.
-3. **Protocol Uniformity:** Every upstream provider implements the canonical `Provider` Python Protocol (`get_health()`, `get_balance()`, `list_products()`, `get_product()`, `create_order()`, `get_order()`).
+3. **Protocol Uniformity:** Every upstream provider implements the canonical `Provider` Python Protocol (`health_check()`, `get_balance()`, `list_products()`, `get_product()`, `create_order()`, `get_order()`). Phase 10 adapter manifests additionally declare category/capability compatibility.
 4. **Resilient Failover:** Orders routed across multiple configured providers automatically fail over when encountering transient network or rate limit errors, but immediately halt on non-retryable errors (such as authentication failures).
 
 ---
@@ -39,8 +39,8 @@ The **Provider Engine** decouples the Commerce Core and Telegram presentation la
 ```
 
 ### Key Models:
-- **`Provider`**: Identifies an external provider entity within a tenant (`tenant_id`, `name`, `slug`, `provider_type`, `is_enabled`, `priority`, `timeout_seconds`, `max_retries`).
-- **`ProviderCredential`**: Secure metadata referencing provider credentials (`credential_type`, `credential_secret_ref`, `key_id`, `environment`).
+- **`Provider`**: Identifies a configured external provider connection within a tenant (`tenant_id`, `name`, `slug`, adapter key in `provider_type`, canonical `category`, enablement/priority, health evidence, and safe metadata).
+- **`ProviderCredential`**: Secure metadata referencing provider credentials (`credential_type`, `secret_ref`). Plaintext values are resolved only through `SecretStorage`; Phase 10 can write them directly to the encrypted local vault without persisting them in SQL.
 - **`ProviderProductMapping`**: Maps an internal catalog `ProductVariant` to an upstream `external_product_id`. Supports ordering by `priority` (lower numbers tried first), tracking supplier `cost_price`, and selective toggling via `is_active`.
 
 ---
@@ -51,7 +51,7 @@ All supplier integrations inherit from `BaseProviderClient` and implement the `P
 
 ```python
 class Provider(Protocol):
-    async def get_health(self) -> ProviderHealthCheck: ...
+    async def health_check(self) -> ProviderHealthResult: ...
     async def get_balance(self) -> ProviderBalanceResult: ...
     async def list_products(self) -> list[ProviderProductDTO]: ...
     async def get_product(self, external_id: str) -> ProviderProductDTO: ...
@@ -60,10 +60,7 @@ class Provider(Protocol):
 ```
 
 ### Provider Client Registry
-The `ProviderClientRegistry` dynamically provisions and caches provider client instances keyed by `(tenant_id, provider_id)`. When an order is processed:
-1. The registry loads the provider record and its associated credentials.
-2. It resolves the secret string from `SecretStorage`.
-3. It instantiates the matching client (`MockProvider`, `ExampleDigitalCodesProvider`, etc.).
+The `ProviderClientRegistry` owns adapter factories plus public `ProviderDefinition` manifests. `ProviderRouter` resolves a tenant provider record and its credential references, validates the record category against the adapter manifest, then asks the registry for the matching client (`MockProvider`, `ExampleDigitalCodesProvider`, future vendor drivers, etc.). Test-only singleton injection remains supported. See `docs/architecture/provider-platform.md`.
 
 ---
 

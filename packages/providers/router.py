@@ -1,5 +1,10 @@
+import asyncio
+import hashlib
 import logging
+import math
 import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -9,8 +14,10 @@ from sqlalchemy.orm import selectinload
 from packages.providers.clients.base import BaseProviderClient
 from packages.providers.clients.registry import ProviderClientRegistry, provider_registry
 from packages.providers.exceptions import (
+    ProviderConfigurationError,
     ProviderError,
     ProviderProductUnavailableError,
+    ProviderTimeoutError,
 )
 from packages.providers.interface import (
     ProviderOrderRequest,
@@ -18,12 +25,24 @@ from packages.providers.interface import (
 )
 from packages.providers.models import (
     Provider,
+    ProviderCategory,
     ProviderHealthStatus,
+    ProviderOfferSnapshot,
     ProviderProductMapping,
+    ProviderRoutingPolicy,
+    ProviderRoutingStrategy,
 )
 from packages.telegram.secrets import SecretNotFoundError, SecretStorage, get_default_secret_storage
 
 logger = logging.getLogger("providers.router")
+
+
+@dataclass(frozen=True, slots=True)
+class RoutingDirective:
+    strategy: ProviderRoutingStrategy
+    preferred_provider_id: uuid.UUID | None = None
+    failover_enabled: bool = True
+    weights_json: dict[str, int] | None = None
 
 
 class ProviderRouter:
@@ -45,8 +64,18 @@ class ProviderRouter:
         tenant_id: uuid.UUID,
         product_id: uuid.UUID,
         variant_id: uuid.UUID | None = None,
+        routing_key: str | None = None,
+        allowed_provider_ids: set[uuid.UUID] | None = None,
+        allowed_categories: set[ProviderCategory] | None = None,
+        strategy_override: ProviderRoutingStrategy | None = None,
+        preferred_provider_id: uuid.UUID | None = None,
+        failover_enabled: bool | None = None,
     ) -> list[ProviderProductMapping]:
-        """Queries and sorts eligible provider mappings for a given product/variant."""
+        """Return eligible mappings in deterministic policy order.
+
+        Variant-scoped policies override product-level policies. Without a policy this method
+        preserves the legacy priority-then-cost order.
+        """
         stmt = (
             select(ProviderProductMapping)
             .join(Provider, ProviderProductMapping.provider_id == Provider.id)
@@ -61,8 +90,12 @@ class ProviderRouter:
             )
         )
 
+        if allowed_provider_ids:
+            stmt = stmt.where(Provider.id.in_(allowed_provider_ids))
+        if allowed_categories:
+            stmt = stmt.where(Provider.category.in_(allowed_categories))
+
         if variant_id:
-            # Prefer specific variant mapping, or fallback to product-level mapping
             stmt = stmt.where(
                 (ProviderProductMapping.product_variant_id == variant_id)
                 | (ProviderProductMapping.product_variant_id.is_(None))
@@ -71,36 +104,245 @@ class ProviderRouter:
         result = await session.execute(stmt)
         mappings = list(result.scalars().all())
 
-        # Filter out UNAVAILABLE providers or providers exceeding failure threshold
         eligible: list[ProviderProductMapping] = []
-        for m in mappings:
-            prov = m.provider
-            if prov.health_status == ProviderHealthStatus.UNAVAILABLE:
+        for mapping in mappings:
+            provider = mapping.provider
+            if provider.health_status == ProviderHealthStatus.UNAVAILABLE:
                 logger.warning(
                     "Skipping provider '%s' (id=%s): health status is UNAVAILABLE",
-                    prov.name,
-                    prov.id,
+                    provider.name,
+                    provider.id,
                 )
                 continue
-            if prov.consecutive_failures >= self.max_consecutive_failures:
+            if provider.consecutive_failures >= self.max_consecutive_failures:
                 logger.warning(
                     "Skipping provider '%s' (id=%s): consecutive failures (%d) >= threshold (%d)",
-                    prov.name,
-                    prov.id,
-                    prov.consecutive_failures,
+                    provider.name,
+                    provider.id,
+                    provider.consecutive_failures,
                     self.max_consecutive_failures,
                 )
                 continue
-            eligible.append(m)
+            eligible.append(mapping)
 
-        # Sort: priority_override takes precedence, then provider.priority (1 is highest)
-        eligible.sort(
-            key=lambda m: (
-                m.priority_override if m.priority_override is not None else m.provider.priority,
-                m.cost_price,
+        offer_snapshots: dict[uuid.UUID, ProviderOfferSnapshot] = {}
+        if eligible:
+            rows = list(
+                (
+                    await session.execute(
+                        select(ProviderOfferSnapshot).where(
+                            ProviderOfferSnapshot.tenant_id == tenant_id,
+                            ProviderOfferSnapshot.mapping_id.in_([item.id for item in eligible]),
+                        )
+                    )
+                ).scalars().all()
+            )
+            offer_snapshots = {row.mapping_id: row for row in rows}
+            eligible = [
+                mapping
+                for mapping in eligible
+                if not (
+                    self._snapshot_is_fresh(offer_snapshots.get(mapping.id))
+                    and offer_snapshots[mapping.id].is_available is False
+                )
+            ]
+
+        policy: ProviderRoutingPolicy | RoutingDirective | None = await self._routing_policy(
+            session, tenant_id=tenant_id, product_id=product_id, variant_id=variant_id
+        )
+        if strategy_override is not None:
+            policy = RoutingDirective(
+                strategy=strategy_override,
+                preferred_provider_id=preferred_provider_id,
+                failover_enabled=True if failover_enabled is None else failover_enabled,
+                weights_json={},
+            )
+        ordered = self._order_mappings(
+            eligible,
+            policy=policy,
+            routing_key=routing_key
+            or f"preview:{tenant_id}:{product_id}:{variant_id or 'default'}",
+            offer_snapshots=offer_snapshots,
+        )
+        if policy is not None and not policy.failover_enabled and ordered:
+            return ordered[:1]
+        return ordered
+
+    async def _routing_policy(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        product_id: uuid.UUID,
+        variant_id: uuid.UUID | None,
+    ) -> ProviderRoutingPolicy | None:
+        if variant_id is not None:
+            variant_policy = await session.scalar(
+                select(ProviderRoutingPolicy).where(
+                    ProviderRoutingPolicy.tenant_id == tenant_id,
+                    ProviderRoutingPolicy.product_id == product_id,
+                    ProviderRoutingPolicy.product_variant_id == variant_id,
+                )
+            )
+            if variant_policy is not None:
+                return variant_policy
+        return await session.scalar(
+            select(ProviderRoutingPolicy).where(
+                ProviderRoutingPolicy.tenant_id == tenant_id,
+                ProviderRoutingPolicy.product_id == product_id,
+                ProviderRoutingPolicy.product_variant_id.is_(None),
             )
         )
-        return eligible
+
+    @staticmethod
+    def _snapshot_is_fresh(snapshot: ProviderOfferSnapshot | None) -> bool:
+        if snapshot is None:
+            return False
+        expires_at = snapshot.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        return expires_at > datetime.now(UTC)
+
+    def _effective_cost(
+        self,
+        mapping: ProviderProductMapping,
+        snapshots: dict[uuid.UUID, ProviderOfferSnapshot],
+    ) -> tuple[Any, str]:
+        snapshot = snapshots.get(mapping.id)
+        if self._snapshot_is_fresh(snapshot):
+            assert snapshot is not None
+            return snapshot.cost_amount, snapshot.cost_currency.upper()
+        return mapping.cost_price, mapping.cost_currency.upper()
+
+    @staticmethod
+    def _health_rank(provider: Provider) -> int:
+        return {
+            ProviderHealthStatus.HEALTHY: 0,
+            ProviderHealthStatus.UNKNOWN: 1,
+            ProviderHealthStatus.DEGRADED: 2,
+            ProviderHealthStatus.UNAVAILABLE: 3,
+        }[provider.health_status]
+
+    @staticmethod
+    def _weighted_score(
+        mapping: ProviderProductMapping, *, routing_key: str, weight: int
+    ) -> float:
+        seed = (
+            f"{routing_key}:{mapping.provider_id}:{mapping.external_product_id}"
+        ).encode()
+        digest = hashlib.sha256(seed).digest()
+        integer = int.from_bytes(digest[:8], "big")
+        unit = (integer + 1) / ((1 << 64) + 1)
+        return -math.log(unit) / max(weight, 1)
+
+    def _order_mappings(
+        self,
+        mappings: list[ProviderProductMapping],
+        *,
+        policy: ProviderRoutingPolicy | RoutingDirective | None,
+        routing_key: str,
+        offer_snapshots: dict[uuid.UUID, ProviderOfferSnapshot] | None = None,
+    ) -> list[ProviderProductMapping]:
+        ordered = list(mappings)
+        snapshots = offer_snapshots or {}
+        currencies = {self._effective_cost(item, snapshots)[1] for item in ordered}
+        comparable_costs = len(currencies) <= 1
+        if policy is None or policy.strategy == ProviderRoutingStrategy.PRIORITY:
+            ordered.sort(
+                key=lambda mapping: (
+                    mapping.priority_override
+                    if mapping.priority_override is not None
+                    else mapping.provider.priority,
+                    self._effective_cost(mapping, snapshots)[0] if comparable_costs else 0,
+                    str(mapping.provider_id),
+                )
+            )
+            return ordered
+
+        if policy.strategy == ProviderRoutingStrategy.LOWEST_COST:
+            if not comparable_costs:
+                raise ProviderConfigurationError(
+                    "LOWEST_COST routing requires one provider cost currency until FX normalization is configured."
+                )
+            ordered.sort(
+                key=lambda mapping: (
+                    self._effective_cost(mapping, snapshots)[0],
+                    mapping.priority_override
+                    if mapping.priority_override is not None
+                    else mapping.provider.priority,
+                    str(mapping.provider_id),
+                )
+            )
+            return ordered
+
+        if policy.strategy == ProviderRoutingStrategy.AVAILABILITY:
+            ordered.sort(
+                key=lambda mapping: (
+                    self._health_rank(mapping.provider),
+                    mapping.provider.consecutive_failures,
+                    mapping.priority_override
+                    if mapping.priority_override is not None
+                    else mapping.provider.priority,
+                    str(mapping.provider_id),
+                )
+            )
+            return ordered
+
+        if policy.strategy == ProviderRoutingStrategy.HEALTHIEST:
+            ordered.sort(
+                key=lambda mapping: (
+                    self._health_rank(mapping.provider),
+                    mapping.provider.consecutive_failures,
+                    mapping.provider.last_health_latency_ms
+                    if mapping.provider.last_health_latency_ms is not None
+                    else float("inf"),
+                    self._effective_cost(mapping, snapshots)[0] if comparable_costs else 0,
+                    str(mapping.provider_id),
+                )
+            )
+            return ordered
+
+        if policy.strategy == ProviderRoutingStrategy.MANUAL:
+            preferred = policy.preferred_provider_id
+            if preferred is None:
+                return []
+            preferred_rows = [mapping for mapping in ordered if mapping.provider_id == preferred]
+            others = [mapping for mapping in ordered if mapping.provider_id != preferred]
+            others.sort(
+                key=lambda mapping: (
+                    mapping.priority_override
+                    if mapping.priority_override is not None
+                    else mapping.provider.priority,
+                    self._effective_cost(mapping, snapshots)[0] if comparable_costs else 0,
+                    str(mapping.provider_id),
+                )
+            )
+            return preferred_rows + others if preferred_rows else []
+
+        if policy.strategy == ProviderRoutingStrategy.WEIGHTED:
+            raw_weights = policy.weights_json or {}
+
+            def weight_for(mapping: ProviderProductMapping) -> int:
+                raw = raw_weights.get(str(mapping.provider_id), 1)
+                try:
+                    value = int(raw)
+                except (TypeError, ValueError):
+                    value = 1
+                return max(1, min(value, 1000))
+
+            ordered.sort(
+                key=lambda mapping: (
+                    self._weighted_score(
+                        mapping,
+                        routing_key=routing_key,
+                        weight=weight_for(mapping),
+                    ),
+                    str(mapping.provider_id),
+                )
+            )
+            return ordered
+
+        return ordered
 
     async def build_provider_config(self, provider_record: Provider) -> dict[str, Any]:
         """Resolve credential references into an ephemeral runtime config.
@@ -108,6 +350,22 @@ class ProviderRouter:
         Secret values are never written back to database models or logs. Adapters can
         read them from config["credentials"] keyed by credential_type.
         """
+        definition = self.registry.get_definition(provider_record.provider_type)
+        self.registry.validate_config(
+            provider_record.provider_type,
+            provider_record.metadata_json or {},
+            provider_record.category,
+        )
+        configured_types = {credential.credential_type.upper() for credential in provider_record.credentials}
+        required = self.registry.required_credentials_for(
+            provider_record.provider_type, provider_record.metadata_json or {}
+        )
+        missing = [key for key in required if key not in configured_types]
+        if missing:
+            raise ProviderConfigurationError(
+                f"Missing required provider credentials: {', '.join(sorted(missing))}."
+            )
+
         config = dict(provider_record.metadata_json or {})
         credentials: dict[str, str] = {}
         for credential in provider_record.credentials:
@@ -122,7 +380,26 @@ class ProviderRouter:
                     f"Credential reference for provider '{provider_record.name}' is not available."
                 ) from exc
         config["credentials"] = credentials
+        config["provider_category"] = provider_record.category.value
+        config["adapter_key"] = definition.normalized_key
+        config["capabilities"] = [
+            capability.value
+            for capability in self.registry.capabilities_for(
+                provider_record.provider_type,
+                provider_record.category,
+                provider_record.metadata_json or {},
+            )
+        ]
         return config
+
+    @staticmethod
+    def _provider_timeout(provider_record: Provider) -> float:
+        raw = (provider_record.metadata_json or {}).get("timeout_seconds", 15)
+        try:
+            timeout = float(raw)
+        except (TypeError, ValueError):
+            timeout = 15.0
+        return max(1.0, min(timeout, 60.0))
 
     async def route_and_execute_order(
         self,
@@ -134,6 +411,11 @@ class ProviderRouter:
         idempotency_key: str,
         variant_id: uuid.UUID | None = None,
         parameters: dict[str, Any] | None = None,
+        allowed_provider_ids: set[uuid.UUID] | None = None,
+        allowed_categories: set[ProviderCategory] | None = None,
+        strategy_override: ProviderRoutingStrategy | None = None,
+        preferred_provider_id: uuid.UUID | None = None,
+        failover_enabled: bool | None = None,
     ) -> tuple[Provider, ProviderProductMapping, ProviderOrderResponse]:
         """Attempts order creation across eligible providers with automatic retryable fallback."""
         mappings = await self.get_eligible_mappings(
@@ -141,6 +423,12 @@ class ProviderRouter:
             tenant_id=tenant_id,
             product_id=product_id,
             variant_id=variant_id,
+            routing_key=idempotency_key,
+            allowed_provider_ids=allowed_provider_ids,
+            allowed_categories=allowed_categories,
+            strategy_override=strategy_override,
+            preferred_provider_id=preferred_provider_id,
+            failover_enabled=failover_enabled,
         )
 
         if not mappings:
@@ -177,7 +465,14 @@ class ProviderRouter:
             )
 
             try:
-                response = await client.create_order(request)
+                timeout_seconds = self._provider_timeout(provider_record)
+                try:
+                    async with asyncio.timeout(timeout_seconds):
+                        response = await client.create_order(request)
+                except TimeoutError as exc:
+                    raise ProviderTimeoutError(
+                        f"Provider '{provider_record.name}' timed out during order creation."
+                    ) from exc
 
                 # Reset failure count on success
                 if provider_record.consecutive_failures > 0:
@@ -208,15 +503,19 @@ class ProviderRouter:
                     provider_record.consecutive_failures,
                 )
 
-                # If the error is non-retryable (e.g. Auth failure or client error), abort failover immediately
-                if not p_err.is_retryable:
+                # Fail over only when the adapter can prove the failure happened before work
+                # could have been accepted upstream. Timeouts/network ambiguity must converge
+                # through reconciliation instead of risking a duplicate purchase at another provider.
+                if not p_err.is_retryable or not p_err.safe_to_failover:
                     logger.error(
-                        "Halting failover: non-retryable provider error encountered on '%s'",
+                        "Halting failover on provider '%s' (retryable=%s, safe_to_failover=%s)",
                         provider_record.name,
+                        p_err.is_retryable,
+                        p_err.safe_to_failover,
                     )
                     raise
 
-                # Otherwise loop continues to next eligible provider in priority order
+                # Safe pre-order failure: continue to the next deterministic eligible provider.
 
             except Exception as unhandled_err:
                 logger.exception("Unexpected error executing provider '%s'", provider_record.name)

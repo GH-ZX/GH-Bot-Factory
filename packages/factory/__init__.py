@@ -3,7 +3,7 @@ from packages.factory.provisioning import BotProvisioningService, VerifiedTelegr
 
 __all__ = [
     "BotProvisioningJob",
-    "BotProvisioningStatus",
     "BotProvisioningService",
+    "BotProvisioningStatus",
     "VerifiedTelegramBot",
 ]

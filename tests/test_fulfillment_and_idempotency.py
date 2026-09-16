@@ -38,7 +38,8 @@ async def test_fulfillment_idempotency_prevents_duplicate_orders(db_session: Asy
     mapping = ProviderProductMapping(
         tenant_id=tenant.id,
         provider_id=prov.id,
-        product_id=variant.id,
+        product_id=product.id,
+        product_variant_id=variant.id,
         external_product_id="ext-idem",
     )
     db_session.add(mapping)
@@ -105,7 +106,7 @@ async def test_fulfillment_worker_queue_and_execution(db_session: AsyncSession, 
     db_session.add(prov)
     await db_session.flush()
 
-    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant.id, external_product_id="ext-work")
+    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product.id, product_variant_id=variant.id, external_product_id="ext-work")
     db_session.add(mapping)
 
     order = Order(tenant_id=tenant.id, user_id=user.id, order_number="ORD-WORK-200", status=OrderStatus.PAID, total_amount=Decimal("20.00"))

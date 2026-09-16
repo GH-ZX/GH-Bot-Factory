@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import logging
 import re
-import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -216,6 +216,6 @@ async def install_first_tenant(
         if secret_written:
             try:
                 await secret_storage.delete_secret(secret_ref)
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - preserve original setup failure during vault cleanup
+                logging.getLogger(__name__).warning("Setup rollback could not remove the staged secret.")
         raise

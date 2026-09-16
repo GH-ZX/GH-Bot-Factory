@@ -9,6 +9,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import apps.api.v1.admin_providers as admin_providers_module
 from apps.api.deps import get_auth_token_service
 from apps.api.main import app
 from packages.commerce.models import Order, Product, ProductVariant
@@ -383,6 +384,67 @@ async def test_payment_provider_upsert_hides_secret_refs_and_is_tenant_scoped(
     ).scalar_one()
     assert stored.credentials_ref == "ENV_PAYMENT_KEY"
     assert stored.webhook_secret_ref == "ENV_PAYMENT_WEBHOOK"
+
+
+async def test_payment_provider_can_store_write_only_encrypted_values(
+    provider_admin_env: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client: httpx.AsyncClient = provider_admin_env["client"]
+    session: AsyncSession = provider_admin_env["session"]
+    tenant = Tenant(name="Payment Vault", slug=f"payvault-{uuid.uuid4().hex[:6]}", is_active=True)
+    session.add(tenant)
+    await session.flush()
+    _, admin_token = await create_identity(session, tenant, Role.ADMIN)
+    await session.commit()
+
+    vault = EnvSecretStorage()
+    monkeypatch.setattr(admin_providers_module, "get_default_secret_storage", lambda: vault)
+    triplea_secret = '{"client_id":"cid","client_secret":"csecret","merchant_key":"mkey"}'
+    created = await client.put(
+        "/api/v1/admin/payment-providers/triplea",
+        headers=auth(admin_token),
+        json={
+            "credentials_value": triplea_secret,
+            "is_enabled": True,
+            "settings": {
+                "display_name": "Triple-A",
+                "sandbox": True,
+                "topup_min_amount": "5.00",
+                "topup_max_amount": "500.00",
+                "topup_currencies": ["USD"],
+            },
+        },
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["credentials_configured"] is True
+    assert triplea_secret not in created.text
+    stored = (
+        await session.execute(
+            select(PaymentProviderConfig).where(
+                PaymentProviderConfig.tenant_id == tenant.id,
+                PaymentProviderConfig.provider_name == "triplea",
+            )
+        )
+    ).scalar_one()
+    assert stored.credentials_ref.startswith(f"GHBF_PAYMENT_{tenant.id.hex}_TRIPLEA_")
+    assert await vault.get_secret(stored.credentials_ref) == triplea_secret
+
+    listing = await client.get("/api/v1/admin/payment-providers", headers=auth(admin_token))
+    assert listing.status_code == 200
+    assert triplea_secret not in listing.text
+    assert stored.credentials_ref not in listing.text
+
+    conflicting = await client.put(
+        "/api/v1/admin/payment-providers/triplea",
+        headers=auth(admin_token),
+        json={
+            "credentials_ref": "ENV_TRIPLEA",
+            "credentials_value": "plaintext",
+            "settings": created.json()["settings"],
+        },
+    )
+    assert conflicting.status_code == 422
 
 
 async def test_reconciliation_uses_secret_resolved_provider_configuration(db_session: AsyncSession) -> None:

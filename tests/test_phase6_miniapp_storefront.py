@@ -18,7 +18,6 @@ from packages.core.auth import AuthSource, AuthTokenService
 from packages.core.database import get_db_session
 from packages.fulfillment.models import FulfillmentJobRecord, FulfillmentJobStatus
 from packages.fulfillment.worker import FulfillmentWorker
-from packages.payments.models import Wallet
 from packages.payments.service import LedgerService
 from packages.tenants.models import Membership, Role, Tenant, User
 

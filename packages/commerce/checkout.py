@@ -10,6 +10,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from packages.commerce.economics import PricingService
+from packages.commerce.economics_models import OrderItemEconomics
 from packages.commerce.models import Order, OrderItem, Product, ProductVariant
 from packages.commerce.state_machine import OrderStatus
 from packages.fulfillment.models import (
@@ -41,11 +43,13 @@ class CheckoutService:
         self,
         fulfillment_service: FulfillmentService | None = None,
         notification_service: NotificationService | None = None,
+        pricing_service: PricingService | None = None,
     ) -> None:
         self.notifications = notification_service or NotificationService()
         self.fulfillment = fulfillment_service or FulfillmentService(
             notification_service=self.notifications
         )
+        self.pricing = pricing_service or PricingService()
 
     async def checkout(
         self,
@@ -58,6 +62,7 @@ class CheckoutService:
         execute_sync: bool = True,
         idempotency_key: str | None = None,
         enqueue_durable: bool = False,
+        bot_id: uuid.UUID | None = None,
     ) -> tuple[Order, FulfillmentAttempt | None]:
         """Backward-compatible single-line checkout wrapper."""
         return await self.checkout_cart(
@@ -69,6 +74,7 @@ class CheckoutService:
             execute_sync=execute_sync,
             idempotency_key=idempotency_key,
             enqueue_durable=enqueue_durable,
+            bot_id=bot_id,
         )
 
     async def checkout_cart(
@@ -81,6 +87,7 @@ class CheckoutService:
         execute_sync: bool = True,
         idempotency_key: str | None = None,
         enqueue_durable: bool = False,
+        bot_id: uuid.UUID | None = None,
     ) -> tuple[Order, FulfillmentAttempt | None]:
         """Checkout one or more variants using server-authoritative prices.
 
@@ -145,13 +152,26 @@ class CheckoutService:
             ]
             raise ValueError(f"One or more product variants are unavailable: {', '.join(missing)}.")
 
-        currencies = {variant.currency for variant in variants}
+        # Phase 12 pricing is server-authoritative and user-tier aware. Catalog price remains
+        # the fallback when no explicit pricing rule/fresh same-currency supplier offer exists.
+        quoted: dict[uuid.UUID, tuple[object, object]] = {}
+        for variant in variants:
+            quote, decision = await self.pricing.quote(
+                session, tenant_id=tenant_id, user_id=user_id, variant=variant, bot_id=bot_id
+            )
+            quoted[variant.id] = (quote, decision)
+
+        currencies = {decision.currency for _quote, decision in quoted.values()}
         if len(currencies) != 1:
             raise ValueError("A single checkout cannot contain variants with different currencies.")
         currency = next(iter(currencies))
 
         total_amount = sum(
-            (variant.price * Decimal(quantity_by_variant[variant.id]) for variant in variants),
+            (
+                decision.sell_price * Decimal(quantity_by_variant[variant.id])
+                for variant in variants
+                for _quote, decision in [quoted[variant.id]]
+            ),
             start=Decimal("0.00"),
         )
         order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
@@ -169,12 +189,12 @@ class CheckoutService:
         session.add(order)
         try:
             await session.flush()
-        except IntegrityError as exc:
+        except IntegrityError:
             # The order insert happens before any financial mutation. Roll back the request
             # transaction so the session can safely resolve the winning idempotent order.
             await session.rollback()
             if not idempotency_key:
-                raise exc
+                raise
             existing = await self._find_idempotent_order(
                 session=session,
                 tenant_id=tenant_id,
@@ -182,7 +202,7 @@ class CheckoutService:
                 idempotency_key=idempotency_key,
             )
             if existing is None:
-                raise exc
+                raise
             self._assert_idempotent_request_matches(existing, request_hash)
             logger.info("Concurrent checkout retry resolved by database idempotency constraint.")
             return await self._resume_or_return(
@@ -194,13 +214,33 @@ class CheckoutService:
 
         for variant in variants:
             quantity = quantity_by_variant[variant.id]
+            quote, decision = quoted[variant.id]
+            item = OrderItem(
+                order_id=order.id,
+                product_variant_id=variant.id,
+                quantity=quantity,
+                unit_price=decision.sell_price,
+                total_price=decision.sell_price * Decimal(quantity),
+            )
+            session.add(item)
+            await session.flush()
             session.add(
-                OrderItem(
+                OrderItemEconomics(
+                    tenant_id=tenant_id,
                     order_id=order.id,
-                    product_variant_id=variant.id,
-                    quantity=quantity,
-                    unit_price=variant.price,
-                    total_price=variant.price * Decimal(quantity),
+                    order_item_id=item.id,
+                    bot_id=bot_id,
+                    price_quote_id=quote.id,
+                    pricing_tier_id=decision.pricing_tier_id,
+                    pricing_rule_id=decision.pricing_rule_id,
+                    sale_amount=item.total_price,
+                    sale_currency=decision.currency,
+                    estimated_supplier_cost=(
+                        decision.supplier_cost * Decimal(quantity)
+                        if decision.supplier_cost is not None
+                        else None
+                    ),
+                    estimated_cost_currency=decision.supplier_currency,
                 )
             )
 

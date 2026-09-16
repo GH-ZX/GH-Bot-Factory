@@ -2,6 +2,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
+from packages.providers.contracts import (
+    ProviderDeliveryArtifact,
+    ProviderOrderState,
+    normalize_provider_order_state,
+)
 from packages.providers.models import ProviderHealthStatus
 
 
@@ -63,6 +68,8 @@ class ProviderOrderResponse:
     raw_data: dict[str, Any] = field(default_factory=dict)
     total_cost: Decimal | None = None
     details: dict[str, Any] | None = None
+    canonical_state: ProviderOrderState | None = None
+    delivery: tuple[ProviderDeliveryArtifact, ...] = ()
 
     def __post_init__(self) -> None:
         if self.total_cost is not None and self.cost == Decimal("0.00"):
@@ -73,6 +80,8 @@ class ProviderOrderResponse:
             self.raw_data = self.details
         elif self.details is None:
             self.details = self.raw_data
+        if self.canonical_state is None:
+            self.canonical_state = normalize_provider_order_state(self.status)
 
 
 
@@ -84,12 +93,16 @@ class ProviderOrderCheckResponse:
     is_failed: bool = False
     raw_data: dict[str, Any] = field(default_factory=dict)
     details: dict[str, Any] | None = None
+    canonical_state: ProviderOrderState | None = None
+    delivery: tuple[ProviderDeliveryArtifact, ...] = ()
 
     def __post_init__(self) -> None:
         if self.details is not None and not self.raw_data:
             self.raw_data = self.details
         elif self.details is None:
             self.details = self.raw_data
+        if self.canonical_state is None:
+            self.canonical_state = normalize_provider_order_state(self.status)
 
 
 

@@ -131,7 +131,7 @@ class EncryptedFileSecretStorage:
 
     def _locked(self, exclusive: bool):
         self._ensure_directory()
-        handle = open(self.lock_path, "a+b")
+        handle = open(self.lock_path, "a+b")  # noqa: SIM115 - ownership passes to _unlock
         if fcntl is not None:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
         return handle

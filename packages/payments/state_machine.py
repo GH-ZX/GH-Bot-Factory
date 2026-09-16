@@ -26,6 +26,7 @@ LEGAL_PAYMENT_TRANSITIONS: dict[PaymentIntentStatus, set[PaymentIntentStatus]] =
         PaymentIntentStatus.CANCELLED,
         PaymentIntentStatus.EXPIRED,
         PaymentIntentStatus.FAILED,
+        PaymentIntentStatus.UNKNOWN,
     },
     PaymentIntentStatus.PENDING: {
         PaymentIntentStatus.PROCESSING,
@@ -47,6 +48,7 @@ LEGAL_PAYMENT_TRANSITIONS: dict[PaymentIntentStatus, set[PaymentIntentStatus]] =
         PaymentIntentStatus.FAILED,
         PaymentIntentStatus.PROCESSING,
         PaymentIntentStatus.EXPIRED,
+        PaymentIntentStatus.CANCELLED,
     },
     # Terminal states: immutable settlement / resolution
     PaymentIntentStatus.SUCCEEDED: set(),

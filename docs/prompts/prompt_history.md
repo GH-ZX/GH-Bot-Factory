@@ -33,7 +33,7 @@ This document serves as the historical record of all user prompts, architectural
 
 ### User Request / Prompt:
 > "Proceed with Phase 2 of GH-Bot-Factory. The Foundation is complete and tested. Implement Multi-Tenancy + Database Core + Authentication/Authorization + Commerce Domain + Order State Machine + Ledger + Provider abstraction according to the architecture above. Work directly in /opt/gh-bot-factory, run migrations/tests/linting, commit each coherent milestone to GitHub, and never commit secrets. Do not modify existing Docker containers or Cloudflare Tunnel configuration. Port 8000 is occupied by Portainer; do not use it. Before coding, inspect the current repository and preserve the existing Foundation. At the end, provide a concise implementation report with files changed, migrations, tests, commit SHAs, and any blockers."
-> 
+>
 > *Directive: "answare in english, no answares in arabic"*
 
 ### Deliverables & Implementation:
@@ -327,13 +327,13 @@ This document serves as the historical record of all user prompts, architectural
 
 #### Verbatim User Prompt:
 > "Phase 5.1 — API Authentication & Authorization Hardening
-> 
+>
 > Objective
 > Harden the Phase 5 REST API authentication and authorization boundary.
 > The current payment infrastructure and Telegram Mini App cryptographic authentication are implemented, but payment endpoints currently accept "X-Tenant-ID" and "X-User-ID" directly from HTTP headers.
 > This is NOT an acceptable final authentication architecture.
 > The authenticated principal must come from a server-verified credential/session, not from arbitrary client-supplied identity headers.
-> 
+>
 > 1. Critical Finding: Payment routes accept X-Tenant-ID and X-User-ID as identity context. Mini App auth returns IDs but no reusable session. Fix without weakening payment or tenant invariants.
 > 2. Introduce AuthenticatedPrincipal: user_id, tenant_id, source: AuthSource, roles: frozenset[Role]. Consumed by routers/services instead of identity headers.
 > 3. Mini App Authentication Session: After initData validation, issue short-lived signed access token (sub, tenant_id, roles, iat, exp, token_version). No secrets in token, no client-supplied ID trust.
@@ -981,3 +981,331 @@ Treat the successful Ubuntu/Telegram live response as proof that the Easy Start 
 - Focused and full runnable suites are rerun at packaging time.
 - SQLite migration upgrade and `alembic check` passed during implementation.
 - Real PostgreSQL concurrency, Ruff, direct-Aiogram runtime tests, and complete release-gate evidence remain external requirements.
+
+---
+
+## Milestone 31 — Phase 9.0 SaaS Plans & Entitlements Foundation
+
+**Date:** 2026-09-15
+
+**User prompt (verbatim):**
+
+> بيطلع انو اي هيلثي و200 وكذا، بالنسبة للرفع لا تمام ارتفعت عادي لأن في .git موجود بالأساس عندي، سابقا بأول خطوات
+> المهم، شو الخطوة التالية لتطوير المشروع؟ خلينا نكمل
+
+### Intent
+
+Start the first real product-development milestone after the Phase 8.7 release candidate instead of repeating deployment validation work. Establish the commercial entitlement boundary required for a future white-label SaaS control plane without breaking the working self-hosted product.
+
+### Implementation
+
+1. Added persisted platform-owned SaaS plans and tenant-owned subscription state.
+2. Added fail-closed entitlement resolution with an explicit Phase 8 self-hosted fallback for tenants without subscriptions.
+3. Made Bot Factory fleet capacity limits plan-authoritative for subscribed tenants.
+4. Added tenant usage resolution, a read-only STAFF+ SaaS overview API, and an Admin Plan view.
+5. Deliberately excluded tenant-side plan mutation and billing-provider coupling; those belong to Phase 9.1 platform control plane.
+6. Added migration `c3d4e5f6a7b8`, ADR-024, architecture documentation, and focused tests.
+
+### Verification
+
+- Phase 9 focused tests: **8/8 passed**.
+- Combined Phase 8 + Phase 9 focused tests: **24/24 passed**.
+- Full dependency-limited runnable regression: **206/206 passed**, excluding PostgreSQL and the two direct-Aiogram modules.
+- SQLite migration upgrade -> drift check -> downgrade -> re-upgrade through `c3d4e5f6a7b8`: passed.
+- Canonical PostgreSQL/Ruff/Aiogram/Docker/staging/restore/release-gate evidence remains external.
+
+
+## 2026-09-15 — Continue to next phase with laptop-first portability
+
+### User prompt (verbatim)
+
+> ما رح جربها حاليا، رح جربها بس نوصل لمرحلة تكون نهائية وصير قلك شو لازم نضيف وشو لازم نعدل، هلق كمل عمل، بالمناسبة، احتمال اصلا ما اخليه على vps وفعلا خلي لابتوبي يكون هو الشغال، مع قابلية النقل مستقبلا الى vps ، لذلك ضع هذا بالحسبان
+> ننتقل للمرحلة التالية
+
+### Implementation summary
+
+Phase 9.1 introduced an installation-level platform control plane, audited plan/subscription management, normalized durable billing-event convergence, a localhost-first operator CLI, and a versioned PostgreSQL + encrypted-secret-vault portable state bundle for laptop-to-VPS migration. Redis and `.env` are intentionally excluded from the portable contract. Migration head advanced to `d4e5f6a7b8c9`.
+
+## 2026-09-15 — Continue project development into Phase 9.2
+
+### User prompt (verbatim)
+
+> اي تمام كمل شغل عالمشروع
+
+### Intent
+
+Continue directly from Phase 9.1 without requiring intermediate user testing, preserving laptop-first operation and future VPS portability while implementing the next SaaS milestone.
+
+### Implementation summary
+
+Phase 9.2 added a provider-agnostic billing boundary with Stripe as the first signed adapter, a separate provider price catalog, tenant checkout/customer-portal handoff, signed webhook convergence, and pull reconciliation for laptop deployments without public ingress. Past-due grace is now persisted deterministically but remains observe-only until Phase 9.3 introduces centralized commercial feature gates. Migration head advanced to `e5f6a7b8c9d0`.
+
+
+## Milestone 33 — Phase 9.3 Commercial Product Entitlements
+
+**Date:** 2026-09-15
+
+### Intent
+
+Turn Phase 9 billing/subscription state into server-authoritative commercial behavior without degrading self-hosted laptop installations that intentionally have no SaaS subscription.
+
+### Implementation summary
+
+1. Added a centralized commercial access policy that distinguishes active/trialing, past-due grace, and blocked states.
+2. Enforced product gates for custom branding, CANARY rollout, and runtime controls at the server boundary; Admin UI mirrors effective access but is not authoritative.
+3. Preserved full self-hosted behavior when no hosted subscription exists and preserved safe contraction operations such as disabling a bot after commercial growth is blocked.
+4. Dependency-limited runnable regression reached **224/224 passed** after these gates.
+
+## Milestone 34 — Phase 9.4 Laptop-First SaaS Operations
+
+**Date:** 2026-09-16
+
+### Intent
+
+Close Phase 9 operationally without requiring permanent public ingress: provider-managed subscriptions must converge through periodic pull reconciliation, and support inspection must not impersonate tenant users.
+
+### Implementation summary
+
+1. Added periodic billing reconciliation in the worker and persisted provider-sync timestamps/source/error evidence.
+2. Added SaaS health aggregation for grace, blocked-commercial-access, stale-sync, and provider-sync-error conditions.
+3. Added platform-authorized tenant entitlement inspection and operator CLI commands without minting tenant JWTs or impersonating tenant identities.
+4. Added migration `f6a7b8c9d0e1` and ADR-029 documenting laptop-first SaaS operations and the no-impersonation support boundary.
+5. Fixed the async test path to eager-load subscription plans rather than triggering SQLAlchemy lazy I/O outside its async greenlet boundary.
+
+## Milestone 35 — Multi-API Reseller Product Direction
+
+**Date:** 2026-09-16
+
+**User prompt (verbatim):**
+
+> للمعلومة، منشئ البوتات رح يكونوا اغلب البوتات عبارة عن Multi api resseller, gift seller..etc لهيك يعني بدي حلول لموضوع الAPIs بشكل عام في هالنظام، كمثال : ممكن استخدام 5sim لوضع أرقام وممكن spider bot (ممكن قدم روابط لأله بالمراحل القادمة)
+> للحسابات مثلا storebat, prodseller هدول تلغرام بوتس بيدعموا الapi (وكتيييييييير مثلهم موجود وقريبين على بعض اصلا يعني فكرتهم هي Swagger على ما اذكر )
+> وكمان apis للدفع كمثال دفع يدوي وموافقة أدمن على USDT BEP20 مثلا او binance id او bybit id ، وممكن ربط مع api بتساعد عالدفع، في كتير كمان كمثال kryptoexpress او منصة كوين اكس (شخص دلني عليها) وما بعرف اذا في شي مخدمين لهيك موضوع انت اضفهم للخطة
+> المهم هدول مجرد تسميات، ممكن يكونوا كapis ممكن يتم الاختيار عند العميل، بيقرر شو رح يستخدم من كل المزودين او مخدمين الارقام او مخدمين الدفع او الدفع اليدوي، الخ ، هدول بدي انو اتأكد أنو يعني في تخطيط لهاد الموضوع بشكل عام، وهلق نكمل مع الوضع بالحسبان هالكلام، شو الخطوات التالية رح تكون ؟ خبرني اول قبل ما تبدأ عمل
+
+### Architectural direction
+
+Treat supplier APIs as a first-class platform capability rather than hard-coded integrations. The roadmap now separates a vendor-neutral Provider & Integration Platform (Phase 10), Payments Platform (Phase 11), reseller pricing/wallet economics (Phase 12), and advanced bot templates/factory wizard (Phase 13). Concrete names such as 5sim, Spider Bot, Storebat, Prodseller, KryptoExpress, CoinEx, Binance ID, Bybit ID, or manual USDT are examples to be mapped only after authoritative API/Swagger documentation is supplied; domain logic must not branch on those vendor names.
+
+## Milestone 36 — Phase 10.0 Provider Platform Core
+
+**Date:** 2026-09-16
+
+**User prompt (verbatim):**
+
+> تمام بدنا نكمل عمل،  اشتغل لتوصل للمرحلة 10
+
+### Intent
+
+Finish the remaining Phase 9.4 handoff and enter Phase 10 with a concrete provider platform foundation that can support number/SMS, accounts, gifts, digital products, and services while preserving old provider routing behavior and laptop-first operation.
+
+### Implementation
+
+1. Added canonical provider categories: `NUMBER`, `ACCOUNT`, `GIFT`, `DIGITAL_PRODUCT`, `SERVICE`, and `OTHER`.
+2. Added code-owned adapter manifests describing safe public metadata, supported categories, canonical capabilities, credential requirements, and configuration fields.
+3. Extended the existing provider client registry without breaking legacy factories; default MOCK and DIGITAL_CODES adapters now publish explicit manifests.
+4. Added write-only tenant provider credential entry through `SecretStorage`; SQL stores only deterministic references and read APIs never return the secret value/reference.
+5. Added adapter/category compatibility checks, required-credential validation, bounded runtime timeouts, redacted connection tests, and durable provider health evidence.
+6. Extended the Admin API/UI with adapter discovery, category-aware provider creation, write-only credential storage, credential deletion, capabilities, and connection health.
+7. Added migration `a7b8c9d0e1f2`, ADR-030, and the Phase 10 provider-platform architecture guide.
+8. Preserved existing priority/cost routing and provider mapping behavior for backward compatibility; category-specific operations and OpenAPI mapping remain subsequent Phase 10 milestones.
+
+### Verification
+
+- Phase 9.4 + provider compatibility focused suite: **23/23 passed**.
+- Phase 10.0 provider-core suite: **5/5 passed**.
+- Dependency-limited runnable regression: **232/232 passed**, excluding PostgreSQL-only tests and two direct-Aiogram modules unavailable in the build environment.
+- SQLite migration upgrade -> `alembic check` -> downgrade to `f6a7b8c9d0e1` -> re-upgrade to `a7b8c9d0e1f2`: passed.
+- The build session used an external temporary `aiosqlite` compatibility shim only because that declared test dependency is absent from the execution environment; it is not part of the repository or release artifact.
+
+## Milestone 37 — Phase 10.1–10.5 Provider Platform Completion
+
+**Date:** 2026-09-16
+
+**User prompt (verbatim):**
+
+> رائع، أكمل للخطوات التالية مع الإحكام بشكل مثالي على كلشيء، أكمل
+
+### Intent
+
+Continue beyond the Phase 10.0 Provider Platform Core and complete the remaining Phase 10 integration foundation with strict safety, determinism, laptop-first convergence, and no vendor coupling.
+
+### Implementation
+
+1. Added category-aware canonical provider operations and normalized upstream order/delivery states, including number/SMS activation contracts and sandbox behavior.
+2. Added a constrained Generic HTTP/OpenAPI adapter with declarative mappings only, dynamic capabilities/credentials, no redirects, bounded response/timeout handling, credential redaction, DNS/IP SSRF defenses, and production host allowlisting.
+3. Added tenant-scoped deterministic multi-provider routing policies and ambiguity-safe failover semantics.
+4. Added normalized provider-offer snapshots for cost/currency/availability/freshness while preserving tenant catalog authority and fail-closing mixed-currency cheapest routing.
+5. Integrated asynchronous canonical provider states into the durable fulfillment engine and added pull reconciliation for laptop/self-hosted operation without public webhooks.
+6. Added safe handling for the current one-upstream-order-per-attempt limitation: multi-item async ambiguity becomes `UNKNOWN` instead of false completion/refund.
+7. Added migrations `b8c9d0e1f2a3` and `c9d0e1f2a3b4`, ADR-031/032/033, and expanded architecture documentation.
+
+### Verification
+
+- Dependency-limited runnable regression: **253/253 passed**, excluding PostgreSQL-only tests and two direct-Aiogram modules.
+- SQLite migration upgrade, no-drift check, downgrade, and re-upgrade through `c9d0e1f2a3b4`: passed.
+- Canonical PostgreSQL/Ruff/Aiogram/Docker/staging/restore evidence remains external.
+
+## Milestone 38 — Phase 10 Final Packaging Gate
+
+**Date:** 2026-09-16
+
+**User prompt (verbatim):**
+
+> هل في اي شي ضل قبل الفيز التالي؟
+> حط الملف طبعا على هالاصدار كمان
+
+### Intent
+
+Close the Phase 10 handoff/documentation gap, verify the final tree, and package a complete Phase 10.5 snapshot before starting Phase 11.
+
+### Final packaging verification
+
+- Dependency-limited runnable regression: **253/253 passed** with 8 PostgreSQL tests deselected and the two direct-Aiogram modules explicitly excluded because `aiogram` is unavailable here.
+- Fresh SQLite migration upgrade -> `alembic check` -> downgrade to Phase 10.0 -> re-upgrade to `c9d0e1f2a3b4`: passed.
+- Handoff consistency, compileall, JavaScript syntax, and repository secret scan: passed.
+- Phase 10.0 -> 10.5 staged patch `git diff --check`: passed.
+- Ruff remains unavailable in this execution environment. Host `pip check` reports an unrelated environment conflict (`moviepy` requires Pillow <12 while the host has Pillow 12.3.0); this is not a repository dependency resolution result.
+- Canonical real-PostgreSQL/Docker/staging/restore/release-gate evidence remains external and is required before production cutover, not before beginning Phase 11 development.
+
+## Milestone 39 — Phase 11 Payments Platform
+
+**Date:** 2026-09-16
+
+**User prompts (verbatim):**
+
+> خلي التنظيم أساس، والتكاملية،
+> وبنفس الوقت بهمني أنو ما كلشي يكون بيتطلب kyc
+> بدي شي سريع ، الأغلاط غير مسموحة بهيك أمر أيضا، دفع وهيك يعني أمر كبير
+
+> حبيت، تمام ابدأ عمل
+
+> اي تمام كمل العمل
+
+> وفي هي هلق كتشفتها، https://gozapay.com/ ما بعرف اذا كتير كويسة واذا كانت سريعة وما بتتطلب تأكيدات كتيرة والخ، بس بتشتغل شغل ظريف، الزبون بيقدر يرسل اي مبلغ ورح يتم اكتشافه من قبل غوزا باي وبيتعبى برصيد الزبون بالبوت تلقائيا
+> وكمل بعدا شغلك، يعني ضيفه حلو جدا حسيتو
+
+### Intent
+
+Build the financial platform with regulation/trust as a primary option, retain lower-friction lawful crypto paths, never trade accounting safety for onboarding speed, and integrate GoZaPay without overstating its institutional trust or silently introducing stablecoin/fiat parity assumptions.
+
+### Implementation
+
+1. Built the canonical payment-method/evidence/assurance layer over the existing database-enforced wallet ledger.
+2. Added manual and self-custody/on-chain paths plus NOWPayments, Triple-A, Bybit Pay, Binance Pay, and GoZaPay adapters.
+3. Preserved laptop-first polling as an authoritative convergence path and treated webhooks as authenticated acceleration rather than the sole source of truth.
+4. Added explicit creation-ambiguity handling, operations health, financial-resolution integration, and fail-closed refund boundaries.
+5. Classified GoZaPay as experimental despite a useful technical API; required explicit operator acknowledgement, delayed credit until `settled`, and refused flexible/open-amount auto-credit into fiat wallets until multi-asset/FX semantics exist.
+
+### Verification
+
+- Payment/wallet/provider regression: **123/123 passed**.
+- Runnable project regression excluding only two direct-Aiogram modules unavailable here: **344/344 passed**.
+- SQLite upgrade/no-drift/downgrade/re-upgrade through `d0e1f2a3b4c5`: passed.
+- Canonical PostgreSQL/Ruff/Aiogram/Docker/staging/restore evidence remains external.
+
+
+## Milestone 40 — Phase 12 Commerce Economics / Reseller Engine
+
+**Date:** 2026-09-16
+
+**User prompts (verbatim):**
+
+> اي ممتاز، استمر بالخطوة التالية، قرأت كلامك كله لكن عندي تعليق صغير جداً، gozapay على ما اظن هو خدمة جديدة تأسس ليخدم كم مشروع انا بستخدمهم من فترة، سابقاً كانوا مانوال وهلق صاروا عن طريقه، وهم موثوقين (احدهم g2bulk خدمة شحن العاب وغيفت كودز)
+> هي مشان البليسهولدرز وغيره يلي لاحظتهم، بالنسبة ل أنو ما رح يكون فيه رصيد كبير هالكلام صحيح
+> وبالمناسبة auto credit مهمة، مع ذلك خليها اختيارية
+
+> اي صححها
+
+### Intent
+
+Make reseller economics first-class, enable GoZaPay/open-amount auto-credit as an explicit operator option rather than a mandatory behavior, and correct the discovered Product/Variant provider-mapping inconsistency before relying on realized-profit data.
+
+### Implementation
+
+1. Added explicit multi-asset wallets, tenant FX/parity policies, wallet holds, flexible-deposit sessions, and optional per-payment-method auto-credit snapshots.
+2. Added reseller/VIP pricing tiers/rules, immutable checkout quotes, estimated/actual supplier cost, gross-profit attribution, and provider-balance observability.
+3. Corrected provider mapping semantics so `product_id` is canonical `Product.id` and `product_variant_id` is the optional refinement; updated all legacy fixtures relying on the old SQLite-friendly shape.
+4. Hardened provider balance monitoring so direct calls eagerly load provider credentials rather than relying on worker-specific preloading.
+5. Added ADR-036 and the commerce-economics architecture guide.
+
+### Verification
+
+- Focused Phase 12 provider/commerce/economics regression: **33/33 passed**.
+- Runnable project regression excluding only the two direct-Aiogram modules: **355/355 passed**.
+- SQLite upgrade/no-drift/downgrade/re-upgrade through `e1f2a3b4c5d6`: passed.
+- Canonical PostgreSQL/Ruff/Aiogram/Docker/staging/restore evidence remains external.
+
+
+## Milestone 41 — Phase 13 Advanced Bot Factory / Operator Closure
+
+**Date:** 2026-09-16
+
+**User prompt (verbatim):**
+
+> اوكي كمل ، وأنهيه اذا بتقدر، وحط طريقة العمل والتشغيل وهيك
+
+### Intent
+
+Finish the current product scope rather than opening endless feature phases, turn the shared provider/payment/economics stack into an authoritative per-bot reseller wizard, and include a practical laptop-first operation/migration guide.
+
+### Implementation
+
+1. Added vendor-neutral reseller/number/account/gift/digital/hybrid templates and a five-stage Admin wizard.
+2. Added tenant-validated `_business` profiles in the existing versioned Bot/provisioning config snapshot and enforced them across storefront payments, pricing, auto-credit permission, and fulfillment routing.
+3. Preserved legacy routing inheritance and made malformed saved profiles fail closed.
+4. Added a safe host doctor, daily Make commands, the full operator runbook, and the final release-qualification checklist.
+5. Declared the current core feature roadmap complete; the next step is environment-specific release qualification rather than a synthetic Phase 14.
+
+### Verification
+
+- Dependency-limited runnable regression: **361/361 passed**, excluding only the two direct-Aiogram modules unavailable here.
+- Phase 13 + legacy routing/fulfillment compatibility coverage passed.
+- No Phase 13 schema migration required; migration head remains `e1f2a3b4c5d6`.
+- Canonical PostgreSQL/Ruff/Aiogram/Docker/staging/restore evidence remains external release evidence.
+
+## Phase 13 Review Request — 2026-09-16
+
+**User prompt (verbatim):**
+
+> this is the latest update to my gh bot factory, take a look, what do we need as repairs for now, and to go to the next update, theres good info files
+
+Reviewed the handoff, latest working tree, and selected high-risk code paths. Recorded prioritized findings and next-update acceptance criteria in `docs/operations/REPAIR_REVIEW_2026-09-16.md`; updated CURRENT_STATE, agent changelog, roadmap, and AGENT_MAP. No application repairs were performed.
+
+Verification: full non-PostgreSQL suite 371 passed / 8 deselected outside the sandbox; canonical `make verify` fails at 197 Ruff findings. Compileall, JavaScript syntax, handoff consistency, and tracked whitespace checks passed. PostgreSQL/release/staging/restore checks were not run. Existing HEAD is `af8fb68`; no review commit or push because the canonical gate is not green.
+
+## Repair Baseline Request — 2026-09-16
+
+**User prompt (verbatim):**
+
+> http://127.0.0.1:8010/admin/ THIS SHOWS Missing bot_id in admin launch URL. , ADD SOME FIXESTO THIS PROJECT FOR REALLY WORK PERFECTLY, THEN I LL TELL U  TO START WORKING IN PHASE 13, IF THERE THINGS SHOULD BE CHANGED WITH THE PROJECT  IN ANY PHASE AND WAS BAD, SUGGEST THEM IN THE FILE THAT TELLS ABOUT THAT, BTW THERE AGENTMAP FILE I GUESS, AND PATCH NOTES MAYBE, PLEASE WORK AND MAKE SURE THIS  PROJECT REACH THE BEST OUT OF ITS IDEA
+
+**Scope:** Repair Admin access and existing safety/integration defects; hold new Phase 13 work pending the user's explicit instruction. Existing imported Phase 13 code is preserved, not treated as accepted or as authorization for further expansion. Implementation and verification are recorded in `docs/operations/REPAIR_PATCH_NOTES_2026-09-16.md`.
+
+## Resume Repair Baseline — 2026-09-16 (continuation)
+
+**User prompt (verbatim):**
+
+> codex was workeing , can u see its last seesion to resume ?
+
+Located the interrupted Codex session ("Review bot factory repairs", 2026-09-16 12:12–16:01, stopped by workspace credit exhaustion mid-verification). Repairs were in the working tree; final canonical verification and the two referenced handoff documents were missing.
+
+**User prompt (verbatim):**
+
+> yes please resume , we wanna complete this project to the best of it
+
+**Continuation outcome:**
+- Recovered verification environment: bootstrapped missing venv `pip` via `ensurepip`; reused the disposable `ghbf-repair-postgres-test` container (127.0.0.1:55439, `ghbf_repair_test`).
+- Canonical gate green: `make verify` exit 0 — Ruff clean, 396 fast tests passed (13 deselected), 13 PostgreSQL tests passed including the five new economics concurrency races, alembic upgrade/check clean at head `f2a3b4c5d6e7`, handoff consistency/secret scan/JS syntax/compileall/`pip check`/`git diff --check` all passed. Full unfiltered suite rerun: 396 passed, 13 skipped. Focused: phase13 factory 14 passed, admin browser login 10 passed, portable import safety passed, Playwright Admin/Mini App browser checks passed.
+- Created the missing [REPAIR_PATCH_NOTES_2026-09-16.md](../../docs/operations/REPAIR_PATCH_NOTES_2026-09-16.md) and [ADR-038](../../docs/decisions/ADR-038-repair-auth-and-financial-boundaries.md) previously referenced by CURRENT_STATE/AGENT_MAP/roadmap.
+- Updated CURRENT_STATE verification/next-work, roadmap repair-baseline status, and CHANGELOG_AGENT. No application code changed in this continuation; no commit/push yet.
+
+## Admin testing and commit authorization — 2026-09-17
+
+**User prompts (verbatim):**
+
+> ok now just rerun the project so i can test  as an admin and make my things, give me some needed info   so i can do it good, and commit push
+
+> resume
+
+Commit/push authorized for the imported baseline plus repairs. Canonical verification rerun: 396 fast and 13 PostgreSQL tests passed; 10 focused Admin authentication tests and mocked Admin/Mini App browser checks passed. Existing host application containers remain unchanged under Law 4; rebuild/migration/restart instructions are operator-run. These checks are not production release evidence.

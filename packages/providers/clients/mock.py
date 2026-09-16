@@ -1,8 +1,18 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from packages.providers.clients.base import BaseProviderClient
+from packages.providers.contracts import (
+    NumberActivationSnapshot,
+    NumberActivationState,
+    NumberCountryDTO,
+    NumberOfferDTO,
+    NumberReservationRequest,
+    NumberServiceDTO,
+    SmsMessageDTO,
+)
 from packages.providers.exceptions import (
     ProviderAuthenticationError,
     ProviderInsufficientBalanceError,
@@ -34,6 +44,8 @@ class MockProvider(BaseProviderClient):
         self._balance = balance
         self.orders: dict[str, dict[str, Any]] = {}
         self.idempotency_map: dict[str, str] = {}  # idempotency_key -> external_order_id
+        self.number_activations: dict[str, NumberActivationSnapshot] = {}
+        self.number_idempotency_map: dict[str, str] = {}
 
         # Configurable failure injections
         self.fail_with_timeout = False
@@ -156,3 +168,130 @@ class MockProvider(BaseProviderClient):
             is_failed=is_failed,
             raw_data=data,
         )
+
+
+    async def list_number_services(self) -> list[NumberServiceDTO]:
+        return [
+            NumberServiceDTO(code="telegram", name="Telegram"),
+            NumberServiceDTO(code="whatsapp", name="WhatsApp"),
+            NumberServiceDTO(code="google", name="Google"),
+        ]
+
+    async def list_number_countries(self, service: str | None = None) -> list[NumberCountryDTO]:
+        del service
+        return [
+            NumberCountryDTO(code="US", name="United States", dial_code="+1"),
+            NumberCountryDTO(code="DE", name="Germany", dial_code="+49"),
+            NumberCountryDTO(code="GB", name="United Kingdom", dial_code="+44"),
+        ]
+
+    async def list_number_offers(
+        self,
+        *,
+        service: str,
+        country: str,
+    ) -> list[NumberOfferDTO]:
+        normalized_service = service.strip().lower()
+        normalized_country = country.strip().upper()
+        services = {item.code for item in await self.list_number_services()}
+        countries = {item.code for item in await self.list_number_countries(normalized_service)}
+        if normalized_service not in services or normalized_country not in countries:
+            return []
+        base = Decimal("0.75") if normalized_country == "US" else Decimal("0.95")
+        return [
+            NumberOfferDTO(
+                service=normalized_service,
+                country=normalized_country,
+                operator="any",
+                cost=base,
+                currency="USD",
+                available_quantity=25,
+                provider_offer_id=f"mock:{normalized_service}:{normalized_country}:any",
+            )
+        ]
+
+    async def reserve_number(self, request: NumberReservationRequest) -> NumberActivationSnapshot:
+        if request.idempotency_key in self.number_idempotency_map:
+            existing_id = self.number_idempotency_map[request.idempotency_key]
+            return self.number_activations[existing_id]
+        offers = await self.list_number_offers(service=request.service, country=request.country)
+        if not offers:
+            raise ProviderProductUnavailableError("No mock number offer is available for this selection.")
+        offer = offers[0]
+        if request.max_price is not None and offer.cost > request.max_price:
+            raise ProviderProductUnavailableError("Available mock number exceeds max_price.")
+        external_order_id = f"num-{uuid.uuid4().hex[:10]}"
+        suffix = int(uuid.UUID(int=uuid.uuid4().int).int % 10_000_000)
+        country = request.country.strip().upper()
+        dial = {"US": "+1", "DE": "+49", "GB": "+44"}.get(country, "+999")
+        phone_number = f"{dial}{suffix:07d}"
+        snapshot = NumberActivationSnapshot(
+            external_order_id=external_order_id,
+            state=NumberActivationState.WAITING_SMS,
+            phone_number=phone_number,
+            cost=offer.cost,
+            currency=offer.currency,
+            expires_at=datetime.now(UTC) + timedelta(minutes=20),
+            raw_data={
+                "sandbox": True,
+                "service": request.service.strip().lower(),
+                "country": country,
+                "operator": request.operator or "any",
+            },
+        )
+        self.number_activations[external_order_id] = snapshot
+        self.number_idempotency_map[request.idempotency_key] = external_order_id
+        return snapshot
+
+    async def get_number_activation(self, external_order_id: str) -> NumberActivationSnapshot:
+        snapshot = self.number_activations.get(external_order_id)
+        if snapshot is None:
+            return NumberActivationSnapshot(
+                external_order_id=external_order_id,
+                state=NumberActivationState.FAILED,
+                raw_data={"error": "Activation not found"},
+            )
+        return snapshot
+
+    async def cancel_number_activation(self, external_order_id: str) -> NumberActivationSnapshot:
+        current = await self.get_number_activation(external_order_id)
+        if current.state in {NumberActivationState.COMPLETED, NumberActivationState.CANCELLED}:
+            return current
+        updated = NumberActivationSnapshot(
+            external_order_id=current.external_order_id,
+            state=NumberActivationState.CANCELLED,
+            phone_number=current.phone_number,
+            cost=current.cost,
+            currency=current.currency,
+            expires_at=current.expires_at,
+            messages=current.messages,
+            raw_data={**current.raw_data, "cancelled": True},
+        )
+        self.number_activations[external_order_id] = updated
+        return updated
+
+    async def finish_number_activation(self, external_order_id: str) -> NumberActivationSnapshot:
+        current = await self.get_number_activation(external_order_id)
+        if current.state in {NumberActivationState.CANCELLED, NumberActivationState.FAILED}:
+            return current
+        messages = current.messages or (
+            SmsMessageDTO(
+                code="123456",
+                text="Your verification code is 123456",
+                sender="MockService",
+                received_at=datetime.now(UTC),
+                metadata={"sandbox": True},
+            ),
+        )
+        updated = NumberActivationSnapshot(
+            external_order_id=current.external_order_id,
+            state=NumberActivationState.COMPLETED,
+            phone_number=current.phone_number,
+            cost=current.cost,
+            currency=current.currency,
+            expires_at=current.expires_at,
+            messages=messages,
+            raw_data={**current.raw_data, "completed": True},
+        )
+        self.number_activations[external_order_id] = updated
+        return updated

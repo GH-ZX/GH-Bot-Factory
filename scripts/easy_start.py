@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """One-command local/self-hosted first-run launcher for GH Bot Factory.
 
 Creates missing local secrets, repairs DATABASE_URL safely, builds the Docker stack,
@@ -10,7 +11,6 @@ from __future__ import annotations
 import secrets
 import shutil
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -61,6 +61,7 @@ def prepare_env() -> str:
     db_password = values.get("POSTGRES_PASSWORD") or secrets.token_hex(24)
     jwt_secret = values.get("JWT_SECRET_KEY") or secrets.token_urlsafe(48)
     setup_code = values.get("SETUP_CODE") or secrets.token_urlsafe(18)
+    platform_admin_token = values.get("PLATFORM_ADMIN_TOKEN") or secrets.token_urlsafe(48)
     api_port = values.get("API_HOST_PORT") or "8010"
 
     encoded_user = urllib.parse.quote(db_user, safe="")
@@ -79,6 +80,7 @@ def prepare_env() -> str:
         "REDIS_URL": values.get("REDIS_URL") or "redis://redis:6379/0",
         "JWT_SECRET_KEY": jwt_secret,
         "SETUP_CODE": setup_code,
+        "PLATFORM_ADMIN_TOKEN": platform_admin_token,
         "LOCAL_SECRET_VAULT_ENABLED": "true",
         "LOCAL_SECRET_VAULT_DIR": "/var/lib/ghbf/secret-store",
         "API_HOST_PORT": api_port,
@@ -103,7 +105,7 @@ def wait_for_api(port: str, timeout_seconds: int = 120) -> None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(url, timeout=3) as response:  # noqa: S310 - local URL
+            with urllib.request.urlopen(url, timeout=3) as response:
                 if response.status == 200:
                     return
         except (urllib.error.URLError, TimeoutError, OSError):

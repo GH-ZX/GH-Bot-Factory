@@ -294,9 +294,8 @@ class TelegramStarsReconciliationService:
             provider_name="telegram_stars",
             secret_storage=self.payment_service.secret_storage,
         )
-        if not isinstance(provider, TelegramStarsProvider):
-            if not hasattr(provider, "list_recent_star_transactions"):
-                raise PaymentProviderError("Configured telegram_stars provider cannot list transactions.")
+        if not isinstance(provider, TelegramStarsProvider) and not hasattr(provider, "list_recent_star_transactions"):
+            raise PaymentProviderError("Configured telegram_stars provider cannot list transactions.")
         transactions = await provider.list_recent_star_transactions()
         processed = 0
         for transaction in transactions:
@@ -348,7 +347,7 @@ class TelegramStarsReconciliationWorker:
                 except PaymentError:
                     await session.rollback()
                     logger.exception("Telegram Stars reconciliation failed for tenant=%s", tenant_id)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     await session.rollback()
                     logger.exception("Unexpected Stars reconciliation failure for tenant=%s", tenant_id)
         return total
@@ -372,6 +371,6 @@ class TelegramStarsReconciliationWorker:
                 await self.poll_once()
             except asyncio.CancelledError:
                 break
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("Telegram Stars reconciliation worker poll failed")
             await asyncio.sleep(self.poll_interval_seconds)

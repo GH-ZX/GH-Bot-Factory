@@ -1,9 +1,11 @@
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.commerce.checkout import CheckoutService
+from packages.commerce.economics_models import OrderItemEconomics
 from packages.commerce.models import Product, ProductVariant
 from packages.commerce.state_machine import OrderStatus
 from packages.core.exceptions import InsufficientFundsError
@@ -41,7 +43,7 @@ async def test_successful_checkout_and_ledger_integration(db_session: AsyncSessi
     db_session.add(prov)
     await db_session.flush()
 
-    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant.id, external_product_id="ext-pro")
+    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product.id, product_variant_id=variant.id, external_product_id="ext-pro")
     db_session.add(mapping)
 
     # 1. Deposit 100.00 into User's wallet
@@ -83,6 +85,17 @@ async def test_successful_checkout_and_ledger_integration(db_session: AsyncSessi
     events = [n.event_type for n in mock_transport.get_events_for_order(order.id)]
     assert NotificationEventType.PAYMENT_CONFIRMED in events
     assert NotificationEventType.FULFILLMENT_SUCCEEDED in events
+
+    # Phase 12: fulfillment must attribute the actual upstream cost to the immutable sale economics.
+    economics = (
+        await db_session.execute(
+            select(OrderItemEconomics).where(OrderItemEconomics.order_id == order.id)
+        )
+    ).scalar_one()
+    assert economics.provider_id == prov.id
+    assert economics.actual_supplier_cost == Decimal("1.250000")
+    assert economics.actual_cost_currency == "USD"
+    assert economics.gross_profit == Decimal("28.750000")
 
 
 @pytest.mark.asyncio
@@ -133,7 +146,7 @@ async def test_failed_fulfillment_triggers_automated_ledger_refund(db_session: A
     db_session.add(prov)
     await db_session.flush()
 
-    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant.id, external_product_id="ext-fail")
+    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product.id, product_variant_id=variant.id, external_product_id="ext-fail")
     db_session.add(mapping)
 
     # Deposit 50.00 into wallet

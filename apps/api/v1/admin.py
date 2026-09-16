@@ -101,7 +101,7 @@ class CategoryUpdateRequest(BaseModel):
 class VariantCreateRequest(BaseModel):
     sku: str = Field(min_length=1, max_length=100)
     title: str = Field(min_length=1, max_length=100)
-    price: Decimal = Field(gt=Decimal("0"), max_digits=12, decimal_places=2)
+    price: Decimal = Field(gt=Decimal(0), max_digits=12, decimal_places=2)
     currency: str = Field(min_length=3, max_length=3)
     stock_quantity: int = Field(default=0, ge=0)
     is_active: bool = True
@@ -111,7 +111,7 @@ class VariantCreateRequest(BaseModel):
 class VariantUpdateRequest(BaseModel):
     sku: str | None = Field(default=None, min_length=1, max_length=100)
     title: str | None = Field(default=None, min_length=1, max_length=100)
-    price: Decimal | None = Field(default=None, gt=Decimal("0"), max_digits=12, decimal_places=2)
+    price: Decimal | None = Field(default=None, gt=Decimal(0), max_digits=12, decimal_places=2)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     stock_quantity: int | None = Field(default=None, ge=0)
     is_active: bool | None = None

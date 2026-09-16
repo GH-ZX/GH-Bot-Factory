@@ -6,6 +6,9 @@ PostgreSQL is the authoritative durable store. Redis is ephemeral coordination/c
 ## Backup
 Run `./scripts/backup_postgres.sh`. Configure `BACKUP_GPG_RECIPIENT` in production. Keep backup encryption keys outside the application host and repository. Default retention is 14 days (`BACKUP_RETENTION_DAYS`). Copy encrypted backups off-host after creation.
 
+## Host migration / laptop-to-VPS portability
+Routine database backups and whole-installation moves are different operations. For a host move, use `./scripts/export_portable_state.sh` and `./scripts/import_portable_state.sh --confirm <archive>` as documented in `docs/runbooks/laptop-vps-portability.md`. That portable bundle includes PostgreSQL plus the encrypted local secret vault, excludes Redis, and deliberately does not copy `.env` because destination credentials and network settings remain destination-owned.
+
 ## Restore drill
 At least monthly, run `./scripts/verify_backup_restore.sh <backup>` against the newest backup. It restores into an isolated temporary database, verifies Alembic metadata and basic tenant readability, then destroys the temporary database.
 

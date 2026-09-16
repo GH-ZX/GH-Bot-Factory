@@ -54,7 +54,7 @@ async def test_retryable_failure_sets_retrying_and_does_not_prematurely_notify_r
     db_session.add(prov)
     await db_session.flush()
 
-    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant.id, external_product_id="mock-stars")
+    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product.id, product_variant_id=variant.id, external_product_id="mock-stars")
     db_session.add(mapping)
 
     wallet = await LedgerService.get_or_create_wallet(db_session, tenant.id, user.id, currency="USD")
@@ -267,7 +267,7 @@ async def test_worker_crash_recovery_resumes_abandoned_jobs(db_session: AsyncSes
     db_session.add(prov)
     await db_session.flush()
 
-    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant.id, external_product_id="ext-durable")
+    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product.id, product_variant_id=variant.id, external_product_id="ext-durable")
     db_session.add(mapping)
 
     order = Order(
@@ -408,7 +408,7 @@ async def test_customer_facing_notifications_do_not_leak_raw_exceptions(db_sessi
     db_session.add(prov)
     await db_session.flush()
 
-    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant.id, external_product_id="mock-sec")
+    mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product.id, product_variant_id=variant.id, external_product_id="mock-sec")
     db_session.add(mapping)
 
     order = Order(
@@ -474,8 +474,8 @@ async def test_multi_item_order_fulfillment_success(db_session: AsyncSession):
     db_session.add(prov)
     await db_session.flush()
 
-    mapping1 = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant1.id, external_product_id="ext-multi-1")
-    mapping2 = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant2.id, external_product_id="ext-multi-2")
+    mapping1 = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product1.id, product_variant_id=variant1.id, external_product_id="ext-multi-1")
+    mapping2 = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product2.id, product_variant_id=variant2.id, external_product_id="ext-multi-2")
     db_session.add_all([mapping1, mapping2])
 
     order = Order(

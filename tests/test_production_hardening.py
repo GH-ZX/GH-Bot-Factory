@@ -53,3 +53,63 @@ def test_log_redaction_covers_bearer_telegram_and_secret_fields():
 def test_rate_limit_route_classification_is_explicit():
     middleware = RateLimitMiddleware(lambda scope, receive, send: None)
     assert middleware is not None
+
+
+def test_production_stripe_billing_requires_provider_secrets_and_https_redirects():
+    with pytest.raises(ValidationError):
+        _prod_settings(BILLING_PROVIDER="stripe")
+
+    with pytest.raises(ValidationError):
+        _prod_settings(
+            BILLING_PROVIDER="stripe",
+            STRIPE_SECRET_KEY="sk_test_example",
+            STRIPE_WEBHOOK_SECRET="whsec_example",
+            BILLING_SUCCESS_URL="http://example.test/billing/success",
+        )
+
+    configured = _prod_settings(
+        BILLING_PROVIDER="stripe",
+        STRIPE_SECRET_KEY="sk_test_example",
+        STRIPE_WEBHOOK_SECRET="whsec_example",
+        BILLING_SUCCESS_URL="https://example.test/billing/success",
+        BILLING_CANCEL_URL="https://example.test/billing/cancel",
+        BILLING_PORTAL_RETURN_URL="https://example.test/admin/",
+    )
+    assert configured.billing_provider == "stripe"
+
+
+def test_production_tron_verifier_requires_https_and_installation_api_key():
+    with pytest.raises(ValidationError):
+        _prod_settings(PAYMENT_TRON_USDT_ENABLED=True)
+    with pytest.raises(ValidationError):
+        _prod_settings(
+            PAYMENT_TRON_USDT_ENABLED=True,
+            PAYMENT_TRONGRID_API_KEY="key",
+            PAYMENT_TRONGRID_BASE_URL="http://api.trongrid.io",
+        )
+
+    configured = _prod_settings(
+        PAYMENT_TRON_USDT_ENABLED=True,
+        PAYMENT_TRONGRID_API_KEY="key",
+    )
+    assert configured.payment_tron_usdt_enabled is True
+
+
+def test_production_bsc_token_verifier_requires_explicit_https_rpc_and_token_identity():
+    with pytest.raises(ValidationError):
+        _prod_settings(PAYMENT_BSC_TOKEN_ENABLED=True)
+    with pytest.raises(ValidationError):
+        _prod_settings(
+            PAYMENT_BSC_TOKEN_ENABLED=True,
+            PAYMENT_BSC_RPC_URL="http://bsc.example.test",
+            PAYMENT_BSC_TOKEN_ASSET="BSC_USD",
+            PAYMENT_BSC_TOKEN_CONTRACT="0x" + "1" * 40,
+        )
+
+    configured = _prod_settings(
+        PAYMENT_BSC_TOKEN_ENABLED=True,
+        PAYMENT_BSC_RPC_URL="https://bsc.example.test",
+        PAYMENT_BSC_TOKEN_ASSET="BSC_USD",
+        PAYMENT_BSC_TOKEN_CONTRACT="0x" + "1" * 40,
+    )
+    assert configured.payment_bsc_chain_id == 56

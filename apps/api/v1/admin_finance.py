@@ -16,7 +16,6 @@ from packages.payments.exceptions import PaymentError, PaymentIntegrityError
 from packages.payments.models import (
     FinancialResolutionCase,
     FinancialResolutionCaseStatus,
-    Wallet,
 )
 from packages.payments.payment_service import PaymentService
 from packages.payments.resolution import FinancialResolutionAction, FinancialResolutionService
@@ -99,9 +98,10 @@ def _available_actions(
         and (reversal.metadata_json or {}).get("origin") == "EXTERNAL_PROVIDER"
     ):
         actions.append(FinancialResolutionAction.RETRY_LOCAL_REVERSAL)
-    if case.wallet_id is None and case.reversal_id is None:
+    asset_wallet = bool((case.metadata_json or {}).get("asset_wallet_id"))
+    if case.wallet_id is None and case.reversal_id is None and not asset_wallet:
         actions.append(FinancialResolutionAction.ACKNOWLEDGE_NO_WALLET_IMPACT)
-    if wallet is not None and not wallet.is_active:
+    if (wallet is not None and not wallet.is_active) or asset_wallet:
         actions.append(FinancialResolutionAction.CLOSE_KEEP_WALLET_FROZEN)
         if actor_is_owner and case.reversal_id is None:
             actions.append(FinancialResolutionAction.MARK_FALSE_POSITIVE_AND_UNFREEZE)

@@ -20,6 +20,7 @@ CANONICAL_REFUND_TYPE = "ORDER_FULFILLMENT_REFUND"
 CANONICAL_SETTLEMENT_TYPE = "PAYMENT_SETTLEMENT"
 CANONICAL_PAYMENT_REFUND_TYPE = "PAYMENT_REFUND"
 CANONICAL_TOPUP_REVERSAL_TYPE = "WALLET_TOPUP_REVERSAL"
+CANONICAL_FLEXIBLE_DEPOSIT_TYPE = "FLEXIBLE_DEPOSIT_SETTLEMENT"
 
 
 class LedgerService:
@@ -293,6 +294,67 @@ class LedgerService:
             raise
 
     @classmethod
+    async def settle_flexible_deposit(
+        cls,
+        session: AsyncSession,
+        wallet: Wallet,
+        amount: Decimal,
+        flexible_deposit_id: uuid.UUID,
+        description: str | None = None,
+    ) -> LedgerTransaction:
+        """Exactly-once fiat-wallet credit for an open-amount deposit session."""
+        if amount <= Decimal("0.00"):
+            raise ValueError("Flexible deposit settlement amount must be positive.")
+        wallet = await cls._lock_wallet(session, wallet)
+        ref_id = str(flexible_deposit_id)
+        existing = await session.scalar(
+            select(LedgerTransaction).where(
+                LedgerTransaction.wallet_id == wallet.id,
+                LedgerTransaction.transaction_type == TransactionType.CREDIT,
+                LedgerTransaction.reference_type == CANONICAL_FLEXIBLE_DEPOSIT_TYPE,
+                LedgerTransaction.reference_id == ref_id,
+            )
+        )
+        if existing is not None:
+            if existing.amount != amount:
+                raise LedgerIntegrityError(
+                    f"Flexible deposit settlement amount mismatch for {ref_id}: existing={existing.amount}, requested={amount}."
+                )
+            return existing
+        try:
+            async with session.begin_nested():
+                before = wallet.balance
+                after = before + amount
+                wallet.balance = after
+                tx = LedgerTransaction(
+                    tenant_id=wallet.tenant_id,
+                    wallet_id=wallet.id,
+                    transaction_type=TransactionType.CREDIT,
+                    amount=amount,
+                    balance_before=before,
+                    balance_after=after,
+                    reference_id=ref_id,
+                    reference_type=CANONICAL_FLEXIBLE_DEPOSIT_TYPE,
+                    description=description or "Flexible deposit settlement",
+                )
+                session.add(tx)
+                await session.flush()
+                return tx
+        except IntegrityError:
+            existing = await session.scalar(
+                select(LedgerTransaction).where(
+                    LedgerTransaction.wallet_id == wallet.id,
+                    LedgerTransaction.transaction_type == TransactionType.CREDIT,
+                    LedgerTransaction.reference_type == CANONICAL_FLEXIBLE_DEPOSIT_TYPE,
+                    LedgerTransaction.reference_id == ref_id,
+                )
+            )
+            if existing is None or existing.amount != amount:
+                raise LedgerIntegrityError("Concurrent flexible-deposit settlement conflict.")
+            await session.refresh(wallet)
+            return existing
+
+    @classmethod
     async def debit(
         cls,
         session: AsyncSession,
@@ -312,9 +374,23 @@ class LedgerService:
                 "Wallet is unavailable pending financial reconciliation."
             )
 
-        if wallet.balance < amount:
+        # Phase 12 reservations reduce spendable balance without changing booked balance.
+        # A hold capture marks the hold CAPTURED before it reaches this method, so that
+        # specific hold is no longer counted and can be debited exactly once.
+        from sqlalchemy import func
+
+        from packages.payments.economics_models import WalletHold, WalletHoldStatus
+
+        held_total = await session.scalar(
+            select(func.coalesce(func.sum(WalletHold.amount), 0)).where(
+                WalletHold.wallet_id == wallet.id,
+                WalletHold.status == WalletHoldStatus.ACTIVE,
+            )
+        )
+        available_balance = wallet.balance - Decimal(held_total or 0)
+        if available_balance < amount:
             raise InsufficientFundsError(
-                f"Insufficient funds: available {wallet.balance} {wallet.currency}, required {amount} {wallet.currency}."
+                f"Insufficient funds: available {available_balance} {wallet.currency}, required {amount} {wallet.currency}."
             )
 
         balance_before = wallet.balance

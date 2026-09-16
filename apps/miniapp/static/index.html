@@ -175,9 +175,10 @@
     </div>
 
     <div id="topupForm">
-      <label class="field-label" for="topupProviderSelect">Payment provider</label>
+      <label class="field-label" for="topupProviderSelect">Payment method</label>
       <select id="topupProviderSelect" class="recipient-input"></select>
 
+      <div id="topupFixedFields">
       <label class="field-label" for="topupCurrencySelect">Currency</label>
       <select id="topupCurrencySelect" class="recipient-input"></select>
 
@@ -188,6 +189,7 @@
         <button type="button" data-topup-amount="25">25</button>
         <button type="button" data-topup-amount="50">50</button>
         <button type="button" data-topup-amount="100">100</button>
+      </div>
       </div>
       <p id="topupPolicyHelp" class="field-help">Choose an amount to fund your wallet.</p>
       <label id="topupTermsRow" class="topup-terms hidden">
@@ -203,6 +205,14 @@
         <strong id="topupStatusAmount">0.00</strong>
       </div>
       <p id="topupStatusMessage">Waiting for payment confirmation.</p>
+      <p id="topupInstructions" class="field-help" style="overflow-wrap:anywhere"></p>
+      <form id="topupProofForm" class="hidden">
+        <label class="field-label" for="topupProofReference">Transaction hash or transfer reference</label>
+        <input id="topupProofReference" class="recipient-input" maxlength="255" autocomplete="off">
+        <label class="field-label" for="topupProofNote">Note for the store (optional)</label>
+        <input id="topupProofNote" class="recipient-input" maxlength="500">
+        <button id="topupProofSubmit" class="text-button" type="submit">Submit for verification</button>
+      </form>
       <button id="topupOpenCheckoutButton" class="primary-button hidden" type="button">Open payment page</button>
       <button id="topupCheckButton" class="text-button topup-check-button" type="button">Check payment status</button>
     </div>

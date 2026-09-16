@@ -70,7 +70,7 @@ class AiogramTelegramIdentityVerifier:
             raise ProvisioningError("TELEGRAM_TEMPORARY_FAILURE", retryable=True) from exc
         except ProvisioningError:
             raise
-        except Exception as exc:  # noqa: BLE001 - normalized at trust boundary
+        except Exception as exc:
             raise ProvisioningError("TELEGRAM_VERIFICATION_FAILED", retryable=False) from exc
         finally:
             await bot.session.close()
@@ -334,7 +334,7 @@ class BotProvisioningService:
                 )
                 await session.commit()
                 return True
-        except Exception as exc:  # normalized into durable status; never persist/log token material
+        except Exception as exc:  # noqa: BLE001 - durable jobs record unexpected adapter failures  # normalized into durable status; never persist/log token material
             await self._mark_failure(job.id, exc)
             return False
 

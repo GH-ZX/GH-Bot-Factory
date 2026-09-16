@@ -10,9 +10,14 @@ from packages.payments.exceptions import (
     PaymentProviderError,
 )
 from packages.payments.models import PaymentProviderConfig
+from packages.payments.providers.binance_pay import BinancePayProvider
+from packages.payments.providers.bybit_pay import BybitPayProvider
+from packages.payments.providers.gozapay import GoZaPayProvider
 from packages.payments.providers.interface import PaymentProvider
 from packages.payments.providers.mock import MockPaymentProvider
+from packages.payments.providers.nowpayments import NowPaymentsProvider
 from packages.payments.providers.telegram_stars import TelegramStarsProvider
+from packages.payments.providers.triplea import TripleAPaymentProvider
 from packages.telegram.secrets import SecretStorage
 
 logger = logging.getLogger("payments.registry")
@@ -34,6 +39,11 @@ class PaymentProviderRegistry:
         # Register built-in provider factories.
         self.register_factory("mock", self._create_mock_provider)
         self.register_factory("telegram_stars", self._create_telegram_stars_provider)
+        self.register_factory("nowpayments", self._create_nowpayments_provider)
+        self.register_factory("triplea", self._create_triplea_provider)
+        self.register_factory("bybit_pay", self._create_bybit_pay_provider)
+        self.register_factory("binance_pay", self._create_binance_pay_provider)
+        self.register_factory("gozapay", self._create_gozapay_provider)
 
     def register_factory(self, provider_name: str, factory: ProviderFactory) -> None:
         self._factories[provider_name.lower()] = factory
@@ -130,6 +140,67 @@ class PaymentProviderRegistry:
         return TelegramStarsProvider(
             settings=settings,
             bot_token=credentials,
+            webhook_secret=webhook_secret,
+        )
+
+    @staticmethod
+    def _create_nowpayments_provider(
+        settings: dict[str, Any],
+        credentials: str,
+        webhook_secret: str | None,
+    ) -> NowPaymentsProvider:
+        return NowPaymentsProvider(
+            settings=settings,
+            api_key=credentials,
+            webhook_secret=webhook_secret,
+        )
+
+    @staticmethod
+    def _create_triplea_provider(
+        settings: dict[str, Any],
+        credentials: str,
+        webhook_secret: str | None,
+    ) -> TripleAPaymentProvider:
+        return TripleAPaymentProvider(
+            settings=settings,
+            credentials=credentials,
+            webhook_secret=webhook_secret,
+        )
+
+    @staticmethod
+    def _create_binance_pay_provider(
+        settings: dict[str, Any],
+        credentials: str,
+        webhook_secret: str | None,
+    ) -> BinancePayProvider:
+        return BinancePayProvider(
+            settings=settings,
+            credentials=credentials,
+            webhook_secret=webhook_secret,
+        )
+
+    @staticmethod
+    def _create_bybit_pay_provider(
+        settings: dict[str, Any],
+        credentials: str,
+        webhook_secret: str | None,
+    ) -> BybitPayProvider:
+        return BybitPayProvider(
+            settings=settings,
+            credentials=credentials,
+            webhook_secret=webhook_secret,
+        )
+
+
+    @staticmethod
+    def _create_gozapay_provider(
+        settings: dict[str, Any],
+        credentials: str,
+        webhook_secret: str | None,
+    ) -> GoZaPayProvider:
+        return GoZaPayProvider(
+            settings=settings,
+            api_key=credentials,
             webhook_secret=webhook_secret,
         )
 

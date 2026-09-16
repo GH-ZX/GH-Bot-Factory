@@ -11,14 +11,18 @@ from apps.api.v1.admin_members import MemberUpdateRequest, update_member
 from packages.commerce.checkout import CheckoutService
 from packages.commerce.models import Order, Product, ProductVariant
 from packages.commerce.state_machine import OrderStatus
-from packages.core.auth import AuthSource, AuthenticatedPrincipal
+from packages.core.auth import AuthenticatedPrincipal, AuthSource
 from packages.core.exceptions import InsufficientFundsError
-from packages.fulfillment.models import FulfillmentJobRecord, FulfillmentJobStatus
 from packages.factory.models import BotProvisioningJob, BotProvisioningStatus
 from packages.factory.provisioning import BotProvisioningService, provisioning_fingerprint
+from packages.fulfillment.models import FulfillmentJobRecord, FulfillmentJobStatus
 from packages.fulfillment.worker import FulfillmentWorker
 from packages.payments.models import LedgerTransaction, TransactionType, Wallet
-from packages.payments.service import CANONICAL_REFUND_TYPE, CANONICAL_SETTLEMENT_TYPE, LedgerService
+from packages.payments.service import (
+    CANONICAL_REFUND_TYPE,
+    CANONICAL_SETTLEMENT_TYPE,
+    LedgerService,
+)
 from packages.tenants.models import Membership, Role, Tenant, User
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
@@ -276,7 +280,7 @@ async def test_duplicate_payment_settlement_credits_once_under_concurrency(
 async def test_duplicate_refund_credits_once_under_concurrency(
     postgres_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    tenant_id, _, wallet_id = await _tenant_user_wallet(
+    _tenant_id, _, wallet_id = await _tenant_user_wallet(
         postgres_session_factory,
         balance=Decimal("0.00"),
     )

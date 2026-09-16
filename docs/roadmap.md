@@ -327,8 +327,190 @@ This roadmap reflects the delivered sequence of the repository. Earlier planning
 - `docker-compose.rollout.yml` supports a candidate bot-runtime image owning only CANARY bots while the stable runtime owns STABLE bots.
 - Moving a bot between channels is audited and bumps runtime revision for deterministic handoff/rollback.
 
-## Phase 9 — White-Label SaaS
-- Plans and billing
-- Customer portal
-- Limits and entitlements
-- SaaS operations
+## Phase 9 — White-Label SaaS 🚧
+
+### Phase 9.0 — Plans & Entitlements Foundation ✅ Implementation
+- Persisted operator-owned SaaS plans and one current subscription record per tenant.
+- Provider-agnostic billing customer/subscription references and lifecycle timestamps/status.
+- Typed, fail-closed entitlement resolution with explicit tenant overrides.
+- Existing self-hosted tenants preserve Phase 8 environment-configured limits until a subscription is assigned.
+- Bot Factory total bots, enabled bots, and open provisioning jobs now enforce subscription-plan limits.
+- Read-only tenant Admin Plan page shows source, plan/status, usage vs limits, and feature flags.
+- Migration `c3d4e5f6a7b8`, ADR-024, architecture documentation, and focused regression coverage.
+
+### Phase 9.1 — Platform Control Plane & Portable Hosting ✅ Implementation
+- Installation-level `PLATFORM_ADMIN_TOKEN` boundary separate from tenant Bearer JWT/RBAC.
+- Local-first `scripts/platformctl.py` for laptop hosting and later VPS-over-SSH operation.
+- Plan catalog create/update/retire and audited tenant subscription assignment/clear operations.
+- Retired plans are blocked for new assignment while existing subscribers continue safely until migrated.
+- Durable provider-neutral `BillingEvent` idempotency/fingerprint boundary and normalized subscription convergence.
+- Global `PlatformAuditLog` evidence separate from tenant AuditLog.
+- Laptop -> VPS portable state export/import covering PostgreSQL + encrypted local secret vault, excluding rebuildable Redis and destination-owned `.env`.
+- Migration `d4e5f6a7b8c9`, ADR-025/026, control-plane architecture, and portability runbook.
+
+### Phase 9.2 — Billing Provider Adapter & Customer Portal ✅ Implementation
+- Provider-agnostic billing adapter contract with Stripe as the first implementation; provider secrets stay environment-only.
+- Separate `SaaSPlanPrice` catalog maps platform plans to provider price IDs without coupling entitlements to commercial pricing.
+- Tenant OWNER/ADMIN checkout and hosted customer-portal handoff; browser redirects never mutate subscription authority directly.
+- Signed Stripe webhook verification maps provider state into the Phase 9.1 durable `BillingEvent` convergence boundary.
+- Laptop-first pull reconciliation via `platformctl billing-reconcile` provides convergence even when no public webhook ingress/tunnel exists.
+- Deterministic past-due grace timestamps are persisted and exposed, while commercial feature disabling remains observe-only until Phase 9.3 policy gates are implemented.
+- Migration `e5f6a7b8c9d0`, ADR-027, billing architecture documentation, local-first billing runbook, and regression coverage.
+
+### Phase 9.3 — Product Entitlements ✅ Implementation
+- Central commercial access states (`SELF_HOSTED`, `ACTIVE`, `GRACE`, `BLOCKED`) derived from normalized subscription status and persisted grace deadline.
+- Self-hosted tenants remain fully functional without a subscription row; SaaS tenants fail closed after grace for commercial growth/premium mutations.
+- Central feature registry and server-side gates for custom branding, canary rollout, and runtime restart controls.
+- Bot provisioning/retry and bot enablement now require commercial access, while safe contraction/security actions remain available.
+- Tenant Admin exposes configured vs effective feature flags and commercial-access reason; UI visibility is non-authoritative.
+- ADR-028 and product-entitlement architecture documentation. No schema migration required; migration head remains `e5f6a7b8c9d0`.
+
+### Phase 9.4 — SaaS Operations ✅ Implementation
+- Periodic pull reconciliation runs inside the worker so laptop-hosted installations converge billing state without permanent public webhook ingress.
+- Provider-managed subscriptions persist last successful sync timestamp/source plus bounded error evidence.
+- Platform SaaS health summarizes self-hosted/subscribed tenants, commercial access state, stale provider synchronization, grace windows, and actionable alerts.
+- Platform tenant-entitlement inspection is support-safe and does not mint tenant JWTs or impersonate users; inspection is recorded in `PlatformAuditLog`.
+- `platformctl saas-health` and `platformctl tenant-entitlements` expose the same operational surface over localhost/SSH.
+- Migration `f6a7b8c9d0e1` adds synchronization observability. ADR-029 records the no-impersonation/laptop-first operations boundary.
+
+### Phase 10.0 — Provider Platform Core ✅ Implementation
+- Provider connections are explicitly categorized as `NUMBER`, `ACCOUNT`, `GIFT`, `DIGITAL_PRODUCT`, `SERVICE`, or `OTHER` while preserving the legacy `provider_type` column as the adapter key.
+- Adapter manifests publish supported categories, canonical capabilities, credential requirements, driver family, and safe operator metadata without embedding tenant secrets.
+- Tenant Admin can discover adapter manifests and create category-compatible provider connections instead of hard-coding vendor names into commerce logic.
+- Provider credential values may be submitted write-only and are stored in the encrypted local secret vault; SQL stores only deterministic secret references. Environment-only references remain supported.
+- Connection tests validate adapter/category compatibility, required credentials, bounded timeout behavior, balance capability, and durable health evidence without returning raw secret material.
+- Existing product mappings and resilient failover routing remain backward compatible; order calls gain a bounded per-provider timeout.
+- Built-in Mock/Sandbox and example digital-code adapters now publish manifests suitable for development without live vendor accounts.
+- Migration `a7b8c9d0e1f2`, ADR-030, and `docs/architecture/provider-platform.md` establish the extensibility contract.
+
+### Phase 10.1 — Provider Categories & Canonical Operations ✅ Implementation
+- Added canonical provider order states and delivery artifacts without leaking vendor-specific status strings into commerce/fulfillment logic.
+- Added category-aware capabilities and explicit number/SMS contracts for services, countries, offers, reservation, activation status, SMS messages, cancellation, and completion.
+- Added canonical offer/order DTOs for account, gift, and digital-service categories.
+- Extended the Mock/Sandbox adapter with deterministic number/SMS lifecycle behavior for bot-template development without live supplier accounts.
+- ADR-031 records the canonical-operation boundary.
+
+### Phase 10.2 — Generic HTTP / OpenAPI Adapter ✅ Implementation
+- Added a constrained declarative Generic HTTP adapter for Swagger/OpenAPI-shaped reseller APIs rather than an arbitrary scripting/code-generation engine.
+- Supports bounded endpoint/auth/query/body/response selectors, canonical state/error mappings, dynamic capabilities, and dynamic credential requirements.
+- Credentials resolve only through `SecretStorage`; persistable/raw responses are recursively redacted against resolved credentials.
+- Redirects are disabled; private/reserved DNS/IP targets fail closed by default; production-like use requires HTTPS plus an installation-owned provider-host allowlist.
+- Request timeout and response size are bounded. OpenAPI inspection accepts operator-supplied documents only and does not fetch/execute remote `$ref` targets.
+- Custom reviewed Python adapters remain the escape hatch for APIs that cannot be represented safely.
+- ADR-031 records the security model.
+
+### Phase 10.3 — Multi-Provider Routing ✅ Implementation
+- Added tenant-scoped `ProviderRoutingPolicy` with `PRIORITY`, `LOWEST_COST`, `AVAILABILITY`, `HEALTHIEST`, `WEIGHTED`, and `MANUAL` strategies.
+- Variant-specific policy overrides product-default policy; legacy routing remains the compatibility fallback when no policy exists.
+- Weighted routing is deterministic from routing/idempotency context rather than process-local randomness.
+- Cross-provider failover is allowed only for explicitly retryable pre-order-safe failures; timeout/transport ambiguity never purchases from another supplier automatically.
+- `LOWEST_COST` refuses mixed-currency comparison until an explicit FX normalization service exists.
+- Migration `b8c9d0e1f2a3` and ADR-032 establish the routing contract.
+
+### Phase 10.4 — Product Aggregation ✅ Implementation
+- Added `ProviderOfferSnapshot` as the normalized latest observation per provider mapping: cost/currency, availability/stock, quantity bounds, observation/expiry timestamps, and bounded error evidence.
+- Upstream observations remain separate from customer-facing Product/ProductVariant identity.
+- Fresh unavailable observations remove mappings from eligibility; stale snapshots are advisory and do not become catalog authority.
+- Live refresh is read-only and never creates an upstream order.
+- Cost routing consumes fresh normalized observations and follows the single-currency safety rule.
+- Migration `c9d0e1f2a3b4` and ADR-033 establish the observation model.
+
+### Phase 10.5 — Provider Order Lifecycle ✅ Implementation
+- Normalized asynchronous provider order responses into canonical states and delivery artifacts.
+- Only `COMPLETED` may mark fulfillment complete; `CREATED`, `PENDING`, `PROCESSING`, and `WAITING_DELIVERY` remain active/non-terminal and `UNKNOWN` preserves ambiguity.
+- Added bounded pull reconciliation in the worker so laptop/self-hosted installs converge supplier orders without public webhook ingress.
+- Terminal supplier failures continue through existing durable fulfillment/refund invariants instead of bypassing accounting rules.
+- Multi-item asynchronous supplier attempts that would require more than one upstream correlation fail safe to `UNKNOWN`; per-item correlation/saga is a future hardening requirement before broad production enablement.
+- ADR-033 records the asynchronous convergence model.
+
+### Phase 11 — Payments Platform ✅ Implementation
+
+#### Phase 11.0 — Payment Core & Ledger Safety ✅
+- Added tenant payment methods, immutable payment observations, assurance levels, amount/currency integrity gates, and database-enforced exactly-once settlement.
+- Provider/browser/manual evidence cannot mutate wallet balances directly.
+
+#### Phase 11.1 — Manual / Self-Custody Verification ✅
+- Added manual proof/admin approval flow and installation-owned on-chain verifiers.
+- TRON USDt and generic EVM token verification bind network, token contract, destination, exact integer amount, execution success, and finality.
+- Canonical transaction identity prevents cross-tenant/case-variant replay.
+
+#### Phase 11.2 — NOWPayments ✅
+- Added direct payment creation, signed IPN verification, pull reconciliation, pay-currency binding, and exactly-once convergence.
+
+#### Phase 11.3 — Triple-A ✅
+- Added regulated-provider authenticated create/status polling. Unsupported webhook/refund surfaces remain fail-closed until authoritative contracts are implemented.
+
+#### Phase 11.4 — Exchange Pay Adapters ✅
+- Added Bybit Pay create/query + signed webhook + safe creation recovery.
+- Added Binance Pay create/query polling integration. Unsupported callback/refund surfaces remain fail-closed.
+
+#### Phase 11.5 — Payments Operations & Risk Hardening ✅
+- Added generic payment-provider pull reconciliation for laptop/self-hosted convergence.
+- Added creation-ambiguity handling, payment operations health, stale/unknown/manual-review/reversal visibility, and Financial Center integration.
+- Added GoZaPay as an explicitly experimental gateway: idempotent invoices, HMAC-SHA256 webhook verification, polling, delayed settlement until provider `settled`, and explicit risk/parity acknowledgement.
+- GoZaPay flexible/open-amount auto-credit remains intentionally disabled until Phase 12 introduces explicit multi-asset/FX semantics.
+- Migration `d0e1f2a3b4c5` and ADR-034/035 establish the Phase 11 financial boundaries.
+
+### Phase 12 — Commerce Economics / Pricing / Wallet / Reseller Engine ✅ Implementation
+
+#### Phase 12.0 — Multi-Asset Wallet & FX Safety ✅
+- Added high-precision asset wallets keyed by explicit asset/network identity and immutable idempotent asset-ledger transactions.
+- Added explicit tenant FX policies (`PARITY` / `FIXED_RATE`) with acknowledgement and optional maximum auto-credit exposure; there is no implicit USDT/USDC = fiat assumption.
+- Added idempotent wallet holds with available-balance enforcement plus capture/release lifecycle.
+
+#### Phase 12.1 — Flexible Deposits & Optional Auto-Credit ✅
+- Added durable open-amount `FlexibleDepositSession` for providers such as GoZaPay; open-amount deposits are no longer forced into a fixed-amount PaymentIntent.
+- Auto-credit is configurable per payment method and snapshotted when the session is created.
+- Asset-wallet auto-credit credits the verified asset/network amount exactly once. Fiat-wallet auto-credit requires an explicit matching FX policy; otherwise the session remains `SETTLED_REVIEW`.
+- Pull reconciliation remains first-class so laptop/self-hosted deployments do not require public webhooks.
+
+#### Phase 12.2 — Reseller Pricing & Profit Attribution ✅
+- Added customer/reseller pricing tiers and global/category/product/variant rules with fixed, percentage, or mixed markup, minimum margin, and rounding increments.
+- Checkout freezes one server-authoritative `CommercePriceQuote`; the displayed price, debited amount, and P&L sale amount use the same quote.
+- Supplier pricing consumes fresh same-currency provider observations and fails closed for cross-currency pricing without explicit normalization.
+- Fulfillment records actual upstream cost after canonical completion and computes realized gross profit when cost and sale currencies match.
+- Corrected the provider mapping invariant: `product_id` references canonical `Product.id`; `product_variant_id` is only the optional refinement.
+
+#### Phase 12.3 — Economics Operations ✅
+- Added tenant Admin economics endpoints for pricing tiers/rules, FX policies, flexible-deposit visibility, order economics, and supplier balances.
+- Added provider balance polling, durable low-balance/error evidence, and operator visibility without automatic provider disable/routing mutation.
+- Added migration `e1f2a3b4c5d6`, ADR-036, and `docs/architecture/commerce-economics.md`.
+- Dependency-limited runnable regression: **355/355 passed**, excluding PostgreSQL-only tests and the two direct-Aiogram modules unavailable in this environment.
+
+### Phase 13 — Advanced Bot Templates & Factory Wizard ✅ Implementation
+- Added vendor-neutral reseller, number/SMS, account, gift-card, digital-product, and hybrid templates over the shared core.
+- Added a five-step Tenant Admin wizard: Template → Telegram → Branding → Business → Review.
+- Added server-validated per-bot business profiles selecting compatible tenant providers, payment methods, routing strategy, default pricing tier, and optional flexible auto-credit permission.
+- Enforced the saved profile in storefront payment exposure, pricing-tier resolution, flexible auto-credit, and fulfillment provider/category/routing selection.
+- Preserved legacy behavior: bots without a business profile inherit existing product routing and tenant defaults; malformed persisted profiles fail closed.
+- Added per-bot launch-readiness business checks, ADR-037, and `docs/architecture/advanced-bot-factory.md`. No schema migration was required.
+
+### Release Qualification — next gate, not a new feature phase
+- Core feature development is complete for the current product scope.
+- Collect canonical PostgreSQL/Ruff/direct-Aiogram/Docker release evidence.
+- Run staging E2E/failure injection and an encrypted backup/restore + laptop-to-VPS portability drill.
+- Smoke-test only the real provider/payment adapters intended for launch using the smallest safe live transactions.
+- New vendor adapters/templates may be added later without reopening core architecture.
+
+### Phase 13 Repair Update — pending after 2026-09-16 review
+
+See [the repair review](operations/REPAIR_REVIEW_2026-09-16.md) for code evidence and acceptance criteria.
+
+- Enforce per-bot funding restrictions on legacy and new customer routes.
+- Observe and escalate flexible-deposit reversals after credit.
+- Keep failed portable imports offline until authoritative database/vault state is recovered and validated.
+- Reject malformed auto-credit values and invalid signed bot contexts.
+- Connect Mini App payment selection and open-amount deposit/status flows to the new APIs.
+- Repair lint/environment gates, extend PostgreSQL races for new financial boundaries, and collect release/staging/restore evidence.
+- Review baseline: 371 non-PostgreSQL tests passed, 8 deselected; canonical gate fails at 197 Ruff findings. Feature expansion remains deferred until repairs and release qualification are complete.
+
+### Repair baseline — Admin access & financial hardening
+
+User directive on 2026-09-16 supersedes the earlier roadmap-closure claim: repair the current baseline first, and wait for explicit authorization before new Phase 13 work.
+
+- Repair browser Admin entry without weakening Telegram identity or tenant RBAC.
+- Close existing funding policy and deposit-reversal gaps; connect the existing customer payment APIs.
+- Keep failed restores offline and verify migrations/concurrency on PostgreSQL.
+- Complete the canonical gate and browser regression checks before deployment.
+- See [repair patch notes](operations/REPAIR_PATCH_NOTES_2026-09-16.md) for evidence and recommendations across earlier phases.
+- Status: repairs complete and canonical gate green on 2026-09-16 (Ruff clean, 396 fast + 13 PostgreSQL tests, alembic clean at `f2a3b4c5d6e7`). Commit/push authorized on 2026-09-17; canonical gate rerun successfully. Remaining: operator-run immutable-image deployment and release-gate/staging/restore evidence. Existing host containers remain untouched under Law 4.

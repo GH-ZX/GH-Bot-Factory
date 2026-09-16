@@ -95,7 +95,7 @@ async def test_provider_router_fallback_on_retryable_error(db_session: AsyncSess
 
     registry = ProviderClientRegistry()
     client1 = MockProvider(provider_name="FailingProv")
-    client1.fail_with_timeout = True  # Retryable failure!
+    client1.fail_with_rate_limit = True  # Retryable and safe before upstream work is accepted.
 
     client2 = MockProvider(provider_name="BackupProv")
 

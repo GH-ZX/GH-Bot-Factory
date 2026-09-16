@@ -13,10 +13,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.deps import require_admin_or_owner, require_staff_or_above
+from packages.commerce.economics_models import PricingTier
+from packages.commerce.models import Product, ProductVariant
 from packages.core.auth import AuthenticatedPrincipal
 from packages.core.config import settings
-from packages.commerce.models import Product, ProductVariant
 from packages.core.database import get_db_session
+from packages.factory.business_profiles import (
+    allowed_provider_categories,
+    business_profile_from_config,
+    parse_business_profile,
+    validate_business_profile_for_tenant,
+)
 from packages.factory.models import BotProvisioningJob, BotProvisioningStatus
 from packages.factory.provisioning import (
     AiogramTelegramIdentityVerifier,
@@ -27,14 +34,25 @@ from packages.factory.provisioning import (
     reject_secret_material,
     validate_secret_ref,
 )
-from packages.payments.models import PaymentProviderConfig
-from packages.providers.models import Provider, ProviderProductMapping
 from packages.factory.templates import (
     TemplateValidationError,
     build_template_config,
     list_bot_templates,
     template_metadata,
 )
+from packages.payments.models import PaymentMethodConfig
+from packages.providers.models import Provider, ProviderProductMapping, ProviderRoutingStrategy
+from packages.saas.product_entitlements import (
+    FEATURE_CANARY_ROLLOUT,
+    FEATURE_CUSTOM_BRANDING,
+    FEATURE_RUNTIME_CONTROLS,
+    CommercialAccessDenied,
+    FeatureEntitlementDenied,
+    require_commercial_access,
+    require_feature_entitlement,
+    resolve_commercial_access,
+)
+from packages.saas.service import EntitlementConfigurationError, resolve_tenant_entitlements
 from packages.telegram.fleet_state import BotFleetStateStore
 from packages.telegram.launch import resolve_tenant_public_url
 from packages.telegram.models import Bot
@@ -76,6 +94,7 @@ class BotResponse(BaseModel):
     release_channel: str
     template_key: str | None = None
     template_version: int | None = None
+    business_profile: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -128,10 +147,49 @@ class BotTemplateResponse(BaseModel):
     description: str
     recommended_for: str
     default_config: dict[str, Any]
+    business_type: str = "GENERAL"
+    provider_categories: list[str] = Field(default_factory=list)
+    default_routing_strategy: str = "PRIORITY"
 
 
 class BotTemplateListResponse(BaseModel):
     templates: list[BotTemplateResponse]
+
+
+class BotWizardProviderOption(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    category: str
+    health_status: str
+
+
+class BotWizardPaymentMethodOption(BaseModel):
+    id: uuid.UUID
+    code: str
+    display_name: str
+    method_type: str
+    provider_name: str | None
+    flexible_deposits_enabled: bool = False
+    auto_credit_enabled: bool = False
+
+
+class BotWizardPricingTierOption(BaseModel):
+    id: uuid.UUID
+    code: str
+    display_name: str
+    is_default: bool
+
+
+class BotWizardOptionsResponse(BaseModel):
+    template_key: str
+    business_type: str
+    provider_categories: list[str]
+    routing_strategies: list[str]
+    default_routing_strategy: str
+    providers: list[BotWizardProviderOption]
+    payment_methods: list[BotWizardPaymentMethodOption]
+    pricing_tiers: list[BotWizardPricingTierOption]
 
 
 class BotProvisionRequest(BaseModel):
@@ -147,6 +205,7 @@ class BotProvisionRequest(BaseModel):
     locale: str | None = Field(default=None, min_length=2, max_length=20)
     branding: dict[str, Any] = Field(default_factory=dict)
     enabled_modules: list[str] | None = None
+    business_profile: dict[str, Any] | None = None
     config: dict[str, Any] | None = None
     max_attempts: int = Field(default=5, ge=1, le=10)
 
@@ -161,7 +220,7 @@ class BotProvisionRequest(BaseModel):
             raise ValueError(str(exc)) from exc
 
     @model_validator(mode="after")
-    def validate_credential_input(self) -> "BotProvisionRequest":
+    def validate_credential_input(self) -> BotProvisionRequest:
         has_ref = bool(self.token_secret_ref)
         has_token = bool(self.bot_token and self.bot_token.get_secret_value())
         if has_ref == has_token:
@@ -195,6 +254,7 @@ class BotConfigurationRequest(BaseModel):
     locale: str | None = Field(default=None, min_length=2, max_length=20)
     branding: dict[str, Any] = Field(default_factory=dict)
     enabled_modules: list[str] | None = None
+    business_profile: dict[str, Any] | None = None
 
 
 def _resolved_request_config(req: BotProvisionRequest | BotConfigurationRequest) -> dict[str, Any]:
@@ -218,9 +278,47 @@ def _resolved_request_config(req: BotProvisionRequest | BotConfigurationRequest)
             locale=req.locale,
             branding=req.branding,
             enabled_modules=req.enabled_modules,
+            business_profile=req.business_profile,
         )
-    except TemplateValidationError as exc:
+    except (TemplateValidationError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+async def _validate_resolved_business_profile(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        profile = parse_business_profile(config.get("_business"))
+        profile = await validate_business_profile_for_tenant(
+            session, tenant_id=tenant_id, profile=profile
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    config["_business"] = profile.public_payload()
+    return config
+
+
+def _uses_custom_branding(
+    req: BotProvisionRequest | BotConfigurationRequest,
+    resolved_config: dict[str, Any],
+) -> bool:
+    if isinstance(req, BotProvisionRequest) and req.template_key is None:
+        return bool(isinstance(req.config, dict) and req.config.get("branding"))
+    try:
+        baseline = build_template_config(
+            template_key=req.template_key or "general-commerce",
+            template_version=req.template_version,
+            currency=req.currency,
+            locale=req.locale,
+            branding={},
+            enabled_modules=req.enabled_modules,
+        )
+    except TemplateValidationError:
+        return True
+    return (resolved_config.get("branding") or {}) != (baseline.get("branding") or {})
 
 
 class BotProvisionJobResponse(BaseModel):
@@ -296,12 +394,70 @@ def _telegram_identity_verifier() -> TelegramIdentityVerifier:
 
 
 
+async def _tenant_entitlements_or_503(session: AsyncSession, tenant_id: uuid.UUID):
+    try:
+        return await resolve_tenant_entitlements(session, tenant_id=tenant_id)
+    except EntitlementConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Tenant plan entitlements are invalid; contact the platform operator.",
+        ) from exc
+
+
+def _commercial_access_http_error(exc: CommercialAccessDenied) -> HTTPException:
+    snapshot = exc.snapshot
+    return HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail={
+            "code": "SAAS_COMMERCIAL_ACCESS_BLOCKED",
+            "message": str(exc),
+            "subscription_status": snapshot.subscription_status.value if snapshot.subscription_status else None,
+            "access_state": snapshot.state.value,
+            "grace_ends_at": snapshot.grace_ends_at.isoformat() if snapshot.grace_ends_at else None,
+        },
+    )
+
+
+async def _require_commercial_mutation(session: AsyncSession, tenant_id: uuid.UUID) -> None:
+    try:
+        await require_commercial_access(session, tenant_id=tenant_id)
+    except CommercialAccessDenied as exc:
+        raise _commercial_access_http_error(exc) from exc
+
+
+async def _require_product_feature(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    feature: str,
+) -> None:
+    try:
+        await require_feature_entitlement(session, tenant_id=tenant_id, feature=feature)
+    except CommercialAccessDenied as exc:
+        raise _commercial_access_http_error(exc) from exc
+    except FeatureEntitlementDenied as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "SAAS_FEATURE_NOT_ENTITLED",
+                "message": str(exc),
+                "feature": exc.feature,
+            },
+        ) from exc
+    except EntitlementConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Tenant plan entitlements are invalid; contact the platform operator.",
+        ) from exc
+
+
 async def _enforce_factory_capacity(
     session: AsyncSession,
     *,
     tenant_id: uuid.UUID,
     desired_enabled: bool,
 ) -> None:
+    await _require_commercial_mutation(session, tenant_id)
+    entitlements = await _tenant_entitlements_or_503(session, tenant_id)
     bot_count = int(
         await session.scalar(
             select(func.count()).select_from(Bot).where(
@@ -311,10 +467,10 @@ async def _enforce_factory_capacity(
         )
         or 0
     )
-    if bot_count >= settings.factory_max_bots_per_tenant:
+    if bot_count >= entitlements.max_bots:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Tenant bot limit reached ({settings.factory_max_bots_per_tenant}).",
+            detail=f"Tenant bot limit reached ({entitlements.max_bots}).",
         )
 
     open_jobs = int(
@@ -328,10 +484,10 @@ async def _enforce_factory_capacity(
         )
         or 0
     )
-    if open_jobs >= settings.factory_max_open_provisioning_jobs_per_tenant:
+    if open_jobs >= entitlements.max_open_provisioning_jobs:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many open provisioning jobs ({settings.factory_max_open_provisioning_jobs_per_tenant}).",
+            detail=f"Too many open provisioning jobs ({entitlements.max_open_provisioning_jobs}).",
         )
 
     if desired_enabled:
@@ -345,10 +501,10 @@ async def _enforce_factory_capacity(
             )
             or 0
         )
-        if enabled_count >= settings.factory_max_enabled_bots_per_tenant:
+        if enabled_count >= entitlements.max_enabled_bots:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Tenant enabled-bot limit reached ({settings.factory_max_enabled_bots_per_tenant}).",
+                detail=f"Tenant enabled-bot limit reached ({entitlements.max_enabled_bots}).",
             )
 
 
@@ -371,6 +527,7 @@ def _bot_response(bot: Bot) -> BotResponse:
         release_channel=bot.release_channel,
         template_key=template_key,
         template_version=template_version,
+        business_profile=business_profile_from_config(bot.config).public_payload(),
         created_at=bot.created_at,
         updated_at=bot.updated_at,
     )
@@ -383,6 +540,85 @@ async def get_templates(
     del principal
     return BotTemplateListResponse(
         templates=[BotTemplateResponse(**template.public_payload()) for template in list_bot_templates()]
+    )
+
+
+@router.get("/wizard/options", response_model=BotWizardOptionsResponse)
+async def get_bot_wizard_options(
+    template_key: str = Query("reseller-hub", min_length=2, max_length=50),
+    principal: AuthenticatedPrincipal = Depends(require_staff_or_above),
+    session: AsyncSession = Depends(get_db_session),
+) -> BotWizardOptionsResponse:
+    try:
+        template = next(item for item in list_bot_templates() if item.key == template_key)
+    except StopIteration as exc:
+        raise HTTPException(status_code=404, detail="Bot template not found.") from exc
+    categories = set(template.provider_categories) or allowed_provider_categories(template.business_type)
+    providers = list(
+        (
+            await session.execute(
+                select(Provider).where(
+                    Provider.tenant_id == principal.tenant_id,
+                    Provider.is_enabled.is_(True),
+                    Provider.category.in_(categories),
+                ).order_by(Provider.category.asc(), Provider.priority.asc(), Provider.name.asc())
+            )
+        ).scalars().all()
+    )
+    methods = list(
+        (
+            await session.execute(
+                select(PaymentMethodConfig).where(
+                    PaymentMethodConfig.tenant_id == principal.tenant_id,
+                    PaymentMethodConfig.is_enabled.is_(True),
+                ).order_by(PaymentMethodConfig.display_name.asc())
+            )
+        ).scalars().all()
+    )
+    tiers = list(
+        (
+            await session.execute(
+                select(PricingTier).where(
+                    PricingTier.tenant_id == principal.tenant_id,
+                    PricingTier.is_active.is_(True),
+                ).order_by(PricingTier.priority.asc(), PricingTier.display_name.asc())
+            )
+        ).scalars().all()
+    )
+    return BotWizardOptionsResponse(
+        template_key=template.key,
+        business_type=template.business_type.value,
+        provider_categories=[item.value for item in template.provider_categories],
+        routing_strategies=[item.value for item in ProviderRoutingStrategy],
+        default_routing_strategy=template.default_routing_strategy.value,
+        providers=[
+            BotWizardProviderOption(
+                id=row.id,
+                name=row.name,
+                slug=row.slug,
+                category=row.category.value,
+                health_status=row.health_status.value,
+            )
+            for row in providers
+        ],
+        payment_methods=[
+            BotWizardPaymentMethodOption(
+                id=row.id,
+                code=row.code,
+                display_name=row.display_name,
+                method_type=row.method_type.value,
+                provider_name=row.provider_name,
+                flexible_deposits_enabled=bool((row.settings_json or {}).get("flexible_deposits_enabled", False)),
+                auto_credit_enabled=bool(row.auto_credit_enabled),
+            )
+            for row in methods
+        ],
+        pricing_tiers=[
+            BotWizardPricingTierOption(
+                id=row.id, code=row.code, display_name=row.display_name, is_default=row.is_default
+            )
+            for row in tiers
+        ],
     )
 
 
@@ -459,6 +695,9 @@ async def get_bot_launch_readiness(
     runtime_status = str(observed.get("status") or ("OFFLINE" if bot.is_enabled else "DISABLED"))
     miniapp_url = resolve_tenant_public_url(tenant.settings, kind="miniapp", fallback=settings.miniapp_public_url)
     admin_url = resolve_tenant_public_url(tenant.settings, kind="admin", fallback=settings.admin_public_url)
+    commercial_access = await resolve_commercial_access(session, tenant_id=principal.tenant_id)
+    business_profile = business_profile_from_config(bot.config)
+    compatible_categories = set(allowed_provider_categories(business_profile.business_type))
 
     active_products = int(
         await session.scalar(
@@ -485,13 +724,15 @@ async def get_bot_launch_readiness(
         )
         or 0
     )
+    provider_filters = [
+        Provider.tenant_id == principal.tenant_id,
+        Provider.is_enabled.is_(True),
+        Provider.category.in_(compatible_categories),
+    ]
+    if business_profile.provider_ids:
+        provider_filters.append(Provider.id.in_(business_profile.provider_ids))
     enabled_providers = int(
-        await session.scalar(
-            select(func.count()).select_from(Provider).where(
-                Provider.tenant_id == principal.tenant_id, Provider.is_enabled.is_(True)
-            )
-        )
-        or 0
+        await session.scalar(select(func.count()).select_from(Provider).where(*provider_filters)) or 0
     )
     enabled_mappings = int(
         await session.scalar(
@@ -502,17 +743,25 @@ async def get_bot_launch_readiness(
         )
         or 0
     )
+    payment_filters = [
+        PaymentMethodConfig.tenant_id == principal.tenant_id,
+        PaymentMethodConfig.is_enabled.is_(True),
+    ]
+    if business_profile.payment_method_ids:
+        payment_filters.append(PaymentMethodConfig.id.in_(business_profile.payment_method_ids))
     payment_configs = int(
         await session.scalar(
-            select(func.count()).select_from(PaymentProviderConfig).where(
-                PaymentProviderConfig.tenant_id == principal.tenant_id,
-                PaymentProviderConfig.is_enabled.is_(True),
-            )
+            select(func.count()).select_from(PaymentMethodConfig).where(*payment_filters)
         )
         or 0
     )
 
     checks = [
+        LaunchReadinessCheck(
+            key="commercial_access", label="Commercial access",
+            status="PASS" if commercial_access.allowed else "BLOCK",
+            detail=commercial_access.reason, action_view="plan",
+        ),
         LaunchReadinessCheck(
             key="credential", label="Telegram credential",
             status="PASS" if bot.credential_status == "VERIFIED" else "BLOCK",
@@ -539,6 +788,16 @@ async def get_bot_launch_readiness(
             detail=f"{active_products} active product(s), {active_variants} active variant(s).", action_view="products",
         ),
         LaunchReadinessCheck(
+            key="business_profile", label="Business profile",
+            status="PASS",
+            detail=(
+                f"{business_profile.business_type.value} · {(business_profile.routing_strategy.value if business_profile.routing_strategy else 'INHERIT')} routing · "
+                f"{len(business_profile.provider_ids) if business_profile.provider_ids else 'all compatible'} provider selection · "
+                f"{len(business_profile.payment_method_ids) if business_profile.payment_method_ids else 'all enabled'} payment selection."
+            ),
+            action_view="bots",
+        ),
+        LaunchReadinessCheck(
             key="fulfillment", label="Fulfillment routing",
             status="PASS" if enabled_providers > 0 and enabled_mappings > 0 else "BLOCK",
             detail=f"{enabled_providers} enabled provider(s), {enabled_mappings} enabled mapping(s).", action_view="providers",
@@ -546,7 +805,7 @@ async def get_bot_launch_readiness(
         LaunchReadinessCheck(
             key="payments", label="Customer funding",
             status="PASS" if payment_configs > 0 else "WARN",
-            detail=(f"{payment_configs} enabled payment provider configuration(s)." if payment_configs else "No enabled payment provider; wallet checkout can only use pre-funded balances."),
+            detail=(f"{payment_configs} enabled payment method(s) allowed for this bot." if payment_configs else "No enabled payment provider; wallet checkout can only use pre-funded balances."),
             action_view="providers",
         ),
     ]
@@ -565,10 +824,12 @@ async def request_bot_provisioning(
     session: AsyncSession = Depends(get_db_session),
     secret_storage: SecretStorage = Depends(_secret_storage),
 ) -> BotProvisionJobResponse:
-    resolved_config = _resolved_request_config(req)
+    resolved_config = await _validate_resolved_business_profile(
+        session, tenant_id=principal.tenant_id, config=_resolved_request_config(req)
+    )
     direct_token = req.bot_token.get_secret_value() if req.bot_token is not None else None
     if direct_token:
-        ref_digest = hashlib.sha256(f"{principal.tenant_id}:{idempotency_key}".encode("utf-8")).hexdigest()[:32].upper()
+        ref_digest = hashlib.sha256(f"{principal.tenant_id}:{idempotency_key}".encode()).hexdigest()[:32].upper()
         token_secret_ref = f"GHBF_VAULT_BOT_{ref_digest}"
         credential_fingerprint = hashlib.sha256(direct_token.encode("utf-8")).hexdigest()
     else:
@@ -600,6 +861,9 @@ async def request_bot_provisioning(
         if direct_token:
             await secret_storage.set_secret(token_secret_ref, direct_token)
         return BotProvisionJobResponse.model_validate(existing)
+
+    if _uses_custom_branding(req, resolved_config):
+        await _require_product_feature(session, principal.tenant_id, FEATURE_CUSTOM_BRANDING)
 
     await _enforce_factory_capacity(
         session,
@@ -704,6 +968,7 @@ async def retry_provisioning_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provisioning job not found.")
     if job.status != BotProvisioningStatus.FAILED:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only FAILED jobs can be retried manually.")
+    await _require_commercial_mutation(session, principal.tenant_id)
     job.status = BotProvisioningStatus.PENDING
     job.attempt_count = 0
     job.next_attempt_at = None
@@ -798,7 +1063,7 @@ async def verify_bot_credential(
         await session.commit()
         http_status = status.HTTP_503_SERVICE_UNAVAILABLE if exc.retryable else status.HTTP_409_CONFLICT
         raise HTTPException(status_code=http_status, detail="Bot credential verification failed.") from exc
-    except Exception as exc:  # noqa: BLE001 - normalize unknown verifier failures
+    except Exception as exc:
         bot.credential_status = "DEGRADED"
         bot.credential_last_error_type = type(exc).__name__
         await _audit(
@@ -866,6 +1131,7 @@ async def restart_bot_runtime(
     bot = await session.get(Bot, bot_id, with_for_update=True)
     if bot is None or bot.tenant_id != principal.tenant_id or bot.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found.")
+    await _require_product_feature(session, principal.tenant_id, FEATURE_RUNTIME_CONTROLS)
     if not bot.is_enabled:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Enable the bot before requesting a runtime restart.")
     bot.runtime_revision += 1
@@ -887,7 +1153,13 @@ async def update_bot_configuration(
     bot = await session.get(Bot, bot_id, with_for_update=True)
     if bot is None or bot.tenant_id != principal.tenant_id or bot.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found.")
-    resolved_config = _resolved_request_config(req)
+    resolved_config = await _validate_resolved_business_profile(
+        session, tenant_id=principal.tenant_id, config=_resolved_request_config(req)
+    )
+    previous_branding = (bot.config or {}).get("branding") or {}
+    next_branding = resolved_config.get("branding") or {}
+    if _uses_custom_branding(req, resolved_config) and next_branding != previous_branding:
+        await _require_product_feature(session, principal.tenant_id, FEATURE_CUSTOM_BRANDING)
     previous_template = template_metadata(bot.config)
     next_template = template_metadata(resolved_config)
     bot.config = resolved_config
@@ -924,6 +1196,8 @@ async def set_bot_release_channel(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found.")
     previous = bot.release_channel
     if previous != req.release_channel:
+        if req.release_channel == "CANARY":
+            await _require_product_feature(session, principal.tenant_id, FEATURE_CANARY_ROLLOUT)
         bot.release_channel = req.release_channel
         bot.runtime_revision += 1
         await _audit(
@@ -945,6 +1219,7 @@ async def set_bot_state(
     if bot is None or bot.tenant_id != principal.tenant_id or bot.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found.")
     if req.is_enabled and not bot.is_enabled:
+        await _require_commercial_mutation(session, principal.tenant_id)
         enabled_count = int(
             await session.scalar(
                 select(func.count()).select_from(Bot).where(
@@ -956,10 +1231,11 @@ async def set_bot_state(
             )
             or 0
         )
-        if enabled_count >= settings.factory_max_enabled_bots_per_tenant:
+        entitlements = await _tenant_entitlements_or_503(session, principal.tenant_id)
+        if enabled_count >= entitlements.max_enabled_bots:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Tenant enabled-bot limit reached ({settings.factory_max_enabled_bots_per_tenant}).",
+                detail=f"Tenant enabled-bot limit reached ({entitlements.max_enabled_bots}).",
             )
     bot.is_enabled = req.is_enabled
     await _audit(

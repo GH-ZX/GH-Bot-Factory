@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -107,11 +107,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not settings.rate_limit_enabled:
             return None
         path = request.url.path
-        if path == "/api/v1/auth/telegram-miniapp":
+        if path in {"/api/v1/auth/telegram-miniapp", "/api/v1/auth/admin-code"}:
             return RatePolicy("auth", settings.rate_limit_auth_per_minute)
         if request.method == "POST" and path in {
             "/api/v1/storefront/checkout",
             "/api/v1/storefront/wallet/topups",
+            "/api/v1/storefront/wallet/topups/method",
+            "/api/v1/storefront/wallet/topups/local",
+            "/api/v1/storefront/wallet/flexible-deposits",
         }:
             return RatePolicy("money", settings.rate_limit_money_per_minute)
         if (
@@ -120,7 +123,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             and "/webhooks/" not in path
         ):
             return RatePolicy("money", settings.rate_limit_money_per_minute)
-        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and path.startswith("/api/v1/admin"):
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and path.startswith(
+            ("/api/v1/admin", "/api/v1/platform")
+        ):
             return RatePolicy("admin_write", settings.rate_limit_admin_write_per_minute)
         return None
 
@@ -155,7 +160,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 if value == 1:
                     await client.expire(key, 60)
                 return int(value) <= limit
-            except Exception:
+            except Exception:  # noqa: BLE001 - backend errors fail closed at the request boundary
                 if settings.is_production_like:
                     return None
                 return True

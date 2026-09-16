@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from packages.commerce.economics import PricingService
 from packages.commerce.models import Order
 from packages.commerce.state_machine import OrderStatus
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
+from packages.fulfillment.service import _provider_response_payload
 from packages.notifications.service import (
     NotificationEventType,
     NotificationPayload,
@@ -17,6 +19,7 @@ from packages.notifications.service import (
 )
 from packages.payments.service import CANONICAL_REFUND_TYPE, LedgerService
 from packages.providers.clients.registry import ProviderClientRegistry, provider_registry
+from packages.providers.contracts import ProviderOrderState
 from packages.providers.models import Provider
 from packages.providers.router import ProviderRouter
 
@@ -41,10 +44,12 @@ class ReconciliationService:
         registry: ProviderClientRegistry | None = None,
         notification_service: NotificationService | None = None,
         provider_router: ProviderRouter | None = None,
+        pricing_service: PricingService | None = None,
     ) -> None:
         self.registry = registry or provider_registry
         self.notifications = notification_service or NotificationService()
         self.provider_router = provider_router or ProviderRouter(registry=self.registry)
+        self.pricing = pricing_service or PricingService()
 
     async def _reconcile_attempt(
         self,
@@ -85,12 +90,22 @@ class ReconciliationService:
                     provider_id=str(provider_record.id),
                 )
                 check_res = await client.get_order(query_target)
-                if check_res.is_completed:
+                attempt.response_payload = _provider_response_payload(check_res)
+                if check_res.is_completed or check_res.canonical_state == ProviderOrderState.COMPLETED:
                     attempt.status = FulfillmentStatus.SUCCEEDED
+                    attempt.error_classification = None
                     if check_res.external_order_id:
                         attempt.external_order_id = check_res.external_order_id
                     if order.status != OrderStatus.FULFILLED:
                         order.transition_to(OrderStatus.FULFILLED)
+                    if attempt.order_item_id is not None and attempt.cost_amount >= 0:
+                        await self.pricing.attribute_actual_cost(
+                            session,
+                            order_item_id=attempt.order_item_id,
+                            provider_id=attempt.provider_id,
+                            actual_cost=attempt.cost_amount,
+                            actual_currency=attempt.cost_currency,
+                        )
                     await session.commit()
 
                     await self.notifications.notify(
@@ -115,7 +130,12 @@ class ReconciliationService:
                         )
                     ]
 
-                if check_res.is_failed:
+                if check_res.is_failed or check_res.canonical_state in {
+                    ProviderOrderState.FAILED,
+                    ProviderOrderState.CANCELLED,
+                    ProviderOrderState.EXPIRED,
+                    ProviderOrderState.REFUNDED,
+                }:
                     attempt.status = FulfillmentStatus.FAILED
                     attempt.error_classification = "UPSTREAM_FAILED_RECONCILED"
                     order.transition_to(OrderStatus.FAILED)
@@ -158,13 +178,25 @@ class ReconciliationService:
                         )
                     ]
 
+                attempt.status = (
+                    FulfillmentStatus.UNKNOWN
+                    if check_res.canonical_state == ProviderOrderState.UNKNOWN
+                    else FulfillmentStatus.PROCESSING
+                )
+                attempt.error_classification = (
+                    "UPSTREAM_STATE_UNKNOWN"
+                    if check_res.canonical_state == ProviderOrderState.UNKNOWN
+                    else None
+                )
+                await session.commit()
                 return [
                     ReconciliationDiscrepancy(
                         order_id=order.id,
                         order_number=order.order_number,
                         issue_type="UPSTREAM_STILL_PENDING",
                         details=f"External order {query_target} is still pending upstream.",
-                        action_taken="No mutation; retained current internal state",
+                        action_taken="Refreshed canonical upstream state; no fulfillment/refund mutation",
+                        metadata={"provider_state": check_res.canonical_state.value},
                     )
                 ]
             except Exception as query_err:  # noqa: BLE001
@@ -195,6 +227,34 @@ class ReconciliationService:
                 )
             ]
         return []
+
+    async def reconcile_active_attempts(
+        self,
+        session: AsyncSession,
+        *,
+        limit: int = 200,
+    ) -> list[ReconciliationDiscrepancy]:
+        """Reconcile a bounded cross-tenant batch for the trusted background worker."""
+        stmt = (
+            select(FulfillmentAttempt)
+            .where(
+                FulfillmentAttempt.status.in_(
+                    [
+                        FulfillmentStatus.PROCESSING,
+                        FulfillmentStatus.RETRYING,
+                        FulfillmentStatus.UNKNOWN,
+                    ]
+                )
+            )
+            .order_by(FulfillmentAttempt.started_at.asc())
+            .limit(max(1, min(limit, 1000)))
+        )
+        attempts = list((await session.execute(stmt)).scalars().all())
+        discrepancies: list[ReconciliationDiscrepancy] = []
+        for attempt in attempts:
+            discrepancies.extend(await self._reconcile_attempt(session, attempt))
+        return discrepancies
+
 
     async def reconcile_order(
         self,

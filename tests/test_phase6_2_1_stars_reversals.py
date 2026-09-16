@@ -72,7 +72,7 @@ async def test_telegram_stars_provider_creates_native_invoice_and_safe_repeat_re
             from packages.payments.exceptions import PaymentProviderError
 
             exc = PaymentProviderError("Bad Request: CHARGE_ALREADY_REFUNDED")
-            setattr(exc, "provider_error_description", "Bad Request: CHARGE_ALREADY_REFUNDED")
+            exc.provider_error_description = "Bad Request: CHARGE_ALREADY_REFUNDED"
             raise exc
         raise AssertionError(method)
 
@@ -80,7 +80,7 @@ async def test_telegram_stars_provider_creates_native_invoice_and_safe_repeat_re
     created = await provider.create_payment(
         PaymentCreateRequest(
             order_id=None,
-            amount=Decimal("25"),
+            amount=Decimal(25),
             currency="XTR",
             idempotency_key="stars-create-001",
             metadata={"payment_intent_id": str(uuid.uuid4())},
@@ -95,7 +95,7 @@ async def test_telegram_stars_provider_creates_native_invoice_and_safe_repeat_re
     refunded = await provider.refund(
         PaymentRefundRequest(
             provider_payment_id="charge-123",
-            amount=Decimal("25"),
+            amount=Decimal(25),
             currency="XTR",
             idempotency_key="stars-refund-001",
             metadata={"telegram_user_id": 123456789},
@@ -138,7 +138,7 @@ async def test_stars_successful_payment_settles_wallet_exactly_once(db_session: 
         session=db_session,
         tenant_id=tenant.id,
         user_id=user.id,
-        amount=Decimal("40"),
+        amount=Decimal(40),
         currency="XTR",
         provider_name="telegram_stars",
         idempotency_key="stars-topup-001",
@@ -152,7 +152,7 @@ async def test_stars_successful_payment_settles_wallet_exactly_once(db_session: 
         user.id,
         payload,
         "charge-stars-001",
-        Decimal("40"),
+        Decimal(40),
         "XTR",
     )
     second = await service.settle_telegram_stars_topup(
@@ -161,7 +161,7 @@ async def test_stars_successful_payment_settles_wallet_exactly_once(db_session: 
         user.id,
         payload,
         "charge-stars-001",
-        Decimal("40"),
+        Decimal(40),
         "XTR",
     )
     assert first.id == second.id
@@ -176,7 +176,7 @@ async def test_stars_successful_payment_settles_wallet_exactly_once(db_session: 
             )
         )
     ).scalar_one()
-    assert wallet.balance == Decimal("40")
+    assert wallet.balance == Decimal(40)
 
 
 async def test_topup_reversal_reserves_balance_and_refunds_exactly_once(db_session: AsyncSession) -> None:
@@ -492,7 +492,7 @@ async def test_external_stars_reversal_debits_wallet_once_and_is_audited(db_sess
         registry,
         secret_storage,
         provider,
-        Decimal("40"),
+        Decimal(40),
         "external-topup-001",
         "charge-external-001",
     )
@@ -523,7 +523,7 @@ async def test_external_stars_reversal_debits_wallet_once_and_is_audited(db_sess
             )
         )
     ).scalar_one()
-    assert wallet.balance == Decimal("0")
+    assert wallet.balance == Decimal(0)
     assert wallet.is_active is True
 
     reversals = list((await db_session.execute(select(WalletTopUpReversal))).scalars().all())
@@ -579,7 +579,7 @@ async def test_external_stars_reversal_freezes_spent_wallet_until_manual_resolut
         registry,
         secret_storage,
         provider,
-        Decimal("50"),
+        Decimal(50),
         "external-spent-topup-001",
         "charge-external-spent-001",
     )
@@ -595,7 +595,7 @@ async def test_external_stars_reversal_freezes_spent_wallet_until_manual_resolut
     await LedgerService.debit(
         db_session,
         wallet,
-        Decimal("20"),
+        Decimal(20),
         reference_id="spent-before-chargeback",
         reference_type="ORDER_CHECKOUT",
     )
@@ -616,7 +616,7 @@ async def test_external_stars_reversal_freezes_spent_wallet_until_manual_resolut
     reconciliation = TelegramStarsReconciliationService(payment_service=service)
     await reconciliation.scan_tenant(db_session, tenant.id)
     await db_session.refresh(wallet)
-    assert wallet.balance == Decimal("30")
+    assert wallet.balance == Decimal(30)
     assert wallet.is_active is False
 
     reversal = (await db_session.execute(select(WalletTopUpReversal))).scalar_one()
@@ -629,7 +629,7 @@ async def test_external_stars_reversal_freezes_spent_wallet_until_manual_resolut
         await LedgerService.debit(
             db_session,
             wallet,
-            Decimal("1"),
+            Decimal(1),
             reference_id="must-be-blocked",
             reference_type="ORDER_CHECKOUT",
         )
@@ -639,7 +639,7 @@ async def test_external_stars_reversal_freezes_spent_wallet_until_manual_resolut
     await LedgerService.credit(
         db_session,
         wallet,
-        Decimal("20"),
+        Decimal(20),
         reference_id="manual-recovery-funds",
         reference_type="MANUAL_RECONCILIATION",
     )
@@ -649,7 +649,7 @@ async def test_external_stars_reversal_freezes_spent_wallet_until_manual_resolut
         reversal.id,
     )
     assert resolved.status == WalletTopUpReversalStatus.COMPLETED
-    assert wallet.balance == Decimal("0")
+    assert wallet.balance == Decimal(0)
     assert wallet.is_active is True
     await db_session.refresh(event)
     assert event.requires_review is False
@@ -691,7 +691,7 @@ async def test_provider_observation_closes_interrupted_merchant_stars_refund(
         registry,
         secret_storage,
         provider,
-        Decimal("25"),
+        Decimal(25),
         "merchant-recovery-topup-001",
         "charge-merchant-recovery-001",
     )
@@ -752,7 +752,7 @@ async def test_stars_reconciliation_integrity_mismatch_freezes_wallet(db_session
         registry,
         secret_storage,
         provider,
-        Decimal("15"),
+        Decimal(15),
         "mismatch-topup-001",
         "charge-mismatch-001",
     )
@@ -781,7 +781,7 @@ async def test_stars_reconciliation_integrity_mismatch_freezes_wallet(db_session
             )
         )
     ).scalar_one()
-    assert wallet.balance == Decimal("15")
+    assert wallet.balance == Decimal(15)
     assert wallet.is_active is False
     event = (await db_session.execute(select(PaymentReconciliationEvent))).scalar_one()
     assert event.classification == "OUTBOUND_INTEGRITY_MISMATCH"

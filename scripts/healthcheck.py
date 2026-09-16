@@ -17,7 +17,7 @@ async def _heartbeat_ok(service: str) -> tuple[bool, str]:
     try:
         value = await client.get(heartbeat_key(service))
         return value == "alive", "ok" if value == "alive" else "missing"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - health boundary reports dependency failure
         return False, type(exc).__name__
     finally:
         await client.aclose()

@@ -53,7 +53,7 @@ class TelegramStarsProvider:
 
     @staticmethod
     def _whole_stars(amount: Decimal) -> int:
-        if amount <= Decimal("0") or amount != amount.to_integral_value():
+        if amount <= Decimal(0) or amount != amount.to_integral_value():
             raise PaymentProviderError("Telegram Stars payments must use a positive whole XTR amount.")
         return int(amount)
 
@@ -73,7 +73,7 @@ class TelegramStarsProvider:
                 method="POST",
             )
             try:
-                with request.urlopen(req, timeout=20) as response:  # noqa: S310
+                with request.urlopen(req, timeout=20) as response:
                     raw = response.read()
             except error.HTTPError as exc:
                 raw = exc.read()
@@ -88,8 +88,8 @@ class TelegramStarsProvider:
                 description = str(parsed.get("description") or "Telegram Bot API rejected the request.")
                 error_code = parsed.get("error_code")
                 exc = PaymentProviderError(description)
-                setattr(exc, "provider_error_code", error_code)
-                setattr(exc, "provider_error_description", description)
+                exc.provider_error_code = error_code
+                exc.provider_error_description = description
                 raise exc
             return parsed.get("result")
 
@@ -173,7 +173,7 @@ class TelegramStarsProvider:
             return PaymentDetailsResult(
                 provider_payment_id=provider_payment_id,
                 status=PaymentIntentStatus.PENDING,
-                amount=Decimal("0"),
+                amount=Decimal(0),
                 currency="XTR",
                 raw_data={"invoice_pending": True},
             )
@@ -183,7 +183,7 @@ class TelegramStarsProvider:
             return PaymentDetailsResult(
                 provider_payment_id=provider_payment_id,
                 status=PaymentIntentStatus.UNKNOWN,
-                amount=Decimal("0"),
+                amount=Decimal(0),
                 currency="XTR",
                 raw_data={"transaction_found": False},
             )

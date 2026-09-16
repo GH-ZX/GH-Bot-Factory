@@ -5,9 +5,9 @@ Revises: 19c7d8e41f02
 Create Date: 2026-09-15 13:55:00.000000
 """
 
+import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
-import uuid
 
 import sqlalchemy as sa
 from alembic import op

@@ -9,8 +9,8 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import postgresql
 from sqlalchemy import Text
+from sqlalchemy.dialects import postgresql
 
 revision: str = "9e1f2a3b4c56"
 down_revision: str | None = "8a9b0c1d2e34"

@@ -16,7 +16,7 @@ async def check_database(timeout_seconds: float | None = None) -> tuple[bool, st
             async with async_session_factory() as session:
                 await session.execute(text("SELECT 1"))
         return True, "ok"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - health probes must report dependency failures
         return False, type(exc).__name__
 
 
@@ -29,7 +29,7 @@ async def check_redis(timeout_seconds: float | None = None) -> tuple[bool, str]:
         async with asyncio.timeout(timeout):
             await client.ping()
         return True, "ok"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - health probes must report dependency failures
         return False, type(exc).__name__
     finally:
         await client.aclose()

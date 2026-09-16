@@ -201,7 +201,7 @@ async def test_concurrent_mixed_services_refund(wal_session_factory: async_sessi
         s.add(prov)
         await s.flush()
 
-        mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=variant.id, external_product_id="ext-mix")
+        mapping = ProviderProductMapping(tenant_id=tenant.id, provider_id=prov.id, product_id=product.id, product_variant_id=variant.id, external_product_id="ext-mix")
         s.add(mapping)
 
         wallet = await LedgerService.get_or_create_wallet(s, tenant.id, user.id, currency="USD")

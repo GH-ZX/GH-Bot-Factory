@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
+from packages.payments.economics_models import FlexibleDepositStatus
 from packages.payments.state_machine import PaymentIntentStatus
 
 
@@ -22,6 +23,7 @@ class PaymentCreateResult:
     status: PaymentIntentStatus
     checkout_url: str | None = None
     raw_data: dict[str, Any] = field(default_factory=dict)
+    verification_attributes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -31,6 +33,7 @@ class PaymentDetailsResult:
     amount: Decimal
     currency: str
     raw_data: dict[str, Any] = field(default_factory=dict)
+    verification_attributes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -43,6 +46,7 @@ class WebhookVerificationResult:
     amount: Decimal | None = None
     currency: str | None = None
     raw_data: dict[str, Any] = field(default_factory=dict)
+    verification_attributes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -95,4 +99,59 @@ class PaymentProvider(Protocol):
 
     async def refund(self, request: PaymentRefundRequest) -> PaymentRefundResult:
         """Executes a gateway-level refund."""
+        ...
+
+
+@dataclass
+class FlexibleDepositCreateRequest:
+    idempotency_key: str
+    order_reference: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+    return_url: str | None = None
+
+
+@dataclass
+class FlexibleDepositResult:
+    provider_deposit_id: str
+    status: FlexibleDepositStatus
+    checkout_url: str | None = None
+    asset: str | None = None
+    network: str | None = None
+    amount_received: Decimal | None = None
+    fee_amount: Decimal | None = None
+    raw_data: dict[str, Any] = field(default_factory=dict)
+
+
+@runtime_checkable
+class FlexibleDepositProvider(Protocol):
+    """Optional capability for open-amount deposit/top-up sessions.
+
+    Implementations return only provider-observed asset evidence. Wallet credit policy is
+    deliberately outside the adapter and belongs to GHBF's economics/ledger layer.
+    """
+
+    supports_flexible_deposits: bool
+
+    async def create_flexible_deposit(
+        self, request: FlexibleDepositCreateRequest
+    ) -> FlexibleDepositResult:
+        ...
+
+    async def get_flexible_deposit(self, provider_deposit_id: str) -> FlexibleDepositResult:
+        ...
+
+
+@runtime_checkable
+class PaymentCreationRecoveryProvider(Protocol):
+    """Optional capability for recovering an ambiguously-created upstream payment.
+
+    Implementations MUST query by a merchant-controlled unique reference derived from the
+    original PaymentCreateRequest. Recovery must not create a new upstream payment.
+    """
+
+    supports_creation_recovery: bool
+
+    async def recover_payment_creation(
+        self, request: PaymentCreateRequest
+    ) -> PaymentDetailsResult:
         ...

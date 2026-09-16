@@ -7,8 +7,8 @@ from sqlalchemy import func, select
 
 from packages.core.config import settings
 from packages.core.database import async_session_factory
-from packages.fulfillment.models import FulfillmentJobRecord, FulfillmentJobStatus
 from packages.factory.models import BotProvisioningJob, BotProvisioningStatus
+from packages.fulfillment.models import FulfillmentJobRecord, FulfillmentJobStatus
 from packages.payments.models import FinancialResolutionCase, FinancialResolutionCaseStatus
 from packages.providers.models import Provider, ProviderHealthStatus
 from packages.telegram.models import Bot
@@ -88,7 +88,7 @@ async def render_operational_metrics() -> str:
                     lines.append(f'ghbf_service_heartbeat_instances{{service="{service}"}} {len(keys)}')
             finally:
                 await client.aclose()
-        except Exception:
+        except Exception:  # noqa: BLE001 - expose collection failure without breaking metrics
             lines.append("ghbf_metrics_redis_collection_error 1")
 
         _cache_text = "\n".join(lines) + "\n"

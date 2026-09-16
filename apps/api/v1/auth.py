@@ -1,8 +1,9 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,11 +17,49 @@ from packages.payments.exceptions import (
     MiniAppExpiredError,
     MiniAppSignatureInvalidError,
 )
+from packages.telegram.admin_login import AdminLoginError, AdminLoginService
 from packages.telegram.miniapp import TelegramMiniAppAuthService
 from packages.telegram.secrets import SecretStorage, get_default_secret_storage
 from packages.tenants.models import Membership, Role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class AdminCodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: SecretStr = Field(min_length=32, max_length=32)
+
+
+class AdminCodeResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = 3600
+
+
+def get_admin_login_service() -> AdminLoginService:
+    return AdminLoginService()
+
+
+@router.post("/admin-code", response_model=AdminCodeResponse)
+async def authenticate_admin_code(
+    req: AdminCodeRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_db_session),
+    service: AdminLoginService = Depends(get_admin_login_service),
+    token_service: AuthTokenService = Depends(get_auth_token_service),
+) -> AdminCodeResponse:
+    try:
+        user, membership, bot = await service.consume(session, req.code.get_secret_value())
+    except AdminLoginError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except RedisError as exc:
+        raise HTTPException(status_code=503, detail="Sign-in is temporarily unavailable. Try again shortly.") from exc
+    response.headers["Cache-Control"] = "no-store"
+    return AdminCodeResponse(access_token=token_service.issue_access_token(
+        user_id=user.id, tenant_id=membership.tenant_id, roles=[membership.role],
+        source=AuthSource.SESSION, token_version=user.token_version,
+        expires_in_seconds=3600, extra_claims={"bot_id": str(bot.id)},
+    ))
 
 
 class TelegramMiniAppAuthRequest(BaseModel):

@@ -23,6 +23,7 @@ from packages.payments.exceptions import (
     PaymentIntegrityError,
     PaymentIntentNotFoundError,
     PaymentProviderError,
+    PaymentProviderTransportError,
     UnsupportedProviderCapabilityError,
     WebhookVerificationError,
 )
@@ -51,7 +52,6 @@ from packages.payments.providers.registry import (
 from packages.payments.service import (
     CANONICAL_PAYMENT_REFUND_TYPE,
     CANONICAL_SETTLEMENT_TYPE,
-    CANONICAL_TOPUP_REVERSAL_TYPE,
     LedgerService,
 )
 from packages.payments.state_machine import PaymentIntentStatus
@@ -181,9 +181,19 @@ class PaymentService:
             return_url=return_url,
         )
 
-        provider_result = await provider.create_payment(create_request)
+        try:
+            provider_result = await provider.create_payment(create_request)
+        except (TimeoutError, PaymentProviderTransportError):
+            self._mark_provider_creation_ambiguous(intent)
+            if order.status == OrderStatus.PENDING:
+                order.transition_to(OrderStatus.PAYMENT_PENDING)
+            await session.flush()
+            return intent
         intent.provider_payment_id = provider_result.provider_payment_id
         intent.checkout_url = self._validated_checkout_url(provider_result.checkout_url)
+        self._store_provider_verification_attributes(
+            intent, provider_result.verification_attributes
+        )
 
         if provider_result.status == PaymentIntentStatus.SUCCEEDED:
             await self.settle_payment_intent(
@@ -214,6 +224,85 @@ class PaymentService:
             raise PaymentProviderError("Payment provider checkout URL must not contain credentials.")
         return checkout_url.strip()
 
+    @staticmethod
+    def _mark_provider_creation_ambiguous(intent: PaymentIntent) -> None:
+        """Persist an uncertain upstream create outcome without retrying the purchase.
+
+        Network timeouts and HTTP 5xx can occur after the provider accepted the request.
+        UNKNOWN is therefore safer than rolling back the local record and allowing a blind
+        re-create. Recovery is provider-specific and must query by a merchant-controlled
+        unique reference.
+        """
+        if intent.status != PaymentIntentStatus.UNKNOWN:
+            intent.transition_to(PaymentIntentStatus.UNKNOWN)
+        metadata = dict(intent.metadata_json or {})
+        metadata["_provider_creation_ambiguity"] = {
+            "detected_at": datetime.now(UTC).isoformat(),
+            "provider": intent.provider,
+            "reason": "transport_outcome_unknown",
+        }
+        intent.metadata_json = metadata
+        logger.warning(
+            "Provider create outcome is ambiguous for payment intent %s (%s); blind retry suppressed.",
+            intent.id,
+            intent.provider,
+        )
+
+    @staticmethod
+    def _normalized_provider_verification_attributes(
+        attributes: dict[str, str] | None,
+    ) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        for raw_key, raw_value in (attributes or {}).items():
+            key = str(raw_key).strip().lower()
+            value = str(raw_value).strip().lower()
+            if not key or len(key) > 64 or not value or len(value) > 255:
+                raise PaymentProviderError(
+                    "Payment provider returned invalid verification attributes."
+                )
+            if any(fragment in key for fragment in ("secret", "token", "password", "key")):
+                raise PaymentProviderError(
+                    "Payment provider verification attributes must not contain credential fields."
+                )
+            normalized[key] = value
+        return normalized
+
+    @classmethod
+    def _store_provider_verification_attributes(
+        cls,
+        intent: PaymentIntent,
+        attributes: dict[str, str] | None,
+    ) -> None:
+        normalized = cls._normalized_provider_verification_attributes(attributes)
+        if not normalized:
+            return
+        metadata = dict(intent.metadata_json or {})
+        metadata["_provider_verification"] = normalized
+        intent.metadata_json = metadata
+
+    @classmethod
+    def assert_provider_verification_attributes(
+        cls,
+        intent: PaymentIntent,
+        attributes: dict[str, str] | None,
+    ) -> None:
+        expected_raw = (intent.metadata_json or {}).get("_provider_verification")
+        if not expected_raw:
+            return
+        if not isinstance(expected_raw, dict):
+            raise PaymentIntegrityError("Stored provider verification attributes are malformed.")
+        expected = cls._normalized_provider_verification_attributes(
+            {str(key): str(value) for key, value in expected_raw.items()}
+        )
+        actual = cls._normalized_provider_verification_attributes(attributes)
+        for key, expected_value in expected.items():
+            actual_value = actual.get(key)
+            if actual_value != expected_value:
+                raise PaymentIntegrityError(
+                    f"Provider verification attribute mismatch for {key}."
+                )
+
+
     async def create_wallet_topup_intent(
         self,
         session: AsyncSession,
@@ -225,6 +314,8 @@ class PaymentService:
         idempotency_key: str,
         metadata: dict[str, Any] | None = None,
         return_url: str | None = None,
+        payment_method_id: uuid.UUID | None = None,
+        provider_context: dict[str, str] | None = None,
     ) -> PaymentIntent:
         """Create a provider-backed intent whose successful settlement funds a wallet.
 
@@ -317,6 +408,7 @@ class PaymentService:
                 or existing.user_id != user_id
                 or existing.order_id is not None
                 or existing.provider != normalized_provider
+                or existing.payment_method_id != payment_method_id
                 or existing.amount != normalized_amount
                 or existing.currency != normalized_currency
             ):
@@ -330,6 +422,7 @@ class PaymentService:
             order_id=None,
             purpose=PaymentIntentPurpose.WALLET_TOPUP,
             user_id=user_id,
+            payment_method_id=payment_method_id,
             provider=normalized_provider,
             currency=normalized_currency,
             amount=normalized_amount,
@@ -344,15 +437,15 @@ class PaymentService:
                 await session.flush()
         except IntegrityError as exc:
             concurrent = (await session.execute(existing_stmt)).scalar_one_or_none()
-            if concurrent is not None:
-                if (
-                    concurrent.purpose == PaymentIntentPurpose.WALLET_TOPUP
-                    and concurrent.user_id == user_id
-                    and concurrent.provider == normalized_provider
-                    and concurrent.amount == normalized_amount
-                    and concurrent.currency == normalized_currency
-                ):
-                    return concurrent
+            if concurrent is not None and (
+                concurrent.purpose == PaymentIntentPurpose.WALLET_TOPUP
+                and concurrent.user_id == user_id
+                and concurrent.provider == normalized_provider
+                and concurrent.payment_method_id == payment_method_id
+                and concurrent.amount == normalized_amount
+                and concurrent.currency == normalized_currency
+            ):
+                return concurrent
             raise PaymentIntegrityError(
                 f"Concurrent wallet top-up idempotency conflict for key {idempotency_key}."
             ) from exc
@@ -363,24 +456,32 @@ class PaymentService:
             provider_name=normalized_provider,
             secret_storage=self.secret_storage,
         )
-        provider_result = await provider.create_payment(
-            PaymentCreateRequest(
-                order_id=None,
-                amount=normalized_amount,
-                currency=normalized_currency,
-                idempotency_key=idempotency_key,
-                metadata={
-                    **effective_metadata,
-                    "purpose": PaymentIntentPurpose.WALLET_TOPUP.value,
-                    "payment_intent_id": str(intent.id),
-                    "tenant_id": str(tenant_id),
-                    "user_id": str(user_id),
-                },
-                return_url=return_url,
-            )
+        create_request = PaymentCreateRequest(
+            order_id=None,
+            amount=normalized_amount,
+            currency=normalized_currency,
+            idempotency_key=idempotency_key,
+            metadata={
+                **effective_metadata,
+                "purpose": PaymentIntentPurpose.WALLET_TOPUP.value,
+                "payment_intent_id": str(intent.id),
+                "tenant_id": str(tenant_id),
+                "user_id": str(user_id),
+                **({"_provider_context": dict(provider_context)} if provider_context else {}),
+            },
+            return_url=return_url,
         )
+        try:
+            provider_result = await provider.create_payment(create_request)
+        except (TimeoutError, PaymentProviderTransportError):
+            self._mark_provider_creation_ambiguous(intent)
+            await session.flush()
+            return intent
         intent.provider_payment_id = provider_result.provider_payment_id
         intent.checkout_url = self._validated_checkout_url(provider_result.checkout_url)
+        self._store_provider_verification_attributes(
+            intent, provider_result.verification_attributes
+        )
         if provider_result.raw_data:
             intent.metadata_json = {**(intent.metadata_json or {}), "provider_create": provider_result.raw_data}
         if provider_result.status == PaymentIntentStatus.SUCCEEDED:
@@ -843,7 +944,7 @@ class PaymentService:
             raise PaymentIntegrityError("External reversal target lacks its authoritative settlement ledger entry.")
 
         digest = hashlib.sha256(
-            f"{tenant_id}:{intent.provider}:{intent.provider_payment_id}:external-reversal".encode("utf-8")
+            f"{tenant_id}:{intent.provider}:{intent.provider_payment_id}:external-reversal".encode()
         ).hexdigest()
         reversal = WalletTopUpReversal(
             tenant_id=tenant_id,
@@ -1257,6 +1358,9 @@ class PaymentService:
 
         # Step 5: Process intent state & settlement
         if intent is not None:
+            self.assert_provider_verification_attributes(
+                intent, verification.verification_attributes
+            )
             # Verify amount and currency integrity if supplied by webhook
             if verification.amount is not None and verification.amount != intent.amount:
                 raise PaymentIntegrityError(

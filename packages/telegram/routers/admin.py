@@ -5,10 +5,12 @@ import html
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.core.config import settings
+from packages.telegram.admin_login import AdminLoginError, AdminLoginService
 from packages.telegram.context import TenantContext
 from packages.telegram.launch import build_admin_url, resolve_tenant_public_url
 from packages.tenants.models import Membership, Role
@@ -57,6 +59,9 @@ async def handle_admin_command(
     tenant_context: TenantContext,
     db_session: AsyncSession,
 ) -> None:
+    if message.chat.type != "private":
+        await message.answer("Send /admin in a private chat with this bot to sign in.")
+        return
     membership = await _membership(db_session, tenant_context)
     if membership is None or membership.role not in _PRIVILEGED_ROLES:
         await message.answer("Admin access is not enabled for your tenant membership.")
@@ -66,22 +71,30 @@ async def handle_admin_command(
         kind="admin",
         fallback=settings.admin_public_url,
     )
-    if not public_url:
-        await message.answer("Admin Web App is not configured. Add a public HTTPS URL in setup or platform settings.")
-        return
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="⚙️ Open Admin",
-                    web_app=WebAppInfo(url=build_admin_url(public_url, tenant_context.bot_id)),
-                )
-            ]
-        ]
-    )
+    keyboard = None
+    if public_url:
+        try:
+            launch_url = build_admin_url(public_url, tenant_context.bot_id)
+        except ValueError:
+            launch_url = None
+        if launch_url:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="Open Admin", web_app=WebAppInfo(url=launch_url))
+            ]])
+    try:
+        code = await AdminLoginService().issue(
+            db_session, tenant_id=tenant_context.tenant_id,
+            user_id=membership.user_id, bot_id=tenant_context.bot_id,
+        )
+        instructions = (
+            "\n\nFor browser access, open your installation's Admin page "
+            "(on this laptop: http://127.0.0.1:8010/admin/) and paste this code:\n"
+            f"<code>{code}</code>\nValid for 5 minutes and one sign-in. Do not share it."
+        )
+    except (RedisError, AdminLoginError):
+        instructions = "\n\nBrowser sign-in is temporarily unavailable. Try /admin again shortly."
     await message.answer(
-        f"⚙️ <b>{html.escape(tenant_context.display_name)}</b> administration",
+        f"<b>{html.escape(tenant_context.display_name)}</b> administration{instructions}",
         reply_markup=keyboard,
         parse_mode="HTML",
     )

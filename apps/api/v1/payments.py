@@ -27,6 +27,7 @@ from packages.payments.models import (
     PaymentReconciliationEvent,
     WalletTopUpReversal,
 )
+from packages.payments.operations import PaymentOperationsService
 from packages.payments.payment_service import PaymentService
 from packages.payments.reconciliation import PaymentReconciliationService
 
@@ -121,6 +122,32 @@ class TopUpReversalResponse(BaseModel):
 
 
 
+class PaymentOperationsAlertResponse(BaseModel):
+    code: str
+    severity: str
+    count: int
+    message: str
+
+
+class PaymentOperationsHealthResponse(BaseModel):
+    tenant_id: uuid.UUID
+    generated_at: datetime
+    stale_after_seconds: int
+    status: str
+    open_intents: int
+    pending_intents: int
+    processing_intents: int
+    unknown_intents: int
+    stale_provider_intents: int
+    creation_ambiguities: int
+    manual_review_observations: int
+    reversal_reconciliation_items: int
+    open_financial_cases: int
+    enabled_provider_configs: int
+    enabled_payment_methods: int
+    alerts: list[PaymentOperationsAlertResponse]
+
+
 class ReconciliationEventResponse(BaseModel):
     id: uuid.UUID
     provider: str
@@ -160,6 +187,44 @@ def get_reconciliation_service(
     payment_service: PaymentService = Depends(get_payment_service),
 ) -> PaymentReconciliationService:
     return PaymentReconciliationService(payment_service=payment_service)
+
+
+@router.get("/operations/health", response_model=PaymentOperationsHealthResponse)
+async def get_payment_operations_health(
+    principal: AuthenticatedPrincipal = Depends(require_staff_or_above),
+    session: AsyncSession = Depends(get_db_session),
+) -> PaymentOperationsHealthResponse:
+    """Read-only financial operations health; never settles, credits, or refunds funds."""
+    snapshot = await PaymentOperationsService().snapshot(
+        session,
+        tenant_id=principal.tenant_id,
+    )
+    return PaymentOperationsHealthResponse(
+        tenant_id=snapshot.tenant_id,
+        generated_at=snapshot.generated_at,
+        stale_after_seconds=snapshot.stale_after_seconds,
+        status=snapshot.status,
+        open_intents=snapshot.open_intents,
+        pending_intents=snapshot.pending_intents,
+        processing_intents=snapshot.processing_intents,
+        unknown_intents=snapshot.unknown_intents,
+        stale_provider_intents=snapshot.stale_provider_intents,
+        creation_ambiguities=snapshot.creation_ambiguities,
+        manual_review_observations=snapshot.manual_review_observations,
+        reversal_reconciliation_items=snapshot.reversal_reconciliation_items,
+        open_financial_cases=snapshot.open_financial_cases,
+        enabled_provider_configs=snapshot.enabled_provider_configs,
+        enabled_payment_methods=snapshot.enabled_payment_methods,
+        alerts=[
+            PaymentOperationsAlertResponse(
+                code=alert.code,
+                severity=alert.severity,
+                count=alert.count,
+                message=alert.message,
+            )
+            for alert in snapshot.alerts
+        ],
+    )
 
 
 @router.post("/intents", response_model=PaymentIntentResponse, status_code=status.HTTP_201_CREATED)

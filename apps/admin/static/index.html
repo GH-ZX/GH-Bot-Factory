@@ -9,12 +9,28 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <div id="fatal" class="fatal hidden"></div>
+  <section id="login" class="login-card panel hidden" aria-labelledby="loginTitle">
+    <span class="brand-mark" aria-hidden="true">GH</span>
+    <p class="eyebrow">GH BOT FACTORY</p>
+    <h1 id="loginTitle">Sign in to Admin</h1>
+    <p class="muted">Send <strong>/admin</strong> in a private chat with your store bot, then paste the browser sign-in code below. Your account needs a staff, manager, admin, or owner role.</p>
+    <form id="loginForm">
+      <label for="loginCode">One-time sign-in code</label>
+      <input id="loginCode" name="code" type="password" autocomplete="one-time-code" required minlength="32" maxlength="32" spellcheck="false" autocapitalize="none" aria-describedby="loginHint loginError">
+      <p id="loginHint" class="muted">The code expires after 5 minutes. Refreshing this page signs you out.</p>
+      <p id="loginError" class="danger-text" role="alert"></p>
+      <button id="loginSubmit" class="primary" type="submit">Sign in</button>
+    </form>
+    <p class="muted">First time here? <a href="/setup/">Set up this installation</a>.</p>
+    <p class="muted">You can also use the Open Admin button inside Telegram when your public HTTPS address is configured.</p>
+  </section>
+  <div id="fatal" class="fatal hidden" role="alert"></div>
   <div id="app" class="shell hidden">
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">GH</span><div><strong id="storeName">Admin</strong><small id="actorRole">Secure console</small></div></div>
       <nav>
         <button class="nav active" data-view="dashboard">Overview</button>
+        <button class="nav" data-view="plan">Plan</button>
         <button class="nav" data-view="bots">Bots</button>
         <button class="nav" data-view="analytics">Analytics</button>
         <button class="nav" data-view="products">Products</button>
@@ -26,7 +42,7 @@
         <button class="nav" data-view="audit">Audit</button>
         <button class="nav" data-view="reconciliation">Evidence</button>
       </nav>
-      <div class="sidebar-foot"><span id="actorName">Telegram staff</span><small>Tenant-scoped access</small></div>
+      <div class="sidebar-foot"><span id="actorName">Telegram staff</span><small>Tenant-scoped access</small><button id="signOut" class="ghost" type="button">Sign out</button></div>
     </aside>
     <main>
       <header><div><small class="eyebrow">OPERATIONS</small><h1 id="viewTitle">Overview</h1></div><button id="refreshButton" class="ghost">Refresh</button></header>
@@ -34,6 +50,14 @@
       <section id="view-dashboard" class="view active">
         <div id="metricGrid" class="metric-grid"></div>
         <div class="panel"><div class="panel-head"><div><small class="eyebrow">SECURITY BOUNDARY</small><h2>Tenant operations</h2></div></div><p class="muted">All data and mutations are resolved from the authenticated principal. The client never submits a tenant ID.</p></div>
+      </section>
+
+      <section id="view-plan" class="view">
+        <div class="panel operation-note"><strong>SaaS entitlement boundary.</strong><span class="muted"> Bot capacity is enforced server-side from the tenant subscription plan. Existing self-hosted tenants keep their configured local defaults until a subscription is assigned.</span></div>
+        <div class="panel-head"><div><small class="eyebrow">SUBSCRIPTION</small><h2 id="saasPlanName">Plan</h2></div><div id="saasPlanStatus"></div></div>
+        <div id="saasUsageGrid" class="metric-grid"></div>
+        <div class="panel"><div class="panel-head"><div><small class="eyebrow">BILLING</small><h2>Subscription management</h2></div><div id="billingProviderStatus"></div></div><p id="billingPolicy" class="muted"></p><div class="ops-actions"><button id="billingPortal" class="primary hidden" data-admin-only>Manage billing</button></div><div id="billingCatalog" class="stack compact-stack"></div></div>
+        <div class="panel"><div class="panel-head"><div><small class="eyebrow">ENTITLEMENTS</small><h2>Feature flags</h2></div></div><div id="saasFeatureList" class="stack compact-stack"></div></div>
       </section>
 
       <section id="view-bots" class="view">
@@ -91,6 +115,7 @@
       </section>
 
       <section id="view-finance" class="view">
+        <div id="paymentOperationsHealth" class="panel operation-note"><strong>Payment operations.</strong><span class="muted"> Loading provider reconciliation health…</span></div>
         <div class="toolbar"><input id="financeSearch" placeholder="Search case type or resolution"><select id="financeStatus"><option value="">Open + resolved</option><option value="OPEN" selected>Open</option><option value="IN_PROGRESS">In progress</option><option value="RESOLVED">Resolved</option></select><select id="financeSeverity"><option value="">All severities</option><option value="CRITICAL">Critical</option><option value="HIGH">High</option></select><select id="financeAssigned"><option value="">Any assignee</option><option value="mine">Assigned to me</option><option value="unassigned">Unassigned</option></select></div>
         <div class="panel operation-note"><strong>Financial safety boundary.</strong><span class="muted"> Provider evidence and ledger entries are never deleted. Case actions are version-checked, tenant-scoped, and audited. Wallet reactivation after a false positive is OWNER-only.</span></div>
         <div id="financialCaseList" class="stack operation-stack"></div>
@@ -114,7 +139,7 @@
     <form id="botProvisionForm" method="dialog">
       <div class="dialog-head"><div><small class="eyebrow">BOT FACTORY</small><h2 id="botWizardTitle">Create a bot</h2></div><button type="button" class="icon" data-close-bot>×</button></div>
       <input id="botWizardBotId" type="hidden">
-      <div class="wizard-steps" aria-label="Provisioning steps"><span data-step-dot="1">1 · Template</span><span data-step-dot="2">2 · Telegram</span><span data-step-dot="3">3 · Brand</span></div>
+      <div class="wizard-steps" aria-label="Provisioning steps"><span data-step-dot="1">1 · Template</span><span data-step-dot="2">2 · Telegram</span><span data-step-dot="3">3 · Brand</span><span data-step-dot="4">4 · Business</span><span data-step-dot="5">5 · Review</span></div>
 
       <section class="wizard-step" data-wizard-step="1">
         <label>Store template<select id="botTemplate" required></select></label>
@@ -142,6 +167,20 @@
         <fieldset class="module-picker"><legend>Enabled modules</legend><label class="check"><input id="botModuleCatalog" type="checkbox" checked> Catalog</label><label class="check"><input id="botModuleOrders" type="checkbox" checked> Orders</label><label class="check"><input id="botModuleAccount" type="checkbox" checked> Wallet & account</label></fieldset>
         <label class="check"><input id="botEnabled" type="checkbox" checked> Runtime enabled after verification</label>
         <div id="botBrandPreview" class="brand-preview"><div id="botBrandPreviewMark" class="brand-preview-mark">G</div><div><strong id="botBrandPreviewName">My Store</strong><span id="botBrandPreviewTagline">Your storefront preview</span></div></div>
+      </section>
+
+      <section class="wizard-step hidden" data-wizard-step="4">
+        <div class="panel operation-note"><strong>Business profile.</strong><span class="muted"> These choices are enforced by the server for this bot. Empty provider/payment selections mean use all compatible enabled tenant options.</span></div>
+        <div class="grid2"><label>Routing strategy<select id="botRoutingStrategy"></select></label><label>Default pricing tier<select id="botPricingTier"><option value="">Tenant default</option></select></label></div>
+        <label id="botPreferredProviderWrap" class="hidden">Preferred provider<select id="botPreferredProvider"><option value="">Select provider</option></select></label>
+        <fieldset><legend>Allowed providers</legend><div id="botProviderChoices" class="choice-grid"></div></fieldset>
+        <fieldset><legend>Allowed payment methods</legend><div id="botPaymentChoices" class="choice-grid"></div></fieldset>
+        <label class="check"><input id="botAllowAutoCredit" type="checkbox"> Allow flexible-deposit auto-credit when the selected payment method also enables it</label>
+      </section>
+
+      <section class="wizard-step hidden" data-wizard-step="5">
+        <div id="botWizardReview" class="stack"></div>
+        <div class="panel operation-note"><strong>Server-authoritative.</strong><span class="muted"> Provider/payment ownership, business-category compatibility, pricing tier ownership, and routing constraints are validated again by the API before provisioning or saving.</span></div>
       </section>
 
       <div class="dialog-actions wizard-actions"><button id="botWizardBack" type="button" class="ghost hidden">Back</button><div class="wizard-spacer"></div><button type="button" class="ghost" data-close-bot>Cancel</button><button id="botWizardNext" class="primary" type="button">Next</button><button id="botWizardSubmit" class="primary hidden" type="submit">Queue provisioning</button></div>
@@ -186,10 +225,11 @@
     <form id="supplierForm" method="dialog">
       <div class="dialog-head"><div><small class="eyebrow">SUPPLIER</small><h2>New fulfillment provider</h2></div><button type="button" class="icon" data-close-supplier>×</button></div>
       <div class="grid2"><label>Name<input id="supplierName" required maxlength="100"></label><label>Slug<input id="supplierSlug" required maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*"></label></div>
-      <div class="grid2"><label>Adapter<select id="supplierType"></select></label><label>Priority<input id="supplierPriority" type="number" min="1" max="1000" value="1"></label></div>
+      <div class="grid3"><label>Adapter<select id="supplierType"></select></label><label>Category<select id="supplierCategory"></select></label><label>Priority<input id="supplierPriority" type="number" min="1" max="1000" value="1"></label></div>
       <label>Safe metadata JSON<textarea id="supplierMetadata" rows="4">{}</textarea></label>
-      <h3>Optional credential reference</h3>
-      <div class="grid2"><label>Credential type<input id="supplierCredentialType" placeholder="API_KEY"></label><label>Environment secret ref<input id="supplierCredentialRef" placeholder="ENV_VENDOR_API_KEY"></label></div>
+      <h3>Optional credential</h3>
+      <div class="grid3"><label>Credential type<input id="supplierCredentialType" placeholder="API_KEY"></label><label>Store encrypted value<input id="supplierCredentialValue" type="password" autocomplete="new-password" placeholder="API secret"></label><label>Or environment secret ref<input id="supplierCredentialRef" placeholder="ENV_VENDOR_API_KEY"></label></div>
+      <p class="muted">Use either an encrypted value or an environment reference, never both. Secret values are written to the local encrypted vault and are never returned by the API.</p>
       <div class="dialog-actions"><button type="button" class="ghost" data-close-supplier>Cancel</button><button class="primary" type="submit">Create provider</button></div>
     </form>
   </dialog>
@@ -199,8 +239,9 @@
       <div class="dialog-head"><div><small class="eyebrow">PAYMENTS</small><h2>Configure payment provider</h2></div><button type="button" class="icon" data-close-payment-provider>×</button></div>
       <label>Adapter<select id="paymentProviderName"></select></label>
       <label class="check"><input id="paymentProviderEnabled" type="checkbox" checked> Enabled</label>
-      <div class="grid2"><label>Credential secret ref<input id="paymentCredentialRef" placeholder="ENV_PAYMENT_API_KEY"></label><label>Webhook secret ref<input id="paymentWebhookRef" placeholder="ENV_PAYMENT_WEBHOOK_SECRET"></label></div>
-      <p class="muted">Leave secret-reference fields blank when editing to preserve the existing references.</p>
+      <div class="grid2"><label>Store encrypted credential value<input id="paymentCredentialValue" type="password" autocomplete="new-password" placeholder="API credential or structured JSON"></label><label>Or credential secret ref<input id="paymentCredentialRef" placeholder="ENV_PAYMENT_API_KEY"></label></div>
+      <div class="grid2"><label>Store encrypted webhook secret<input id="paymentWebhookValue" type="password" autocomplete="new-password" placeholder="Webhook/IPN secret"></label><label>Or webhook secret ref<input id="paymentWebhookRef" placeholder="ENV_PAYMENT_WEBHOOK_SECRET"></label></div>
+      <p class="muted">Use either a write-only encrypted value or an environment secret reference for each secret. Leave both blank when editing to preserve the existing credential. Triple-A uses one structured credential JSON containing client_id, client_secret and merchant_key.</p>
       <label>Safe settings JSON<textarea id="paymentProviderSettings" rows="10">{"display_name":"Gateway","topup_enabled":true,"topup_min_amount":"5.00","topup_max_amount":"500.00","topup_currencies":["USD"]}</textarea></label>
       <div class="dialog-actions"><button type="button" class="ghost" data-close-payment-provider>Cancel</button><button class="primary" type="submit">Save configuration</button></div>
     </form>

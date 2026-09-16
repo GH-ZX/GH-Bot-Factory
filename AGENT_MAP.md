@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
-> **Single Source of Truth for Autonomous Coding Agents**  
-> *Last Updated: 2026-09-15 (Phase 8.7 Bot Factory Release Candidate)*
+> **Single Source of Truth for Autonomous Coding Agents**
+> *Last Updated: 2026-09-16 (Repair baseline / new Phase 13 work on hold)*
 
 ---
 
@@ -14,8 +14,9 @@ Every AI coding agent working in this repository is strictly bound by these immu
 - Never output answers or reports in Arabic or other languages unless explicitly requested by the user.
 
 ### Law 2: Strict Multi-Tenant Data Scoping
-- Every business entity (`Order`, `Product`, `Wallet`, `Bot`, `Provider`, `FulfillmentAttempt`, `FulfillmentJobRecord`) **MUST** belong to a `Tenant` (`tenant_id`).
-- All queries, filters, and mutations **MUST** be explicitly filtered by `tenant_id`.
+- Every tenant-owned business/operational entity (`Order`, `Product`, `Wallet`, `Bot`, `Provider`, `FulfillmentAttempt`, `FulfillmentJobRecord`, `TenantSubscription`) **MUST** belong to a `Tenant` (`tenant_id`).
+- All tenant-owned queries, filters, and mutations **MUST** be explicitly filtered by `tenant_id`.
+- Explicit platform-control-plane catalog entities such as `SaaSPlan` may be global only when their global ownership is documented by an ADR and they carry no tenant-owned operational/customer data. Tenant authority must never be sufficient to mutate those global records.
 - Tenant A must never be able to view, query, or mutate Tenant B's data under any circumstance.
 - Telegram identities are NOT global. A user visiting Store A and Store B has separate tenant-scoped profiles (`TenantTelegramUser`).
 
@@ -23,6 +24,10 @@ Every AI coding agent working in this repository is strictly bound by these immu
 - **NEVER** commit `.env` files, plaintext API keys, Telegram bot tokens, supplier credentials, or database passwords to Git.
 - Bot tokens and provider credentials must be referenced via abstract secret keys (e.g. `token_secret_ref`, `credential_secret_ref`) and resolved at runtime via the `SecretStorage` abstraction.
 - Admin/provider APIs must never return resolved secrets or secret references. Supplier execution **and reconciliation** must resolve credentials only at the runtime adapter boundary. Provider-controlled endpoint settings that could redirect credential-bearing requests must be rejected or strictly allowlisted.
+- Phase 10 provider integrations are vendor-neutral. Adapter manifests declare canonical categories/capabilities, and commerce/domain code must not branch on vendor names. Write-only supplier credential values may be moved directly into `SecretStorage`, but SQL/read APIs still expose only configured status/type and never the value or reference.
+- Generic HTTP/OpenAPI provider integrations are constrained declarative mappings, never arbitrary executable code. Redirects/private targets/unbounded responses fail closed, production hosts require operator allowlisting, and persistable raw payloads are credential-redacted.
+- Cross-provider failover is permitted only for explicitly pre-order-safe failures. Timeout/transport ambiguity after possible upstream acceptance must remain `UNKNOWN`/reconciliation rather than purchasing from another provider.
+- Provider offer snapshots are observations rather than catalog authority; cheapest routing never compares mixed currencies without explicit FX normalization. Only canonical upstream `COMPLETED` may mark fulfillment complete.
 - Never log raw exception traces or credentials in user-facing notifications or public API responses.
 - JWT signing must never use a repository-known fallback key. `JWT_SECRET_KEY` is mandatory for runtime token signing and must be at least 32 bytes; `SECRET_KEY` is not an accepted JWT fallback.
 
@@ -119,6 +124,28 @@ Every AI coding agent working in this repository is strictly bound by these immu
 - Telegram Mini App authentication signs the verified internal `bot_id` into the access token. Per-bot storefront branding must derive from this signed claim, never from an authoritative browser-supplied bot ID.
 - Post-provision template/branding mutations preserve the credential reference, require ADMIN/OWNER, and must be AuditLog-backed.
 
+### Law 16: Platform Control Plane Separation
+- Tenant OWNER/ADMIN authority is never platform authority. `/api/v1/platform/*` requires the independent installation-level platform credential.
+- Platform plan/subscription/billing mutations must emit `PlatformAuditLog` evidence and must never persist platform tokens, provider secrets, or raw secret-bearing webhook payloads.
+- Billing event idempotency is authoritative on `(provider, external_event_id)` plus normalized-payload fingerprint. Reuse with different content fails closed.
+- Retiring a plan prevents new assignment but must not unexpectedly revoke existing subscribers.
+
+### Law 17: Portable Self-Hosted State
+- PostgreSQL plus the encrypted local secret vault are the portable durable state contract for laptop/VPS moves.
+- Redis is rebuildable coordination/observation state and is not a portable source of truth.
+- Portable bundles must exclude `.env`; destination database/JWT/platform credentials and public URLs are destination-owned.
+- Because the bundle contains the vault master key, encrypted export is preferred and plaintext requires explicit operator acknowledgement.
+
+### Law 18: Payment Evidence, Provider Ambiguity & Experimental Gateway Safety
+- External payment providers, webhooks, browser return URLs, screenshots, and blockchain observations never mutate wallet balances directly. All successful paths converge through `PaymentService` and database-enforced settlement idempotency.
+- Provider amount/currency/identity evidence must match the stored `PaymentIntent`; mismatch or unsupported state fails closed to `UNKNOWN`/manual resolution.
+- A timeout after upstream payment creation is ambiguous. Blind create retries are forbidden unless a provider-specific documented recovery/idempotency contract makes the retry provably safe.
+- Pull reconciliation is a first-class payment convergence path so laptop/self-hosted operation does not depend on permanent public ingress.
+- Built-in chain verifiers use installation-owned RPC/token/network configuration; tenants may not redirect verification to arbitrary endpoints or token contracts.
+- Provider institutional trust and technical integration quality are separate. Experimental gateways must be labeled and explicitly acknowledged by the operator before enablement.
+- Flexible/open-amount stablecoin deposits must not auto-credit a fiat wallet until explicit multi-asset/FX/parity semantics define the credited asset, quote, rounding, expiry, and depeg behavior.
+- Provider refund/reversal APIs remain fail-closed unless their current authoritative contract, authentication, and retry/idempotency semantics are implemented and tested.
+
 ---
 
 ## 2. Architecture & Codebase Map
@@ -148,7 +175,7 @@ GH-Bot-Factory Root
 ├── tests/                    # Fast async suite plus tests/postgres production-engine concurrency invariants
 ├── docs/
 │   ├── architecture/         # System architecture deep-dives & sequence diagrams
-│   ├── decisions/            # Architecture Decision Records (ADR-001 through ADR-017)
+│   ├── decisions/            # Architecture Decision Records (ADR-001 through ADR-026)
 │   └── prompts/              # Complete historical archive of all user prompts and instructions
 └── .agents/
     └── skills/               # Antigravity agent skills repository
@@ -160,16 +187,17 @@ GH-Bot-Factory Root
 | `packages.core` | `Base`, `UUIDMixin`, `TimestampMixin`, `AuthenticatedPrincipal`, `AuthTokenService`, `AuthSource` | Foundation DB base, async engine, cryptographic JWT access tokens, principal abstraction |
 | `packages.tenants` | `Tenant`, `User` (with `token_version`), `Membership`, `Role` | Tenant scoping, customer authentication, RBAC, instant session revocation |
 | `packages.commerce` | `Order`, `OrderItem`, `Product`, `ProductVariant`, `OrderStateMachine`, `CheckoutService` | Catalog, legal state transitions, cart checkout |
-| `packages.payments` | `PaymentIntent`, `PaymentIntentPurpose`, `PaymentTransaction`, `PaymentProviderConfig`, `PaymentWebhookEvent`, `PaymentService`, `PaymentProviderRegistry`, `PaymentReconciliationService`, `Wallet`, `LedgerTransaction`, `LedgerService` | Provider-agnostic order payments and wallet top-ups, durable PaymentIntents, webhook security, settlement idempotency, double-entry wallet ledger |
+| `packages.payments` | `PaymentIntent`, `PaymentMethodConfig`, `PaymentObservation`, `PaymentProviderConfig`, `PaymentWebhookEvent`, `PaymentService`, `PaymentProviderRegistry`, `PaymentReconciliationService`, `PaymentProviderReconciliationWorker`, `Wallet`, `LedgerTransaction`, `LedgerService` | Provider-agnostic payments, immutable evidence, manual/on-chain/provider verification, webhook + polling convergence, settlement idempotency, and wallet ledger |
 | `packages.telegram` | `Bot`, `TenantTelegramUser`, `TelegramMiniAppAuthService`, `BotRuntimeManager`, `TenantResolutionMiddleware` | Multi-bot runtime, secret storage, tenant resolution, FSM isolation, TMA initData HMAC auth, privileged `/admin` Web App entry |
-| `packages.providers` | `Provider`, `ProviderCredential`, `ProviderProductMapping`, `ProviderRouter`, `MockProvider` | Supplier protocol, failover routing, credential safety |
+| `packages.providers` | `Provider`, `ProviderCategory`, `ProviderCredential`, `ProviderProductMapping`, `ProviderDefinition`, `ProviderRouter`, `MockProvider` | Capability-driven supplier platform, failover routing, encrypted credential boundary, health evidence |
 | `packages.fulfillment` | `FulfillmentAttempt`, `FulfillmentJobRecord`, `FulfillmentService`, `FulfillmentWorker`, `ReconciliationService` | Durable execution, DB polling/atomic claim, retry backoff, crash recovery, out-of-band reconciliation |
 | `packages.notifications`| `NotificationService`, `NotificationPayload`, `MockNotificationTransport` | Asynchronous post-checkout customer alerting |
 | `packages.analytics` | `AdminAnalyticsService` | Read-only, tenant-scoped, currency-safe operational analytics over authoritative domain tables |
+| `packages.saas` | `SaaSPlan`, `TenantSubscription`, `BillingEvent`, `PlatformAuditLog`, entitlement/control-plane services | Platform-owned plan catalog, tenant subscription state, durable billing convergence, global audit evidence, and fail-closed entitlement resolution |
 | `apps.api.deps` | `get_current_principal`, `require_roles`, `require_staff_or_above` | Bearer JWT verification, session revocation check, tenant membership and role enforcement |
-| `apps.api.v1` | `payments_router`, `auth_router`, `storefront_router`, `admin_router`, `admin_analytics_router` | Multi-client REST endpoints: Bearer JWT issuance, customer-isolated payments, webhook verification, tenant-scoped storefront, operations, analytics, and audit |
+| `apps.api.v1` | tenant/customer routers plus `platform_router` | Multi-client REST endpoints plus an installation-level platform control plane that is independent of tenant RBAC |
 | `apps.miniapp` | Static HTML/CSS/JS storefront | Telegram WebView presentation layer; in-memory Bearer session, catalog/cart/orders UX, no authoritative prices or identity |
-| `apps.admin` | Static HTML/CSS/JS operator console | Telegram-authenticated tenant operations UI; RBAC-aware operations plus guided Bot Factory template/branding provisioning |
+| `apps.admin` | Static HTML/CSS/JS operator console | Telegram-authenticated tenant operations UI; RBAC-aware Bot Factory operations plus read-only SaaS plan, entitlement, and usage visibility |
 | `apps.worker` | `run_worker`, `FulfillmentWorker` | Dedicated process for recovery, DB polling, atomic job claim, supplier execution, retry/dead-letter handling |
 
 ---
@@ -178,7 +206,7 @@ GH-Bot-Factory Root
 
 ### Playbook A: Adding Database Models & Migrations
 1. Define the model in the appropriate `packages/<domain>/models.py` inheriting from `Base, UUIDMixin, TimestampMixin`.
-2. Ensure every model includes `tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)`.
+2. Ensure every tenant-owned model includes `tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)`. A platform-global control-plane model is allowed only when explicitly documented by an ADR and must not contain tenant-owned customer/operational data.
 3. Import the new model in `packages/core/models.py` so Alembic detects it.
 4. **SQLite Batch Mode Rule:** Because SQLite does not support standard `ALTER TABLE`, all migrations must use batch operations:
    ```python
@@ -585,3 +613,185 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 - Fast runnable regression excluding PostgreSQL and the two direct-Aiogram modules: **198/198 passed**.
 - SQLite upgrade to `b2c3d4e5f6a7` and `alembic check`: passed with no drift.
 - Canonical PostgreSQL, Ruff, direct-Aiogram, Docker/staging, restore drill, and full release-gate evidence remain external requirements before production cutover.
+
+
+## Milestone 31: Phase 9.0 — SaaS Plans & Entitlements Foundation
+
+- **Date:** 2026-09-15
+- **Status:** Implemented locally; canonical PostgreSQL/Ruff/Aiogram/Docker release gates remain external
+
+### Implementation
+
+1. Added platform-owned `SaaSPlan` definitions and exactly-one-per-tenant `TenantSubscription` state with provider-neutral billing references.
+2. Added fail-closed entitlement resolution with explicit self-hosted fallback when a tenant has no subscription.
+3. Made Bot Factory total/enabled/open-provisioning limits plan-authoritative whenever a subscription exists.
+4. Added tenant usage resolution plus a STAFF+ read-only SaaS overview endpoint and Admin **Plan** view.
+5. Kept plan assignment/mutation outside tenant authority so Phase 9.1 can introduce a dedicated platform billing/control-plane boundary.
+6. Added migration `c3d4e5f6a7b8`, ADR-024, SaaS entitlement architecture documentation, and focused regression coverage.
+
+### Verification
+
+- Phase 9 focused suite: **8/8 passed**.
+- Combined Phase 8 + Phase 9 focused suites: **24/24 passed**.
+- Fast runnable regression excluding PostgreSQL and the two direct-Aiogram modules: **206/206 passed**.
+- SQLite upgrade -> `alembic check` -> downgrade -> upgrade through `c3d4e5f6a7b8`: passed with no drift.
+- Canonical PostgreSQL, Ruff, direct-Aiogram, Docker/staging, restore drill, and full release-gate evidence remain external requirements.
+
+
+## Milestone 32: Phase 9.1 — Platform Control Plane & Portable Hosting
+
+- **Date:** 2026-09-15
+- **Status:** Implemented locally; canonical PostgreSQL/Ruff/Aiogram/Docker release gates remain external
+
+### Implementation
+
+1. Added installation-level `PLATFORM_ADMIN_TOKEN` authentication for `/api/v1/platform/*`, independent of tenant Bearer JWT/RBAC.
+2. Added plan create/update/retire, tenant subscription assignment/clear, overview/listing, global audit, and localhost-first `scripts/platformctl.py`.
+3. Added `BillingEvent` durable idempotency/fingerprint convergence boundary and `PlatformAuditLog`; raw provider payloads/secrets are not persisted.
+4. Defined retired-plan semantics: no new assignments, while existing subscribers continue until explicitly migrated/cleared.
+5. Added quiesced portable export/import of PostgreSQL plus encrypted local secret vault for Laptop -> VPS moves. Redis and `.env` are deliberately excluded.
+6. Added migration `d4e5f6a7b8c9`, ADR-025, ADR-026, platform architecture guide, and laptop/VPS portability runbook.
+
+### Verification
+
+- Phase 9.0 + 9.1 focused suites: **15/15 passed**.
+- Fast runnable regression excluding PostgreSQL and the two direct-Aiogram modules: **213/213 passed** (8 PostgreSQL tests deselected).
+- SQLite upgrade -> `alembic check` -> downgrade -> upgrade through `d4e5f6a7b8c9`: passed with no drift.
+- `compileall` and portable shell syntax checks passed.
+- Canonical PostgreSQL, Ruff, direct-Aiogram, Docker portability drill, staging recovery, and full release-gate evidence remain external requirements.
+
+
+## Milestone 33: Phase 9.2 — Billing Provider Adapter & Customer Portal
+
+### Implementation
+
+1. Added provider-neutral billing adapter interfaces with Stripe as the first implementation and environment-only provider secrets.
+2. Added `SaaSPlanPrice` as a platform-global commercial catalog mapping plans to provider price IDs without coupling pricing to entitlement JSON.
+3. Added tenant checkout/customer-portal handoff; tenant/browser requests never write authoritative subscription status directly.
+4. Added signed Stripe webhook ingestion converging through the durable Phase 9.1 `BillingEvent` boundary.
+5. Added pull reconciliation through `platformctl billing-reconcile` so a laptop host can converge billing state without public webhook ingress.
+6. Added deterministic past-due grace persistence and kept commercial enforcement observe-only until Phase 9.3 feature gates.
+7. Added migration `e5f6a7b8c9d0`, ADR-027, billing architecture docs, and a local-first billing runbook.
+
+### Verification
+
+- Phase 9.0 + 9.1 + 9.2 focused suites: **20/20 passed**.
+- Dependency-limited runnable regression: **219/219 passed**, excluding PostgreSQL and the two direct-Aiogram modules.
+- SQLite upgrade -> `alembic check` -> downgrade -> upgrade through `e5f6a7b8c9d0`: passed with no drift.
+- Provider webhook replay/tamper coverage and no-public-ingress pull reconciliation coverage passed.
+- Canonical PostgreSQL/Ruff/Aiogram/Docker/staging/restore/release-gate evidence remains external.
+
+## Milestone 34: Phase 9.3 — Product Entitlements
+
+- **Date:** 2026-09-16
+- **Status:** Implemented locally; canonical external release evidence pending
+
+1. Added centralized commercial access policy and effective feature resolution.
+2. Enforced premium/growth capabilities server-side while preserving self-hosted behavior and safe contraction/security actions.
+3. Added ADR-028 and focused regression coverage. No schema migration required.
+
+## Milestone 35: Phase 9.4 — SaaS Operations
+
+- **Date:** 2026-09-16
+- **Status:** Implemented locally; canonical external release evidence pending
+
+1. Added periodic provider pull reconciliation to the worker for laptop-first billing convergence without public ingress.
+2. Added durable provider-sync evidence, SaaS health/alerts, and support-safe no-impersonation tenant entitlement inspection.
+3. Added local/SSH platform operations commands and migration `f6a7b8c9d0e1`.
+4. Added ADR-029.
+
+## Milestone 36: Phase 10.0 — Provider Platform Core
+
+- **Date:** 2026-09-16
+- **Status:** Implemented locally; canonical external release evidence pending
+
+1. Added canonical provider categories and adapter capability manifests while preserving the earlier provider/mapping schema contract.
+2. Added safe adapter discovery to Tenant Admin and category compatibility validation before runtime calls.
+3. Added write-only encrypted-vault provider credential entry with SQL reference-only persistence and environment-reference compatibility.
+4. Added durable provider connection health evidence and bounded provider connection/order timeouts.
+5. Added migration `a7b8c9d0e1f2`, ADR-030, and provider-platform architecture documentation.
+6. Runnable regression: **232/232 passed** excluding PostgreSQL-only and two direct-Aiogram modules; Phase 10.0 focused **5/5 passed**.
+7. SQLite upgrade/check/downgrade/re-upgrade through `a7b8c9d0e1f2`: passed.
+
+## Milestone 37: Phase 10.1–10.5 — Provider & Integration Platform Completion
+
+- **Date:** 2026-09-16
+- **Status:** Implemented locally; canonical external release evidence pending
+
+1. Added canonical supplier order states/delivery artifacts plus category-aware operations, including the full number/SMS activation contract and deterministic sandbox behavior.
+2. Added the constrained Generic HTTP/OpenAPI adapter with declarative mappings, dynamic capabilities/credentials, no redirects, bounded requests/responses, credential redaction, SSRF/DNS defenses, and production host allowlisting.
+3. Added tenant-scoped deterministic provider routing policies (`PRIORITY`, `LOWEST_COST`, `AVAILABILITY`, `HEALTHIEST`, `WEIGHTED`, `MANUAL`) with ambiguity-safe failover semantics.
+4. Added normalized `ProviderOfferSnapshot` observations with freshness/availability/cost handling and mixed-currency fail-closed cheapest routing.
+5. Integrated canonical asynchronous provider states into the existing durable fulfillment subsystem and added pull reconciliation for laptop-first operation without public webhooks.
+6. Preserved one-upstream-order-per-fulfillment-attempt safety: multi-item async execution requiring multiple correlations becomes `UNKNOWN` until a per-item saga is implemented.
+7. Added migrations `b8c9d0e1f2a3` and `c9d0e1f2a3b4`, ADR-031/032/033, and updated provider-platform architecture.
+8. Dependency-limited runnable regression: **253/253 passed** excluding PostgreSQL-only and the two direct-Aiogram modules.
+9. SQLite upgrade, `alembic check`, downgrade, and re-upgrade through `c9d0e1f2a3b4`: passed.
+
+## Milestone 38: Phase 10 Final Packaging Gate
+
+- **Date:** 2026-09-16
+- **Status:** Completed; Phase 10.5 snapshot/patch/checksums packaged before Phase 11 work
+
+1. Closed Phase 10 documentation/handoff consistency and packaged the Provider Integration Platform checkpoint.
+2. Runnable regression remained **253/253 passed** in the dependency-limited environment.
+3. SQLite migration/no-drift/downgrade/re-upgrade, compileall, JavaScript syntax, secret scan, staged patch `git diff --check`, and patch-apply integrity passed.
+
+## Milestone 39: Phase 11.0–11.5 — Payments Platform Completion
+
+- **Date:** 2026-09-16
+- **Status:** Implemented locally; canonical PostgreSQL/Ruff/Aiogram/Docker/staging/restore release evidence pending
+
+1. Added tenant payment methods, immutable payment observations, assurance metadata, and exactly-once wallet settlement over the existing ledger.
+2. Added manual payment/admin approval and installation-owned TRON USDt + generic EVM token verification with canonical transaction replay prevention.
+3. Added NOWPayments signed IPN + polling integration and Triple-A authenticated create/poll integration.
+4. Added Bybit Pay create/query, RSA webhook verification, and creation recovery; added Binance Pay create/query polling with unverified callback/refund surfaces fail-closed.
+5. Added generic provider reconciliation worker for laptop-first convergence, creation-ambiguity handling, payment operations health, and Financial Center visibility.
+6. Added GoZaPay as an explicitly experimental crypto gateway with idempotent invoice creation, HMAC-SHA256/timestamp webhook verification, polling, and delayed settlement until upstream `settled`. Flexible/open-amount auto-credit remains disabled until explicit multi-asset/FX semantics are implemented.
+7. Added migration `d0e1f2a3b4c5`, ADR-034/035, and `docs/architecture/payment-platform.md`.
+8. Payment/wallet/provider regression: **123/123 passed**. Runnable project regression excluding only the two direct-Aiogram modules unavailable here: **344/344 passed**.
+9. SQLite fresh upgrade, `alembic check`, downgrade to Phase 10.5, re-upgrade to `d0e1f2a3b4c5`, and second `alembic check`: passed.
+
+
+## Milestone 40: Phase 12.0–12.3 — Commerce Economics / Reseller Engine Completion
+
+- **Date:** 2026-09-16
+- **Status:** Implemented locally; canonical PostgreSQL/Ruff/Aiogram/Docker/staging/restore release evidence pending
+
+1. Added high-precision asset wallets and immutable asset-ledger transactions with explicit asset/network identity.
+2. Added explicit tenant FX/parity policies, wallet holds, and optional per-payment-method flexible-deposit auto-credit with creation-time policy snapshots.
+3. Added GoZaPay open-amount deposit sessions with polling convergence: exact asset auto-credit is supported, while fiat auto-credit requires a matching explicit FX policy and otherwise remains `SETTLED_REVIEW`.
+4. Added reseller/VIP pricing tiers and global/category/product/variant markup rules with minimum margin and rounding controls; checkout freezes one server-authoritative price quote.
+5. Added supplier-cost observations, actual upstream cost attribution, gross-profit records, and bot/provider/order-item economics.
+6. Added read-only supplier balance polling/low-balance evidence plus Admin economics surfaces. Balance monitoring never auto-disables providers or mutates routing.
+7. Corrected the canonical provider-mapping invariant throughout fulfillment/tests: `ProviderProductMapping.product_id` references `Product.id`, with `product_variant_id` as the optional refinement. Also hardened direct balance-monitor calls against async ORM lazy-loading.
+8. Added migration `e1f2a3b4c5d6`, ADR-036, and `docs/architecture/commerce-economics.md`.
+9. Phase 12 provider/commerce/economics focused regression: **33/33 passed**. Runnable project regression excluding only the two direct-Aiogram modules unavailable here: **355/355 passed**.
+10. SQLite fresh upgrade, `alembic check`, downgrade to Phase 11.5, re-upgrade to `e1f2a3b4c5d6`, and second no-drift check: passed.
+
+## Milestone 41: Phase 13 — Advanced Bot Factory / Core Roadmap Closure
+
+- Added vendor-neutral reseller/number/account/gift/digital/hybrid templates over the shared Provider/Payments/Economics core.
+- Added server-authoritative `_business` profiles and five-stage Admin wizard; tenant/provider/payment/tier references are validated before persistence and re-filtered at runtime.
+- Bot profiles now constrain storefront payment exposure, pricing tier, flexible auto-credit, provider categories/IDs, and fulfillment routing.
+- Legacy bots inherit existing product routing; malformed profiles fail closed.
+- Added operator doctor, daily Make commands, laptop/VPS operator runbook, release-qualification checklist, ADR-037, and advanced Bot Factory architecture docs.
+- No migration added; current head remains `e1f2a3b4c5d6`.
+- Core feature roadmap is complete; production status still depends on the canonical PostgreSQL/Docker/staging/restore release evidence.
+
+## Phase 13 Repair Review — 2026-09-16
+
+- User requested review of the latest update, current repairs, and next-update priorities; prompt preserved in `docs/prompts/prompt_history.md`.
+- Review and acceptance plan: [Repair Review](docs/operations/REPAIR_REVIEW_2026-09-16.md).
+- Full non-PostgreSQL suite: 371 passed, 8 deselected. Canonical verification fails at 197 Ruff findings; PostgreSQL and release evidence remain pending.
+- Prioritize payment restrictions across legacy routes, post-credit reversal observation, safe failed-import handling, strict bot-profile validation, and Mini App payment integration.
+- Review only: application repairs are outstanding. No new architecture, migration, commit, or push.
+
+## Repair baseline — Admin access & financial hardening (2026-09-16)
+
+- Latest user directive: fix Admin access and existing defects; **do not start new Phase 13 work** until explicitly requested. Imported Phase 13 code is retained but is not release acceptance.
+- New browser sign-in boundary: `packages/telegram/admin_login.py`, private `/admin` command, and `POST /api/v1/auth/admin-code`. Redis grants are ephemeral, single-use, five-minute credentials; PostgreSQL remains user/tenant/role authority.
+- New migration: `f2a3b4c5d6e7` aligns historical PostgreSQL JSON columns to the existing JSONB models. No migration against the live database was run during repair development.
+- [Repair patch notes and recommendations](docs/operations/REPAIR_PATCH_NOTES_2026-09-16.md) are the current acceptance checklist; [ADR-038](docs/decisions/ADR-038-repair-auth-and-financial-boundaries.md) records security/accounting decisions.
+- Canonical verification gate completed green on 2026-09-16 after resuming the interrupted session: Ruff clean, 396 fast + 13 PostgreSQL tests passed, alembic clean at `f2a3b4c5d6e7`, Playwright Admin/Mini App browser checks passed. Docker release-gate, staging, and restore evidence remain pending.
+- 2026-09-17: user requested Admin testing instructions and authorized commit/push, then requested continuation; prompts recorded in `docs/prompts/prompt_history.md`. Canonical verification rerun: 396 fast + 13 PostgreSQL tests passed; focused Admin authentication and mocked browser checks passed. Deployment remains operator-run under Law 4; live application containers were not changed.

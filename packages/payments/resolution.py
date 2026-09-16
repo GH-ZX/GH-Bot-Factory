@@ -1,13 +1,13 @@
 import enum
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from packages.core.exceptions import InsufficientFundsError, TenantAccessViolationError
+from packages.core.exceptions import TenantAccessViolationError
+from packages.payments.economics_models import AssetWallet
 from packages.payments.exceptions import PaymentError, PaymentIntegrityError
 from packages.payments.models import (
     FinancialResolutionCase,
@@ -303,8 +303,13 @@ class FinancialResolutionService:
         session: AsyncSession,
         case: FinancialResolutionCase,
     ) -> int:
-        if case.wallet_id is None:
+        asset_wallet_id = (case.metadata_json or {}).get("asset_wallet_id")
+        if case.wallet_id is None and not asset_wallet_id:
             return 0
+        wallet_filter = (
+            FinancialResolutionCase.wallet_id == case.wallet_id if case.wallet_id is not None
+            else FinancialResolutionCase.metadata_json["asset_wallet_id"].as_string() == asset_wallet_id
+        )
         return int(
             (
                 await session.scalar(
@@ -312,7 +317,7 @@ class FinancialResolutionService:
                     .select_from(FinancialResolutionCase)
                     .where(
                         FinancialResolutionCase.tenant_id == case.tenant_id,
-                        FinancialResolutionCase.wallet_id == case.wallet_id,
+                        wallet_filter,
                         FinancialResolutionCase.status != FinancialResolutionCaseStatus.RESOLVED,
                         FinancialResolutionCase.id != case.id,
                     )
@@ -320,6 +325,22 @@ class FinancialResolutionService:
             )
             or 0
         )
+
+    @staticmethod
+    async def _resolution_wallet(session: AsyncSession, case: FinancialResolutionCase):
+        asset_id = (case.metadata_json or {}).get("asset_wallet_id")
+        if case.wallet_id is not None:
+            model, wallet_id = Wallet, case.wallet_id
+        elif asset_id:
+            model, wallet_id = AssetWallet, uuid.UUID(asset_id)
+        else:
+            raise PaymentError("This case has no wallet to resolve.")
+        wallet = await session.scalar(select(model).where(
+            model.id == wallet_id, model.tenant_id == case.tenant_id,
+        ).with_for_update().execution_options(populate_existing=True))
+        if wallet is None:
+            raise PaymentIntegrityError("Financial case wallet is missing or cross-tenant.")
+        return wallet
 
     async def resolve_case(
         self,
@@ -354,14 +375,11 @@ class FinancialResolutionService:
                 raise PaymentIntegrityError("Financial case reversal is missing or cross-tenant.")
             if (reversal.metadata_json or {}).get("origin") != "EXTERNAL_PROVIDER":
                 raise PaymentError("Only externally-originated reversals can use local retry resolution.")
-            try:
-                resolved_reversal = await payment_service.resolve_external_wallet_topup_reversal(
-                    session=session,
-                    tenant_id=tenant_id,
-                    reversal_id=reversal.id,
-                )
-            except InsufficientFundsError:
-                raise
+            resolved_reversal = await payment_service.resolve_external_wallet_topup_reversal(
+                session=session,
+                tenant_id=tenant_id,
+                reversal_id=reversal.id,
+            )
             if resolved_reversal.status != WalletTopUpReversalStatus.COMPLETED:
                 raise PaymentIntegrityError("Wallet reversal did not reach COMPLETED state.")
             await self._mark_event_resolved(
@@ -378,7 +396,7 @@ class FinancialResolutionService:
             resolution_code = "EXTERNAL_REVERSAL_DEBIT_APPLIED"
 
         elif action == FinancialResolutionAction.ACKNOWLEDGE_NO_WALLET_IMPACT:
-            if case.wallet_id is not None or case.reversal_id is not None:
+            if case.wallet_id is not None or case.reversal_id is not None or (case.metadata_json or {}).get("asset_wallet_id"):
                 raise PaymentError("This action is allowed only for cases with no wallet impact.")
             await self._mark_event_resolved(
                 session,
@@ -391,11 +409,7 @@ class FinancialResolutionService:
             resolution_code = "NO_WALLET_IMPACT_ACKNOWLEDGED"
 
         elif action == FinancialResolutionAction.CLOSE_KEEP_WALLET_FROZEN:
-            if case.wallet_id is None:
-                raise PaymentError("This case has no wallet to keep frozen.")
-            wallet = await session.get(Wallet, case.wallet_id)
-            if wallet is None or wallet.tenant_id != tenant_id:
-                raise PaymentIntegrityError("Financial case wallet is missing or cross-tenant.")
+            wallet = await self._resolution_wallet(session, case)
             if wallet.is_active:
                 raise PaymentError("Wallet is active; this action is only valid for a frozen wallet.")
             await self._mark_event_resolved(
@@ -415,11 +429,7 @@ class FinancialResolutionService:
                 raise PaymentError("Owner unfreeze requires a resolution note of at least 20 characters.")
             if case.reversal_id is not None:
                 raise PaymentError("A case linked to a provider reversal cannot be waived as a false positive.")
-            if case.wallet_id is None:
-                raise PaymentError("This case has no frozen wallet to unfreeze.")
-            wallet = await session.get(Wallet, case.wallet_id)
-            if wallet is None or wallet.tenant_id != tenant_id:
-                raise PaymentIntegrityError("Financial case wallet is missing or cross-tenant.")
+            wallet = await self._resolution_wallet(session, case)
             if wallet.is_active:
                 raise PaymentError("Wallet is already active.")
             if await self._other_open_case_count(session, case):

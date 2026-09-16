@@ -223,8 +223,14 @@ async function loadOrders() {
 }
 
 async function loadTopupOptions() {
-  const response = await api("/api/v1/storefront/wallet/topups/options");
-  state.topupOptions = response.providers ?? [];
+  const [response, methods] = await Promise.all([
+    api("/api/v1/storefront/wallet/topups/options"),
+    api("/api/v1/storefront/wallet/payment-methods"),
+  ]);
+  state.topupOptions = [
+    ...(methods.methods ?? []).map(method => ({ ...method, provider_name: method.id })),
+    ...(response.providers ?? []),
+  ];
   if (state.bootstrap) renderBootstrap();
 }
 
@@ -262,7 +268,13 @@ function renderBootstrap() {
       </div>
     </article>
   `).join("");
-  el("emptyWallets").classList.toggle("hidden", wallets.length > 0);
+  const assets = state.bootstrap.asset_wallets ?? [];
+  walletGrid.innerHTML += assets.map(wallet => `<article class="wallet-card">
+    <span class="wallet-currency">${escapeHtml(wallet.asset)} · ${escapeHtml(wallet.network)}</span>
+    <strong class="wallet-balance">${escapeHtml(wallet.balance)}</strong>
+    <span class="field-help">Asset balance · separate from your spending wallet</span>
+  </article>`).join("");
+  el("emptyWallets").classList.toggle("hidden", wallets.length + assets.length > 0);
   el("fundWalletButton").classList.toggle("hidden", state.topupOptions.length === 0);
 }
 
@@ -516,8 +528,8 @@ function topupStorageKey() {
 function persistActiveTopup() {
   const key = topupStorageKey();
   if (!key) return;
-  if (state.activeTopup?.id && !["SUCCEEDED", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status)) {
-    localStorage.setItem(key, state.activeTopup.id);
+  if (state.activeTopup?.id && !["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status)) {
+    localStorage.setItem(key, `${state.activeTopup._flexible ? "flex:" : ""}${state.activeTopup.id}`);
   } else {
     localStorage.removeItem(key);
   }
@@ -553,7 +565,11 @@ function renderTopupForm(preferredCurrency = null) {
   topupAmountInput.min = currentProvider.min_amount;
   topupAmountInput.max = currentProvider.max_amount;
   topupAmountInput.step = currentProvider.whole_units_only ? "1" : "0.01";
-  el("topupPolicyHelp").textContent = `Allowed: ${money(currentProvider.min_amount, selectedCurrency)} – ${money(currentProvider.max_amount, selectedCurrency)}.`;
+  const flexible = Boolean(currentProvider.flexible_deposits_enabled);
+  el("topupFixedFields").classList.toggle("hidden", flexible);
+  el("topupPolicyHelp").textContent = flexible
+    ? `Choose the asset and amount on the payment page. ${currentProvider.auto_credit_enabled ? "Confirmed funds are credited according to the store's asset/conversion policy." : "Confirmed funds require staff review before credit."}`
+    : `Allowed: ${money(currentProvider.min_amount, selectedCurrency)} – ${money(currentProvider.max_amount, selectedCurrency)}.`;
   const termsRow = el("topupTermsRow");
   const termsLink = el("topupTermsLink");
   const termsCheckbox = el("topupTermsCheckbox");
@@ -565,7 +581,7 @@ function renderTopupForm(preferredCurrency = null) {
 }
 
 function topupStatusClass(status) {
-  if (status === "SUCCEEDED") return "success";
+  if (["SUCCEEDED", "CREDITED"].includes(status)) return "success";
   if (["FAILED", "EXPIRED", "CANCELLED"].includes(status)) return "danger";
   return "warning";
 }
@@ -585,8 +601,13 @@ function renderTopupStatus() {
   const label = el("topupStatusLabel");
   label.textContent = topup.status;
   label.className = `status-chip ${topupStatusClass(topup.status)}`;
-  el("topupStatusAmount").textContent = money(topup.amount, topup.currency);
+  el("topupStatusAmount").textContent = topup._flexible
+    ? (topup.credited_amount != null ? `${topup.credited_amount} ${topup.credited_currency || topup.credited_asset || ""}` : `${topup.amount_received ?? "0"} ${topup.asset || "awaiting asset"}`) + (topup.network ? ` · ${topup.network}` : "")
+    : money(topup.amount, topup.currency);
   const messages = {
+    CREDITED: "Confirmed deposit credited. Asset and spending-wallet balances are shown separately in your account.",
+    SETTLED_REVIEW: "Deposit confirmed. Staff review is required before wallet credit.",
+    REVERSED: "The provider reversed this deposit. Contact the store for financial review.",
     SUCCEEDED: `Funds confirmed. Wallet balance: ${money(topup.wallet_balance, topup.currency)}.`,
     FAILED: "The payment provider reported that this payment failed.",
     EXPIRED: "This payment session expired. Start a new top-up to continue.",
@@ -598,9 +619,17 @@ function renderTopupStatus() {
   };
   el("topupStatusMessage").textContent = messages[topup.status] || "Waiting for payment confirmation.";
 
+  const instructions = topup.payment_instructions;
+  el("topupInstructions").textContent = instructions ? [
+    instructions.instructions, instructions.asset, instructions.network,
+    instructions.destination_address || instructions.pay_address,
+    instructions.destination_memo || instructions.payin_extra_id,
+    instructions.pay_amount ? `Send exactly ${instructions.pay_amount} ${instructions.pay_currency || ""}` : null,
+  ].filter(Boolean).join(" · ") : "";
+  el("topupProofForm").classList.toggle("hidden", !instructions || instructions.mode !== "local" || ["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(topup.status));
   const checkoutUrl = safeHttpsUrl(topup.checkout_url);
-  el("topupOpenCheckoutButton").classList.toggle("hidden", !checkoutUrl || topup.status === "SUCCEEDED");
-  el("topupCheckButton").classList.toggle("hidden", ["SUCCEEDED", "FAILED", "EXPIRED", "CANCELLED"].includes(topup.status));
+  el("topupOpenCheckoutButton").classList.toggle("hidden", !checkoutUrl || ["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW"].includes(topup.status));
+  el("topupCheckButton").classList.toggle("hidden", ["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(topup.status));
 }
 
 function openPaymentCheckout() {
@@ -635,7 +664,7 @@ function openPaymentCheckout() {
 
 
 function openTopup(preferredCurrency = null) {
-  if (state.activeTopup && ["SUCCEEDED", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status) && !topupSheet.classList.contains("open")) {
+  if (state.activeTopup && ["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status) && !topupSheet.classList.contains("open")) {
     resetTopup();
   }
   if (!state.topupOptions.length) {
@@ -672,15 +701,16 @@ async function reconcileActiveTopup({ quiet = false } = {}) {
   state.topupBusy = true;
   el("topupCheckButton").disabled = true;
   try {
-    state.activeTopup = await api(`/api/v1/storefront/wallet/topups/${state.activeTopup.id}/reconcile`, { method: "POST" });
+    const flexible = Boolean(state.activeTopup._flexible);
+    state.activeTopup = { ...await api(`/api/v1/storefront/wallet/${flexible ? "flexible-deposits" : "topups"}/${state.activeTopup.id}/reconcile`, { method: "POST" }), _flexible: flexible };
     renderTopupStatus();
     persistActiveTopup();
-    if (state.activeTopup.status === "SUCCEEDED") {
+    if (["SUCCEEDED", "CREDITED"].includes(state.activeTopup.status)) {
       stopTopupPolling();
       await loadBootstrap();
       notifyHaptic("success");
-      showToast(`Wallet funded with ${money(state.activeTopup.amount, state.activeTopup.currency)}.`);
-    } else if (["FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status)) {
+      showToast("Payment confirmed. Your account balances have been refreshed.");
+    } else if (["FAILED", "EXPIRED", "CANCELLED", "REVERSED", "SETTLED_REVIEW"].includes(state.activeTopup.status)) {
       stopTopupPolling();
       if (!quiet) showToast("Payment did not complete.", "error");
     }
@@ -694,7 +724,7 @@ async function reconcileActiveTopup({ quiet = false } = {}) {
 
 function startTopupPolling() {
   stopTopupPolling();
-  if (!state.activeTopup?.id || ["SUCCEEDED", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status)) return;
+  if (!state.activeTopup?.id || ["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status)) return;
   state.topupPollTimer = window.setInterval(() => {
     if (document.visibilityState === "visible") reconcileActiveTopup({ quiet: true });
   }, 4000);
@@ -706,7 +736,8 @@ async function createTopup() {
   const currency = topupCurrencySelect.value;
   const rawAmount = topupAmountInput.value.trim();
   const amount = Number(rawAmount);
-  if (!provider || !currency || !/^\d+(?:\.\d{1,2})?$/.test(rawAmount) || !Number.isFinite(amount)) {
+  const flexible = Boolean(provider?.flexible_deposits_enabled);
+  if (!provider || (!flexible && (!currency || !/^\d+(?:\.\d{1,2})?$/.test(rawAmount) || !Number.isFinite(amount)))) {
     showToast("Choose a provider, currency, and valid amount.", "error");
     return;
   }
@@ -720,7 +751,7 @@ async function createTopup() {
     showToast("Accept the payment terms before continuing.", "error");
     return;
   }
-  if (amount < min || amount > max) {
+  if (!flexible && (amount < min || amount > max)) {
     showToast(`Amount must be between ${money(min, currency)} and ${money(max, currency)}.`, "error");
     return;
   }
@@ -730,16 +761,14 @@ async function createTopup() {
   el("topupSubmitButton").disabled = true;
   el("topupSubmitButton").textContent = "Creating payment…";
   try {
-    state.activeTopup = await api("/api/v1/storefront/wallet/topups", {
-      method: "POST",
-      body: JSON.stringify({
-        amount: amount.toFixed(2),
-        currency,
-        provider_name: provider.provider_name,
-        idempotency_key: state.topupKey,
-        terms_accepted: Boolean(el("topupTermsCheckbox").checked),
-      }),
-    });
+    const path = flexible ? "flexible-deposits" : (provider.id ? "topups/method" : "topups");
+    const body = { idempotency_key: state.topupKey };
+    if (provider.id) body.payment_method_id = provider.id;
+    else { body.provider_name = provider.provider_name; body.terms_accepted = Boolean(el("topupTermsCheckbox").checked); }
+    if (!flexible) { body.amount = amount.toFixed(2); body.currency = currency; }
+    state.activeTopup = { ...await api(`/api/v1/storefront/wallet/${path}`, {
+      method: "POST", body: JSON.stringify(body),
+    }), _flexible: flexible };
     persistActiveTopup();
     renderTopupStatus();
     haptic("medium");
@@ -760,15 +789,36 @@ async function restorePendingTopup() {
   const intentId = key ? localStorage.getItem(key) : null;
   if (!intentId) return;
   try {
-    state.activeTopup = await api(`/api/v1/storefront/wallet/topups/${intentId}`);
+    const flexible = intentId.startsWith("flex:");
+    const id = flexible ? intentId.slice(5) : intentId;
+    state.activeTopup = { ...await api(`/api/v1/storefront/wallet/${flexible ? "flexible-deposits" : "topups"}/${encodeURIComponent(id)}`), _flexible: flexible };
     persistActiveTopup();
-    if (!["SUCCEEDED", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status)) {
+    if (!["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status)) {
       startTopupPolling();
     }
   } catch (_) {
     localStorage.removeItem(key);
     state.activeTopup = null;
   }
+}
+
+async function submitPaymentProof(event) {
+  event.preventDefault();
+  if (!state.activeTopup?.id || state.topupBusy) return;
+  const button = el("topupProofSubmit");
+  button.disabled = true;
+  try {
+    const mode = state.activeTopup.payment_instructions?.verification_mode;
+    await api(`/api/v1/storefront/wallet/topups/${state.activeTopup.id}/observations`, {
+      method: "POST", body: JSON.stringify({
+        source: ["ONCHAIN", "HYBRID"].includes(mode) ? "ONCHAIN" : "MANUAL",
+        external_reference: el("topupProofReference").value.trim() || null,
+        note: el("topupProofNote").value.trim() || null,
+      }),
+    });
+    showToast("Reference submitted for verification. Credit follows confirmation.");
+  } catch (error) { showToast(error.message || "Could not submit reference.", "error"); }
+  finally { button.disabled = false; }
 }
 
 function resetTopup() {
@@ -861,6 +911,7 @@ function bindEvents() {
   el("topupSubmitButton").addEventListener("click", createTopup);
   el("topupCheckButton").addEventListener("click", () => reconcileActiveTopup());
   el("topupOpenCheckoutButton").addEventListener("click", openPaymentCheckout);
+  el("topupProofForm").addEventListener("submit", submitPaymentProof);
   topupProviderSelect.addEventListener("change", () => { state.topupKey = null; renderTopupForm(); });
   topupCurrencySelect.addEventListener("change", () => { state.topupKey = null; renderTopupForm(topupCurrencySelect.value); });
   topupAmountInput.addEventListener("input", () => { state.topupKey = null; });

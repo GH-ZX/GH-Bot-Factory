@@ -31,7 +31,6 @@ from packages.payments.state_machine import PaymentIntentStatus
 from packages.providers.models import Provider
 from packages.tenants.models import AuditLog
 
-
 _CAPTURED_ORDER_STATUSES = (
     OrderStatus.PAID,
     OrderStatus.PROCESSING,

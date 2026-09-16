@@ -15,8 +15,16 @@ class PaymentIntegrityError(PaymentError):
     """Raised when payment verification detects amount, currency, or order discrepancies."""
 
 
+class OnChainVerificationPending(PaymentError):
+    """Trusted verifier has not observed enough chain evidence to decide yet."""
+
+
 class PaymentProviderError(PaymentError):
     """Raised when an upstream payment provider operation fails or returns an error."""
+
+
+class PaymentProviderTransportError(PaymentProviderError):
+    """Raised when provider transport outcome is uncertain (network failure / HTTP 5xx)."""
 
 
 class UnsupportedProviderCapabilityError(PaymentProviderError):

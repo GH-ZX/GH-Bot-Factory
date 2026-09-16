@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
+from packages.factory.business_profiles import BotBusinessType
+from packages.providers.models import ProviderCategory, ProviderRoutingStrategy
+
 _TEMPLATE_KEY_RE = re.compile(r"^[a-z][a-z0-9-]{1,49}$")
 _CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})?$")
@@ -40,6 +43,9 @@ class BotTemplate:
     description: str
     recommended_for: str
     default_config: dict[str, Any]
+    business_type: BotBusinessType = BotBusinessType.GENERAL
+    provider_categories: tuple[ProviderCategory, ...] = ()
+    default_routing_strategy: ProviderRoutingStrategy = ProviderRoutingStrategy.PRIORITY
 
     def public_payload(self) -> dict[str, Any]:
         return {
@@ -49,6 +55,9 @@ class BotTemplate:
             "description": self.description,
             "recommended_for": self.recommended_for,
             "default_config": copy.deepcopy(self.default_config),
+            "business_type": self.business_type.value,
+            "provider_categories": [item.value for item in self.provider_categories],
+            "default_routing_strategy": self.default_routing_strategy.value,
         }
 
 
@@ -62,6 +71,9 @@ def _template(
     welcome: str,
     tagline: str,
     modules: list[str] | None = None,
+    business_type: BotBusinessType = BotBusinessType.GENERAL,
+    provider_categories: tuple[ProviderCategory, ...] = (),
+    routing_strategy: ProviderRoutingStrategy = ProviderRoutingStrategy.PRIORITY,
 ) -> BotTemplate:
     return BotTemplate(
         key=key,
@@ -69,6 +81,9 @@ def _template(
         name=name,
         description=description,
         recommended_for=recommended_for,
+        business_type=business_type,
+        provider_categories=provider_categories,
+        default_routing_strategy=routing_strategy,
         default_config={
             "currency": "USD",
             "locale": "en",
@@ -84,6 +99,15 @@ def _template(
                 "store_button_text": "🛍️ Open Store",
             },
             "enabled_modules": modules or ["catalog", "orders", "account"],
+            "_business": {
+                "business_type": business_type.value,
+                "provider_ids": [],
+                "payment_method_ids": [],
+                "routing_strategy": routing_strategy.value,
+                "preferred_provider_id": None,
+                "default_pricing_tier_id": None,
+                "allow_flexible_auto_credit": False,
+            },
         },
     )
 
@@ -135,6 +159,78 @@ _TEMPLATES: dict[str, BotTemplate] = {
             accent="#00A884",
             welcome="Welcome. Choose the service that fits what you need.",
             tagline="Simple service ordering with transparent status tracking.",
+        ),
+        _template(
+            "reseller-hub",
+            "Multi-API Reseller",
+            "Provider-agnostic reseller storefront with routing, wallet funding, and margin controls.",
+            "Multi-supplier stores that aggregate APIs and choose providers dynamically.",
+            accent="#6D5EF7",
+            welcome="Welcome. Choose a product and we will route it through the best available supplier.",
+            tagline="Multi-provider catalog, automated fulfillment, and transparent order tracking.",
+            business_type=BotBusinessType.RESELLER,
+            provider_categories=tuple(ProviderCategory),
+            routing_strategy=ProviderRoutingStrategy.AVAILABILITY,
+        ),
+        _template(
+            "numbers-sms",
+            "Numbers & SMS",
+            "Number reservation and SMS activation storefront using canonical number-provider operations.",
+            "5sim-style number/SMS providers and similar activation services.",
+            accent="#00A8E8",
+            welcome="Choose a service and country to reserve a number securely.",
+            tagline="Fast number reservations with tracked activation status.",
+            business_type=BotBusinessType.NUMBER_SMS,
+            provider_categories=(ProviderCategory.NUMBER,),
+            routing_strategy=ProviderRoutingStrategy.AVAILABILITY,
+        ),
+        _template(
+            "accounts-store",
+            "Accounts Store",
+            "Storefront for account inventory supplied through one or more account providers.",
+            "Account reseller APIs with provider fallback and margin rules.",
+            accent="#EC4899",
+            welcome="Browse available accounts and receive tracked digital delivery.",
+            tagline="Account inventory from trusted suppliers with resilient fulfillment.",
+            business_type=BotBusinessType.ACCOUNT,
+            provider_categories=(ProviderCategory.ACCOUNT,),
+            routing_strategy=ProviderRoutingStrategy.PRIORITY,
+        ),
+        _template(
+            "gift-reseller",
+            "Gift Cards & Codes",
+            "Gift-card, voucher, and code reseller storefront backed by multiple APIs.",
+            "Gift-code sellers such as game, prepaid, and voucher catalogs.",
+            accent="#F97316",
+            welcome="Choose your gift card or code and we will deliver it securely.",
+            tagline="Gift cards and digital codes with supplier-aware pricing.",
+            business_type=BotBusinessType.GIFT_CARD,
+            provider_categories=(ProviderCategory.GIFT, ProviderCategory.DIGITAL_PRODUCT),
+            routing_strategy=ProviderRoutingStrategy.LOWEST_COST,
+        ),
+        _template(
+            "digital-reseller",
+            "Digital Products Reseller",
+            "General digital-product reseller template for subscriptions, codes, services, and API inventory.",
+            "Swagger/OpenAPI-backed resellers and mixed digital product catalogs.",
+            accent="#10B981",
+            welcome="Browse our digital catalog and track every delivery from one place.",
+            tagline="Digital inventory, multi-provider routing, and automated fulfillment.",
+            business_type=BotBusinessType.DIGITAL_PRODUCT,
+            provider_categories=(ProviderCategory.DIGITAL_PRODUCT, ProviderCategory.GIFT, ProviderCategory.SERVICE),
+            routing_strategy=ProviderRoutingStrategy.PRIORITY,
+        ),
+        _template(
+            "hybrid-store",
+            "Hybrid Store",
+            "One bot for numbers, accounts, gifts, digital products, and services.",
+            "Tenants that want one storefront across several provider categories.",
+            accent="#8B5CF6",
+            welcome="Everything you need in one store. Choose a category to get started.",
+            tagline="One storefront across multiple supplier and payment integrations.",
+            business_type=BotBusinessType.HYBRID,
+            provider_categories=tuple(ProviderCategory),
+            routing_strategy=ProviderRoutingStrategy.AVAILABILITY,
         ),
     ]
 }
@@ -212,6 +308,7 @@ def build_template_config(
     locale: str | None = None,
     branding: dict[str, Any] | None = None,
     enabled_modules: list[str] | None = None,
+    business_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     template = get_bot_template(template_key, template_version)
     config = copy.deepcopy(template.default_config)
@@ -238,6 +335,10 @@ def build_template_config(
         config["enabled_modules"] = modules
 
     config["branding"].update(validate_branding(branding))
+    if business_profile is not None:
+        # Cross-entity tenant validation is performed by the API/service layer.
+        from packages.factory.business_profiles import parse_business_profile
+        config["_business"] = parse_business_profile(business_profile).public_payload()
     config["_factory"] = {
         "template_key": template.key,
         "template_version": template.version,

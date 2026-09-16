@@ -59,7 +59,8 @@ async def test_canonical_refund_idempotency_across_services(
     mapping = ProviderProductMapping(
         tenant_id=tenant.id,
         provider_id=prov.id,
-        product_id=variant.id,
+        product_id=product.id,
+        product_variant_id=variant.id,
         external_product_id="ext-failing",
     )
     db_session.add(mapping)
@@ -259,7 +260,8 @@ async def test_refund_amount_uses_frozen_order_total(db_session: AsyncSession):
     mapping = ProviderProductMapping(
         tenant_id=tenant.id,
         provider_id=prov.id,
-        product_id=variant.id,
+        product_id=product.id,
+        product_variant_id=variant.id,
         external_product_id="ext-fail-2",
     )
     db_session.add(mapping)

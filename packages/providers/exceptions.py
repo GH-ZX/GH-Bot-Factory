@@ -7,11 +7,18 @@ class ProviderError(BotFactoryError):
     """Base exception for all upstream provider interactions."""
 
     is_retryable: bool = False
+    safe_to_failover: bool = False
 
     def __init__(self, message: str, is_retryable: bool | None = None) -> None:
         super().__init__(message)
         if is_retryable is not None:
             self.is_retryable = is_retryable
+
+
+class ProviderConfigurationError(ProviderError):
+    """Raised when tenant provider configuration is incomplete or incompatible with its adapter."""
+
+    is_retryable = False
 
 
 class ProviderAuthenticationError(ProviderError):
@@ -21,21 +28,24 @@ class ProviderAuthenticationError(ProviderError):
 
 
 class ProviderRateLimitError(ProviderError):
-    """Raised when upstream provider throttles requests."""
+    """Raised when upstream provider throttles before accepting work."""
 
     is_retryable = True
+    safe_to_failover = True
 
 
 class ProviderInsufficientBalanceError(ProviderError):
     """Raised when the tenant's account balance with the upstream provider is depleted."""
 
-    is_retryable = True  # Can fall back to an alternate provider
+    is_retryable = True
+    safe_to_failover = True
 
 
 class ProviderProductUnavailableError(ProviderError):
     """Raised when an external product is out of stock or disabled upstream."""
 
-    is_retryable = True  # Can fall back to an alternate provider
+    is_retryable = True
+    safe_to_failover = True
 
 
 class ProviderTimeoutError(ProviderError):

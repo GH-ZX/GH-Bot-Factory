@@ -8,8 +8,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from packages.commerce.models import Order
+from packages.commerce.economics import PricingService
+from packages.commerce.economics_models import OrderItemEconomics
+from packages.commerce.models import Order, ProductVariant
 from packages.commerce.state_machine import OrderStatus
+from packages.factory.business_profiles import (
+    allowed_provider_categories,
+    business_profile_from_config,
+)
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
 from packages.notifications.service import (
     NotificationEventType,
@@ -17,8 +23,14 @@ from packages.notifications.service import (
     NotificationService,
 )
 from packages.payments.service import CANONICAL_REFUND_TYPE, LedgerService
-from packages.providers.exceptions import ProviderError, ProviderTimeoutError
+from packages.providers.contracts import ProviderOrderState
+from packages.providers.exceptions import (
+    ProviderError,
+    ProviderOrderFailedError,
+    ProviderTimeoutError,
+)
 from packages.providers.router import ProviderRouter
+from packages.telegram.models import Bot
 
 logger = logging.getLogger("fulfillment.service")
 
@@ -38,6 +50,24 @@ def _to_json_safe(val: Any) -> Any:
     return val
 
 
+def _provider_response_payload(response: Any) -> dict[str, Any]:
+    return _to_json_safe(
+        {
+            "external_order_id": response.external_order_id,
+            "canonical_state": response.canonical_state.value,
+            "raw_data": response.raw_data,
+            "delivery": [
+                {
+                    "kind": artifact.kind.value,
+                    "value": artifact.value,
+                    "fields": artifact.fields,
+                }
+                for artifact in response.delivery
+            ],
+        }
+    )
+
+
 class FulfillmentService:
     """Orchestrates resilient order dispatch, provider routing, idempotency, and financial reconciliation."""
 
@@ -45,9 +75,11 @@ class FulfillmentService:
         self,
         router: ProviderRouter | None = None,
         notification_service: NotificationService | None = None,
+        pricing_service: PricingService | None = None,
     ) -> None:
         self.router = router or ProviderRouter()
         self.notifications = notification_service or NotificationService()
+        self.pricing = pricing_service or PricingService()
 
     async def execute_order_fulfillment(
         self,
@@ -68,6 +100,17 @@ class FulfillmentService:
 
         if order is None:
             raise ValueError(f"Order {order_id} not found.")
+
+        bot_profile = business_profile_from_config(None)
+        bot_id = await session.scalar(
+            select(OrderItemEconomics.bot_id)
+            .where(OrderItemEconomics.order_id == order.id, OrderItemEconomics.bot_id.is_not(None))
+            .limit(1)
+        )
+        if bot_id is not None:
+            bot = await session.get(Bot, bot_id)
+            if bot is not None and bot.tenant_id == order.tenant_id and bot.deleted_at is None:
+                bot_profile = business_profile_from_config(bot.config)
 
         # 2. Check and enforce idempotency key
         idempotency_key = f"order:{order.id}:attempt:{attempt_number}"
@@ -131,7 +174,22 @@ class FulfillmentService:
         try:
             responses = []
             last_provider = None
+            cost_currencies: set[str] = set()
             total_provider_cost = Decimal("0.00")
+
+            # Provider mappings are product-scoped with an optional variant refinement.
+            # Resolve canonical product ids once instead of incorrectly using variant ids as
+            # product ids (an old SQLite-friendly bug that violates the PostgreSQL FK contract).
+            variant_rows = (
+                await session.execute(
+                    select(ProductVariant.id, ProductVariant.product_id).where(
+                        ProductVariant.id.in_([item.product_variant_id for item in order.items])
+                    )
+                )
+            ).all()
+            product_id_by_variant = {variant_id: product_id for variant_id, product_id in variant_rows}
+            if len(product_id_by_variant) != len({item.product_variant_id for item in order.items}):
+                raise ProviderError("One or more order item variants no longer exist.")
 
             for item in order.items:
                 item_key = (
@@ -139,30 +197,104 @@ class FulfillmentService:
                     if len(order.items) == 1
                     else f"{idempotency_key}:item:{item.id}"
                 )
-                provider, _mapping, response = await self.router.route_and_execute_order(
+                provider, mapping, response = await self.router.route_and_execute_order(
                     session=session,
                     tenant_id=order.tenant_id,
-                    product_id=item.product_variant_id,
+                    product_id=product_id_by_variant[item.product_variant_id],
                     quantity=item.quantity,
                     recipient=recipient,
                     idempotency_key=item_key,
                     variant_id=item.product_variant_id,
+                    allowed_provider_ids=set(bot_profile.provider_ids) or None,
+                    allowed_categories=set(allowed_provider_categories(bot_profile.business_type)),
+                    strategy_override=bot_profile.routing_strategy,
+                    preferred_provider_id=bot_profile.preferred_provider_id,
+                    failover_enabled=True,
                 )
                 responses.append(response)
                 last_provider = provider
-                total_provider_cost += response.cost
+                cost_currency = mapping.cost_currency.upper()
+                cost_currencies.add(cost_currency)
+                # Never add costs expressed in different currencies into a fake total.
+                if len(cost_currencies) == 1:
+                    total_provider_cost += response.cost
 
-            # 5. Success Flow
+                if response.canonical_state == ProviderOrderState.COMPLETED:
+                    await self.pricing.attribute_actual_cost(
+                        session,
+                        order_item_id=item.id,
+                        provider_id=provider.id,
+                        actual_cost=response.cost,
+                        actual_currency=cost_currency,
+                    )
+
+                if response.canonical_state in {
+                    ProviderOrderState.FAILED,
+                    ProviderOrderState.CANCELLED,
+                    ProviderOrderState.EXPIRED,
+                    ProviderOrderState.REFUNDED,
+                }:
+                    attempt.provider_id = provider.id
+                    attempt.external_order_id = response.external_order_id
+                    attempt.response_payload = _provider_response_payload(response)
+                    raise ProviderOrderFailedError(
+                        f"Provider returned terminal state {response.canonical_state.value}."
+                    )
+
             attempt.provider_id = last_provider.id if last_provider else None
             attempt.external_order_id = responses[0].external_order_id
-            attempt.cost_amount = total_provider_cost
-            attempt.response_payload = _to_json_safe(
-                responses[0].raw_data if len(responses) == 1 else [r.raw_data for r in responses]
+            if len(cost_currencies) == 1:
+                attempt.cost_amount = total_provider_cost
+                attempt.cost_currency = next(iter(cost_currencies))
+            else:
+                # Per-item economics remains authoritative for mixed-currency carts.
+                attempt.cost_amount = Decimal("0.00")
+                attempt.cost_currency = "MIX"
+            attempt.response_payload = (
+                _provider_response_payload(responses[0])
+                if len(responses) == 1
+                else [_provider_response_payload(response) for response in responses]
             )
+
+            nonterminal = [
+                response
+                for response in responses
+                if response.canonical_state != ProviderOrderState.COMPLETED
+            ]
+            if nonterminal:
+                # A dispatched upstream order is authoritative. Do not replay it at another provider,
+                # mark the commerce order fulfilled, or refund while the provider state is pending/unknown.
+                if len(responses) > 1:
+                    attempt.status = FulfillmentStatus.UNKNOWN
+                    attempt.error_classification = "MULTI_ITEM_NONTERMINAL_PROVIDER_STATE"
+                elif nonterminal[0].canonical_state == ProviderOrderState.UNKNOWN:
+                    attempt.status = FulfillmentStatus.UNKNOWN
+                    attempt.error_classification = "UPSTREAM_STATE_UNKNOWN"
+                else:
+                    attempt.status = FulfillmentStatus.PROCESSING
+                    attempt.error_classification = None
+                attempt.completed_at = None
+                await session.commit()
+                await self.notifications.notify(
+                    NotificationPayload(
+                        event_type=NotificationEventType.FULFILLMENT_STARTED,
+                        tenant_id=order.tenant_id,
+                        recipient=recipient,
+                        order_id=order.id,
+                        order_number=order.order_number,
+                        message=f"Order #{order.order_number} was accepted and is still processing upstream.",
+                        metadata={
+                            "external_order_id": attempt.external_order_id,
+                            "provider_state": nonterminal[0].canonical_state.value,
+                        },
+                    )
+                )
+                return attempt
+
+            # 5. Success Flow: only canonical COMPLETED is fulfillment success.
             attempt.status = FulfillmentStatus.SUCCEEDED
             attempt.completed_at = datetime.now(UTC)
 
-            # Mark order as fulfilled
             order.transition_to(OrderStatus.FULFILLED)
             await session.commit()
 

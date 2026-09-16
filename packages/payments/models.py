@@ -23,6 +23,43 @@ from packages.payments.state_machine import PaymentIntentStatus, PaymentStateMac
 from packages.tenants.models import JSON_TYPE, Tenant, User
 
 
+class PaymentMethodType(str, enum.Enum):
+    REGULATED_PROVIDER = "REGULATED_PROVIDER"
+    CRYPTO_GATEWAY = "CRYPTO_GATEWAY"
+    SELF_CUSTODY = "SELF_CUSTODY"
+    MANUAL_TRANSFER = "MANUAL_TRANSFER"
+    EXCHANGE_TRANSFER = "EXCHANGE_TRANSFER"
+
+
+class PaymentVerificationMode(str, enum.Enum):
+    PROVIDER_RECONCILIATION = "PROVIDER_RECONCILIATION"
+    ONCHAIN = "ONCHAIN"
+    MANUAL = "MANUAL"
+    HYBRID = "HYBRID"
+
+
+class PaymentObservationSource(str, enum.Enum):
+    PROVIDER = "PROVIDER"
+    ONCHAIN = "ONCHAIN"
+    MANUAL = "MANUAL"
+    EXCHANGE = "EXCHANGE"
+
+
+class PaymentObservationStatus(str, enum.Enum):
+    SUBMITTED = "SUBMITTED"
+    PENDING_VERIFICATION = "PENDING_VERIFICATION"
+    MANUAL_REVIEW = "MANUAL_REVIEW"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+
+
+class PaymentAssuranceLevel(str, enum.Enum):
+    REGULATED_RECONCILED = "REGULATED_RECONCILED"
+    ONCHAIN_VERIFIED = "ONCHAIN_VERIFIED"
+    GATEWAY_VERIFIED = "GATEWAY_VERIFIED"
+    MANUAL_APPROVED = "MANUAL_APPROVED"
+
+
 class TransactionType(str, enum.Enum):
     CREDIT = "CREDIT"
     DEBIT = "DEBIT"
@@ -135,6 +172,32 @@ class LedgerTransaction(Base, UUIDMixin, TimestampMixin):
                 "transaction_type = 'DEBIT' AND reference_type = 'WALLET_TOPUP_REVERSAL' AND reference_id IS NOT NULL"
             ),
         ),
+        Index(
+            "uq_flexible_deposit_settlement",
+            "wallet_id",
+            "reference_type",
+            "reference_id",
+            unique=True,
+            postgresql_where=text(
+                "transaction_type = 'CREDIT' AND reference_type = 'FLEXIBLE_DEPOSIT_SETTLEMENT' AND reference_id IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "transaction_type = 'CREDIT' AND reference_type = 'FLEXIBLE_DEPOSIT_SETTLEMENT' AND reference_id IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_wallet_hold_capture",
+            "wallet_id",
+            "reference_type",
+            "reference_id",
+            unique=True,
+            postgresql_where=text(
+                "transaction_type = 'DEBIT' AND reference_type = 'WALLET_HOLD_CAPTURE' AND reference_id IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "transaction_type = 'DEBIT' AND reference_type = 'WALLET_HOLD_CAPTURE' AND reference_id IS NOT NULL"
+            ),
+        ),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -205,6 +268,11 @@ class PaymentIntent(Base, UUIDMixin, TimestampMixin):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+    payment_method_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("payment_method_configs.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -490,6 +558,166 @@ class FinancialResolutionCase(Base, UUIDMixin, TimestampMixin):
     reconciliation_event: Mapped["PaymentReconciliationEvent | None"] = relationship(
         "PaymentReconciliationEvent"
     )
+
+
+class PaymentMethodConfig(Base, UUIDMixin, TimestampMixin):
+    """Tenant-facing payment method definition without storing private credentials.
+
+    Secrets remain in SecretStorage/adapter configuration. This row contains only the
+    public/payment-policy surface needed to create instructions and enforce verification.
+    """
+
+    __tablename__ = "payment_method_configs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_payment_method_tenant_code"),
+        Index("ix_payment_method_tenant_enabled", "tenant_id", "is_enabled"),
+        Index("ix_payment_method_tenant_type", "tenant_id", "method_type"),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    method_type: Mapped[PaymentMethodType] = mapped_column(
+        Enum(PaymentMethodType, name="payment_method_type_enum", native_enum=False),
+        nullable=False,
+    )
+    verification_mode: Mapped[PaymentVerificationMode] = mapped_column(
+        Enum(
+            PaymentVerificationMode,
+            name="payment_verification_mode_enum",
+            native_enum=False,
+        ),
+        nullable=False,
+    )
+    provider_name: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    asset: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    network: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    destination_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    destination_memo: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    instructions: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    requires_admin_approval: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Phase 12: auto-credit is an explicit tenant choice, never an implicit provider behavior.
+    auto_credit_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    auto_credit_target: Mapped[str] = mapped_column(String(32), default="ASSET_WALLET", nullable=False)
+    settings_json: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict, nullable=False)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+
+
+class PaymentQuote(Base, UUIDMixin, TimestampMixin):
+    """Immutable server-side quote binding wallet settlement value to external asset value."""
+
+    __tablename__ = "payment_quotes"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "quote_fingerprint", name="uq_payment_quote_tenant_fingerprint"),
+        Index("ix_payment_quote_intent_created", "payment_intent_id", "created_at"),
+        Index("ix_payment_quote_tenant_expires", "tenant_id", "expires_at"),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    payment_intent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payment_intents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    payment_method_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payment_method_configs.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    settlement_amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
+    settlement_currency: Mapped[str] = mapped_column(String(12), nullable=False)
+    asset_amount: Mapped[Decimal] = mapped_column(Numeric(36, 18), nullable=False)
+    asset: Mapped[str] = mapped_column(String(24), nullable=False)
+    network: Mapped[str] = mapped_column(String(64), nullable=False)
+    rate: Mapped[Decimal] = mapped_column(Numeric(36, 18), nullable=False)
+    rate_source: Mapped[str] = mapped_column(String(100), nullable=False)
+    quote_reference: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    quote_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict, nullable=False)
+
+    payment_intent: Mapped["PaymentIntent"] = relationship("PaymentIntent")
+    payment_method: Mapped["PaymentMethodConfig"] = relationship("PaymentMethodConfig")
+
+
+class PaymentObservation(Base, UUIDMixin, TimestampMixin):
+    """Immutable-ish evidence that an external payment may have occurred.
+
+    Customer submissions are observations, never authority. Only a trusted verifier or
+    explicit privileged approval may move an observation to VERIFIED, after which the
+    existing ledger settlement idempotency gate performs the credit exactly once.
+    """
+
+    __tablename__ = "payment_observations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "evidence_fingerprint", name="uq_payment_observation_tenant_fingerprint"
+        ),
+        Index("ix_payment_observation_tenant_status", "tenant_id", "status"),
+        Index("ix_payment_observation_intent", "payment_intent_id"),
+        Index("ix_payment_observation_method", "payment_method_id"),
+        Index(
+            "uq_payment_observation_chain_reference",
+            "network",
+            "external_reference",
+            unique=True,
+            postgresql_where=text(
+                "source = 'ONCHAIN' AND network IS NOT NULL AND external_reference IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "source = 'ONCHAIN' AND network IS NOT NULL AND external_reference IS NOT NULL"
+            ),
+        ),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    payment_intent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payment_intents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    payment_method_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("payment_method_configs.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    payment_quote_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("payment_quotes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source: Mapped[PaymentObservationSource] = mapped_column(
+        Enum(PaymentObservationSource, name="payment_observation_source_enum", native_enum=False),
+        nullable=False,
+    )
+    status: Mapped[PaymentObservationStatus] = mapped_column(
+        Enum(PaymentObservationStatus, name="payment_observation_status_enum", native_enum=False),
+        nullable=False,
+    )
+    assurance_level: Mapped[PaymentAssuranceLevel | None] = mapped_column(
+        Enum(PaymentAssuranceLevel, name="payment_assurance_level_enum", native_enum=False),
+        nullable=True,
+    )
+    external_reference: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    asset: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    network: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    destination_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    asset_amount: Mapped[Decimal | None] = mapped_column(Numeric(36, 18), nullable=True)
+    settlement_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    settlement_currency: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    confirmations: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_final: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    evidence_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    details_json: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict, nullable=False)
+
+    payment_intent: Mapped["PaymentIntent"] = relationship("PaymentIntent")
+    payment_method: Mapped["PaymentMethodConfig"] = relationship("PaymentMethodConfig")
+    payment_quote: Mapped["PaymentQuote | None"] = relationship("PaymentQuote")
+    verified_by_user: Mapped["User | None"] = relationship("User")
 
 
 class PaymentProviderConfig(Base, UUIDMixin, TimestampMixin):
