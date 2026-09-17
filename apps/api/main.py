@@ -16,6 +16,7 @@ from apps.api.v1.admin_bots import router as admin_bots_router
 from apps.api.v1.admin_economics import router as admin_economics_router
 from apps.api.v1.admin_finance import router as admin_finance_router
 from apps.api.v1.admin_members import router as admin_members_router
+from apps.api.v1.admin_onboarding import router as admin_onboarding_router
 from apps.api.v1.admin_payments import router as admin_payments_router
 from apps.api.v1.admin_providers import router as admin_providers_router
 from apps.api.v1.admin_saas import router as admin_saas_router
@@ -126,6 +127,7 @@ app.include_router(admin_router, prefix="/api/v1")
 app.include_router(admin_analytics_router, prefix="/api/v1")
 app.include_router(admin_bots_router, prefix="/api/v1")
 app.include_router(admin_members_router, prefix="/api/v1")
+app.include_router(admin_onboarding_router, prefix="/api/v1")
 app.include_router(admin_payments_router, prefix="/api/v1")
 app.include_router(admin_economics_router, prefix="/api/v1")
 app.include_router(admin_finance_router, prefix="/api/v1")

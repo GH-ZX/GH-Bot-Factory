@@ -111,6 +111,42 @@ async function loadBootstrap() {
   ].map(([label,value,hint])=>`<article class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small class="muted">${escapeHtml(hint)}</small></article>`).join("");
   el("newProduct").classList.toggle("hidden", state.bootstrap.actor.role === "STAFF");
   document.querySelectorAll("[data-admin-only]").forEach(node=>node.classList.toggle("hidden",!["ADMIN","OWNER"].includes(state.bootstrap.actor.role)));
+  document.querySelectorAll("[data-admin-only]").forEach(node=>node.classList.toggle("hidden",!["ADMIN","OWNER"].includes(state.bootstrap.actor.role)));
+  loadOnboardingChecklist().catch(()=>{});
+}
+
+async function loadOnboardingChecklist() {
+  const card = el("onboardingChecklistCard");
+  if (!card) return;
+  try {
+    const data = await api("/api/v1/admin/onboarding/checklist");
+    if (data.launch_ready) {
+      card.classList.add("hidden");
+      return;
+    }
+    card.classList.remove("hidden");
+    el("onboardingProgressBadge").textContent = `${data.progress_percent}% Complete`;
+    el("onboardingProgressBadge").className = `chip ${data.progress_percent >= 60 ? "chip-ok" : "chip-accent"}`;
+    el("onboardingProgressBar").style.width = `${data.progress_percent}%`;
+    el("onboardingNextStep").innerHTML = `<strong>Next step:</strong> ${escapeHtml(data.next_step)}`;
+
+    el("onboardingItemsList").innerHTML = data.items.map((it) => `
+      <div class="item-row" style="background:#0c1322;padding:8px 12px;border-radius:10px;border:1px solid ${it.completed ? "rgba(85,211,159,0.3)" : "var(--line)"}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">${it.completed ? "✅" : "⭕"}</span>
+          <div>
+            <strong style="color:${it.completed ? "var(--text)" : "var(--muted)"}">${escapeHtml(it.title)}</strong>
+            <small style="display:block;color:var(--muted)">${escapeHtml(it.description)}</small>
+          </div>
+        </div>
+        <div>
+          ${it.completed ? `<span class="chip chip-ok">Ready</span>` : `<button type="button" class="ghost" data-onboarding-target="${escapeHtml(it.action_view)}">Configure →</button>`}
+        </div>
+      </div>
+    `).join("");
+  } catch (_) {
+    card.classList.add("hidden");
+  }
 }
 
 function formatMinorUnits(amount,currency){try{const nf=new Intl.NumberFormat(undefined,{style:"currency",currency});const digits=nf.resolvedOptions().maximumFractionDigits;return nf.format(Number(amount)/(10**digits));}catch(_){return `${amount} ${currency} minor units`;}}
@@ -776,7 +812,9 @@ function renderSalesQuotes() {
               <p class="muted compact">${escapeHtml(q.notes || q.terms || "Standard commercial quote.")}</p>
             </div>
             <div class="ops-actions">
-              ${!isAccepted && q.status !== "SUPERSEDED" ? `<button type="button" class="primary" data-accept-quote="${q.id}">Accept &amp; Lock Quote</button>` : `<span class="chip ${bClass}">Locked</span>`}
+              ${!isAccepted && q.status !== "SUPERSEDED" ? `<button type="button" class="primary" data-accept-quote="${q.id}">Accept &amp; Lock Quote</button>` : ""}
+              ${isAccepted && !q.tenant_id ? `<button type="button" class="primary" data-onboard-quote="${q.id}">🚀 Onboard Tenant</button>` : ""}
+              ${q.tenant_id ? `<span class="chip chip-ok">✓ Onboarded</span>` : (isAccepted ? `<span class="chip ${bClass}">Locked</span>` : "")}
             </div>
           </div>
         </article>
@@ -948,6 +986,45 @@ async function acceptQuote(quoteId) {
   }
 }
 
+function openOnboardTenantDialog(quoteId) {
+  const quote = state.salesQuotes.find((q) => q.id === quoteId);
+  if (!quote) return;
+  el("onboardQuoteId").value = quote.id;
+  el("onboardTenantTitle").textContent = `Onboard Tenant for ${quote.customer_name}`;
+  el("onboardTenantName").value = quote.customer_name;
+  el("onboardTenantSlug").value = quote.customer_name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  el("onboardOwnerUsername").value = quote.customer_contact.replace(/^@/, "");
+  el("onboardTenantDialog").showModal();
+}
+
+async function saveOnboardTenant(event) {
+  event.preventDefault();
+  const quoteId = el("onboardQuoteId").value;
+  const payload = {
+    tenant_name: el("onboardTenantName").value.trim(),
+    tenant_slug: el("onboardTenantSlug").value.trim(),
+    owner_username: el("onboardOwnerUsername").value.trim(),
+  };
+
+  try {
+    const res = await platformApi(`/api/v1/platform/sales/quotes/${quoteId}/onboard`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    alert(
+      `Tenant '${res.tenant_name}' provisioned successfully!\n\n` +
+      `• Slug: ${res.tenant_slug}\n` +
+      `• Owner: @${res.owner_username}\n` +
+      `• Admin Launch URL: ${res.admin_launch_url}\n\n` +
+      `The owner can use this launch URL or send /admin in Telegram to sign in.`
+    );
+    el("onboardTenantDialog").close();
+    await loadSales();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 async function refreshCurrent(){ const active=document.querySelector(".nav.active")?.dataset.view; if(active==="plan") await loadSaas(); else if(active==="bots") await loadBots(); else if(active==="products") await Promise.all([loadCategories(),loadProducts()]); else if(active==="orders") await loadOrders(); else if(active==="fulfillment") await loadFulfillment(); else if(active==="providers") await loadProviderOps(); else if(active==="members") await loadMembers(); else if(active==="finance") await Promise.all([loadFinancialCases(),loadPaymentOperationsHealth()]); else if(active==="analytics") await loadAnalytics(); else if(active==="audit") await loadAuditLogs(0); else if(active==="reconciliation") await loadEvents(); else if(active==="sales") await loadSales(); else await loadBootstrap(); }
 
 function bind(){
@@ -1021,8 +1098,19 @@ function bind(){
     if (id) openInquiryDetail(id);
   });
   el("salesQuotesList")?.addEventListener("click", (e) => {
-    const id = e.target.closest("[data-accept-quote]")?.dataset.acceptQuote;
-    if (id) acceptQuote(id);
+    const acceptId = e.target.closest("[data-accept-quote]")?.dataset.acceptQuote;
+    const onboardId = e.target.closest("[data-onboard-quote]")?.dataset.onboardQuote;
+    if (acceptId) acceptQuote(acceptId);
+    else if (onboardId) openOnboardTenantDialog(onboardId);
+  });
+  el("onboardTenantForm")?.addEventListener("submit", saveOnboardTenant);
+  document.querySelectorAll("[data-close-onboard-tenant]").forEach((b) => b.addEventListener("click", () => el("onboardTenantDialog").close()));
+  el("onboardingItemsList")?.addEventListener("click", (e) => {
+    const target = e.target.closest("[data-onboarding-target]")?.dataset.onboardingTarget;
+    if (target) {
+      const navBtn = document.querySelector(`.nav[data-view="${target}"]`);
+      if (navBtn) navBtn.click();
+    }
   });
   el("saveInquiryStatusBtn")?.addEventListener("click", async () => {
     const inqId = el("inquiryDetailId").value;

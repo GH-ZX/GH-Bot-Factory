@@ -19,7 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.core.database import Base, TimestampMixin, UUIDMixin
-from packages.tenants.models import JSON_TYPE
+from packages.tenants.models import JSON_TYPE, Tenant
 
 
 class InquiryStatus(str, enum.Enum):
@@ -90,6 +90,9 @@ class CommercialQuote(Base, UUIDMixin, TimestampMixin):
     inquiry_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("customer_inquiries.id", ondelete="SET NULL"), nullable=True
     )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     customer_name: Mapped[str] = mapped_column(String(120), nullable=False)
     customer_contact: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[QuoteStatus] = mapped_column(
@@ -112,6 +115,7 @@ class CommercialQuote(Base, UUIDMixin, TimestampMixin):
         order_by="CommercialQuoteLine.created_at",
     )
     inquiry: Mapped[CustomerInquiry | None] = relationship("CustomerInquiry", back_populates="quotes")
+    tenant: Mapped[Tenant | None] = relationship("Tenant")
 
 
 class CommercialQuoteLine(Base, UUIDMixin, TimestampMixin):

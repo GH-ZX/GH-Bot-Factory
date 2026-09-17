@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**
-> *Last Updated: 2026-09-18 (Phase 14.2 Platform Sales Console & Quotes)*
+> *Last Updated: 2026-09-18 (Phase 14.3 Customer Onboarding & Tenant Ownership)*
 
 ---
 
@@ -884,3 +884,19 @@ All verbatim user prompts, architectural requirements, and commit records are ca
   7. Bumped Admin asset cache busters to `v=20260918_02`.
   8. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
   9. Canonical gate passed: Ruff clean, 411 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `b2c3d4e5f6a8`.
+
+## Milestone 50: Phase 14.3 Customer Onboarding & Tenant Ownership (2026-09-18)
+
+- **Status:** Delivered & Verified
+- **Key Additions:**
+  1. Added ADR-042 defining the automated tenant handoff boundary, customer `Role.OWNER` assignment, and launch readiness checklist.
+  2. Added `tenant_id` foreign key and migration `c3d4e5f6a8b9_link_quote_to_tenant.py` linking accepted commercial quotes to created tenants.
+  3. Implemented `CustomerOnboardingService` (`packages/marketplace/onboarding.py`) providing idempotent tenant provisioning, user/membership assignment, template bot setup, single-use login grant, and audit logging.
+  4. Added platform endpoint `POST /api/v1/platform/sales/quotes/{quote_id}/onboard` and `scripts/platformctl.py quote-onboard` CLI subcommand.
+  5. Implemented tenant onboarding checklist API `GET /api/v1/admin/onboarding/checklist` (`apps/api/v1/admin_onboarding.py`) evaluating branding, catalog, payments, providers, and bot token status.
+  6. Built interactive onboarding progress widget in Admin Overview dashboard guiding the customer step-by-step to store launch readiness.
+  7. Added 1-click "🚀 Onboard Tenant" action button for accepted quotes in the Admin Sales Console.
+  8. Added test suite `tests/test_phase14_3_customer_onboarding.py` covering customer onboarding, quote-to-tenant linkage, audit logging, and the admin onboarding checklist.
+  9. Bumped Admin asset cache busters to `v=20260918_03`.
+  10. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+  11. Canonical gate passed: Ruff clean, 413 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `c3d4e5f6a8b9`.

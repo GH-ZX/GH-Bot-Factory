@@ -3,14 +3,14 @@
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
 - **Last updated:** 2026-09-18
-- **Current phase:** Phase 14.2 — Platform Sales Console & Quotes
-- **Implementation status:** Phase 14.2 is complete. Platform sales console API router (`/api/v1/platform/sales/inquiries`, `/quotes`, `/quotes/{id}/accept`) is live, guarded by `require_platform_operator` and audited via `PlatformAuditLog`. Versioned `CommercialQuote` and `CommercialQuoteLine` models and database migration `b2c3d4e5f6a8` provide immutable quote freezing and acceptance locking. Admin console features a dedicated "Sales & Leads" view with in-memory operator token verification (never stored in browser persistence), inquiry inspection, status transitions, and formal quote generation. `scripts/platformctl.py` CLI is updated with `inquiries`, `inquiry`, `inquiry-status`, `quotes`, `quote`, and `quote-accept` subcommands. ADR-041 records sales boundaries. Next is Phase 14.3 (Customer Onboarding & Tenant Ownership).
-- **Current migration head:** `b2c3d4e5f6a8`
+- **Current phase:** Phase 14.3 — Customer Onboarding & Tenant Ownership
+- **Implementation status:** Phase 14.3 is complete. Customer onboarding service (`packages/marketplace/onboarding.py`) converts accepted quotes into tenant provisioning, provisions owner user and `Role.OWNER` membership, creates desired bot state with template defaults, issues single-use admin launch grants, and records `PlatformAuditLog`. CommercialQuote is linked to provisioned tenants via migration `c3d4e5f6a8b9`. Tenant Admin exposes an interactive onboarding checklist API (`GET /api/v1/admin/onboarding/checklist`) and Overview dashboard widget guiding the owner through branding, catalog, payments, providers, and bot token verification. `scripts/platformctl.py` provides `quote-onboard` CLI command. ADR-042 records onboarding boundaries. Next is Phase 14.4 (Integration & API Marketplace).
+- **Current migration head:** `c3d4e5f6a8b9`
 - **Primary branch:** `main`
-- **Latest milestone commit:** `4cfb5608ad01e9d0a68d0ee5a51352e82e36780c` (`feat(phase14): deliver phase 14.1 public configurator and messaging`)
+- **Latest milestone commit:** `c8dd007399f92e59df95b32cb39ae57731215437` (`feat(phase14): deliver phase 14.2 platform sales console and immutable quotes`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 411 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `b2c3d4e5f6a8`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
-- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_02`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
+- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 413 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `c3d4e5f6a8b9`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_03`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
 ## Delivered Capabilities
@@ -133,8 +133,16 @@
    - Admin dashboard Sales & Leads console with in-memory operator token verification, lead inspection drawer, and formal quote generator dialog.
    - `scripts/platformctl.py` CLI subcommands (`inquiries`, `inquiry`, `inquiry-status`, `quotes`, `quote`, `quote-accept`) with auto-resolved LAN bind host.
    - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
-## Current Trust Boundaries
+22. Phase 14.3 Customer Onboarding & Tenant Ownership:
+   - ADR-042 defines the automated tenant handoff boundary, customer `Role.OWNER` assignment, and launch readiness checklist.
+   - Added `tenant_id` foreign key and migration `c3d4e5f6a8b9_link_quote_to_tenant.py` linking accepted commercial quotes to created tenants.
+   - Implemented `CustomerOnboardingService` (`packages/marketplace/onboarding.py`) providing idempotent tenant provisioning, user/membership assignment, template bot setup, single-use login grant, and audit logging.
+   - Added platform endpoint `POST /api/v1/platform/sales/quotes/{quote_id}/onboard` and `platformctl quote-onboard` CLI subcommand.
+   - Implemented tenant onboarding checklist API `GET /api/v1/admin/onboarding/checklist` (`apps/api/v1/admin_onboarding.py`) evaluating branding, catalog, payments, providers, and bot token status.
+   - Built interactive onboarding progress widget in Admin Overview dashboard guiding the customer step-by-step to store launch readiness.
+   - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 
+## Current Trust Boundaries
 - Tenant/user identity always comes from `AuthenticatedPrincipal`; browser clients cannot choose authoritative tenant/user IDs.
 - Money mutates only through ledger services and PostgreSQL serialization/idempotency controls.
 - Provider/Telegram secret values exist only at runtime adapter boundaries. Write-only provider credential values may be accepted solely to place them into `SecretStorage`; SQL/read APIs expose only configured status/type, never the value or secret reference.
@@ -199,4 +207,4 @@ Read in order:
 4. Provider balance monitoring is advisory/read-only by design; routing automation based on balance evidence is deferred until hysteresis/freshness policy is specified.
 
 ## Next Recommended Work
-Proceed with Phase 14.3 (Customer Onboarding & Tenant Ownership): convert accepted commercial quotes into tenant provisioning, assign customer as tenant `OWNER`, apply subscription and integration entitlements via platform authority, and guide customer setup. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md).
+Proceed with Phase 14.4 (Integration & API Marketplace): public and tenant-admin discovery of wholesale provider adapters, priced tenant entitlements, declarative configuration, and write-only credential entry into `SecretStorage`. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md).

@@ -428,3 +428,18 @@ Current phase checkpoint: **Phase 14 — Customer Marketplace product definition
 - Bumped Admin asset cache busters to `v=20260918_02`.
 - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 - Canonical verification: Ruff clean, 411 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `b2c3d4e5f6a8`.
+
+## 2026-09-18 — Phase 14.3 — Customer Onboarding & Tenant Ownership
+
+- Milestone implementation: Phase 14.3 delivered.
+- Added ADR-042 (`docs/decisions/ADR-042-customer-tenant-onboarding-and-launch-checklist.md`) establishing automated tenant handoff boundaries, customer `Role.OWNER` assignment, and launch readiness checklist.
+- Added `tenant_id` foreign key on `CommercialQuote` via migration `c3d4e5f6a8b9_link_quote_to_tenant.py` linking accepted commercial quotes to created tenants.
+- Implemented `CustomerOnboardingService` (`packages/marketplace/onboarding.py`) providing idempotent tenant provisioning, owner user setup, initial desired bot state with template defaults, single-use login grant code via `AdminLoginService`, and non-repudiable `PlatformAuditLog` audit logging.
+- Added platform endpoint `POST /api/v1/platform/sales/quotes/{quote_id}/onboard` and `scripts/platformctl.py quote-onboard` CLI subcommand.
+- Implemented tenant onboarding checklist API `GET /api/v1/admin/onboarding/checklist` (`apps/api/v1/admin_onboarding.py`) evaluating branding, catalog, payments, providers, and bot token status.
+- Built interactive onboarding progress widget in Admin Overview dashboard guiding the customer step-by-step to store launch readiness.
+- Added 1-click "🚀 Onboard Tenant" action button for accepted quotes in the Admin Sales Console.
+- Added test suite `tests/test_phase14_3_customer_onboarding.py` covering customer onboarding, quote-to-tenant linkage, audit logging, and the admin onboarding checklist.
+- Bumped Admin asset cache busters to `v=20260918_03`.
+- Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+- Canonical verification: Ruff clean, 413 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `c3d4e5f6a8b9`.

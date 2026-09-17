@@ -20,6 +20,7 @@ from packages.marketplace.models import (
     InquiryStatus,
     QuoteStatus,
 )
+from packages.marketplace.onboarding import CustomerOnboardingService, OnboardingError
 from packages.saas.control_plane import append_platform_audit
 
 router = APIRouter(prefix="/platform/sales", tags=["platform-sales"])
@@ -99,6 +100,7 @@ class QuoteResponse(BaseModel):
     quote_number: str
     version: int
     inquiry_id: uuid.UUID | None
+    tenant_id: uuid.UUID | None = None
     customer_name: str
     customer_contact: str
     status: str
@@ -116,6 +118,26 @@ class QuoteResponse(BaseModel):
 class QuoteListResponse(BaseModel):
     items: list[QuoteResponse]
     total: int
+
+class OnboardCustomerRequest(BaseModel):
+    tenant_slug: str | None = Field(default=None, max_length=50)
+    tenant_name: str | None = Field(default=None, max_length=120)
+    owner_username: str | None = Field(default=None, max_length=120)
+    owner_telegram_id: int | None = Field(default=None)
+
+
+class OnboardCustomerResponse(BaseModel):
+    tenant_id: uuid.UUID
+    tenant_slug: str
+    tenant_name: str
+    owner_id: uuid.UUID
+    owner_username: str | None
+    bot_id: uuid.UUID
+    quote_id: uuid.UUID
+    quote_number: str
+    admin_launch_url: str
+    login_code: str
+    already_existed: bool
 
 
 @router.get("/inquiries", response_model=InquiryListResponse)
@@ -381,6 +403,7 @@ async def create_quote_for_inquiry(
         quote_number=quote.quote_number,
         version=quote.version,
         inquiry_id=quote.inquiry_id,
+        tenant_id=quote.tenant_id,
         customer_name=quote.customer_name,
         customer_contact=quote.customer_contact,
         status=quote.status.value,
@@ -451,6 +474,7 @@ async def list_quotes(
             quote_number=q.quote_number,
             version=q.version,
             inquiry_id=q.inquiry_id,
+            tenant_id=q.tenant_id,
             customer_name=q.customer_name,
             customer_contact=q.customer_contact,
             status=q.status.value,
@@ -500,6 +524,7 @@ async def get_quote(
         quote_number=quote.quote_number,
         version=quote.version,
         inquiry_id=quote.inquiry_id,
+        tenant_id=quote.tenant_id,
         customer_name=quote.customer_name,
         customer_contact=quote.customer_contact,
         status=quote.status.value,
@@ -547,6 +572,7 @@ async def accept_quote(
             quote_number=quote.quote_number,
             version=quote.version,
             inquiry_id=quote.inquiry_id,
+            tenant_id=quote.tenant_id,
             customer_name=quote.customer_name,
             customer_contact=quote.customer_contact,
             status=quote.status.value,
@@ -628,6 +654,7 @@ async def accept_quote(
         quote_number=quote.quote_number,
         version=quote.version,
         inquiry_id=quote.inquiry_id,
+        tenant_id=quote.tenant_id,
         customer_name=quote.customer_name,
         customer_contact=quote.customer_contact,
         status=quote.status.value,
@@ -650,4 +677,40 @@ async def accept_quote(
             )
             for l in quote.lines
         ],
+    )
+
+@router.post("/quotes/{quote_id}/onboard", response_model=OnboardCustomerResponse, status_code=status.HTTP_201_CREATED)
+async def onboard_customer_tenant(
+    quote_id: uuid.UUID,
+    payload: OnboardCustomerRequest,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> OnboardCustomerResponse:
+    try:
+        result = await CustomerOnboardingService.onboard_from_quote(
+            session,
+            quote_id=quote_id,
+            tenant_slug=payload.tenant_slug,
+            tenant_name=payload.tenant_name,
+            owner_username=payload.owner_username,
+            owner_telegram_id=payload.owner_telegram_id,
+            actor=operator.actor,
+            ip_address=_client_ip(request),
+        )
+    except OnboardingError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return OnboardCustomerResponse(
+        tenant_id=result.tenant_id,
+        tenant_slug=result.tenant_slug,
+        tenant_name=result.tenant_name,
+        owner_id=result.owner_id,
+        owner_username=result.owner_username,
+        bot_id=result.bot_id,
+        quote_id=result.quote_id,
+        quote_number=result.quote_number,
+        admin_launch_url=result.admin_launch_url,
+        login_code=result.login_code,
+        already_existed=result.already_existed,
     )

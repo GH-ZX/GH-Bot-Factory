@@ -1631,3 +1631,42 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
    - Verified live at `http://10.70.5.5:8010/admin/` and verified with `platformctl.py`.
    - Canonical `make verify` green: 411 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `b2c3d4e5f6a8`.
+
+## Phase 14.3 — Customer Onboarding and Tenant Ownership Delivery — 2026-09-18
+
+**User prompt (verbatim):**
+
+> ok nice, go ahead
+
+**Continuation directive (verbatim):**
+
+> resume, sorry for interrupt, after u end this, recheck the code of phase 14.1,2,3 if everything integrated good, and no errors
+
+**Delivered scope:**
+
+1. **ADR-042 Customer Onboarding & Tenant Ownership:**
+   - Established ADR-042 (`docs/decisions/ADR-042-customer-tenant-onboarding-and-launch-checklist.md`) governing automated tenant handoff boundaries, customer `Role.OWNER` assignment, and launch readiness checklist.
+2. **Quote-to-Tenant Database Migration (`c3d4e5f6a8b9`):**
+   - Added `tenant_id` foreign key column on `commercial_quotes` table linking accepted commercial quotes to created tenants.
+3. **Customer Onboarding Service (`packages/marketplace/onboarding.py`):**
+   - Implemented `CustomerOnboardingService.onboard_from_quote(...)`:
+     - Verifies quote status is `ACCEPTED`.
+     - Idempotently creates or reuses `Tenant` (`slug`, `name`).
+     - Provisions primary `User` and `Membership(role=Role.OWNER, is_active=True)`.
+     - Sets up initial desired `Bot` record with template configuration and business profile.
+     - Generates single-use admin sign-in grant code via `AdminLoginService`.
+     - Links `quote.tenant_id = tenant.id` and updates inquiry to `CONVERTED`.
+     - Records `PlatformAuditLog` (`action="tenant.onboarded_from_quote"`).
+4. **Platform Onboard Endpoint & CLI:**
+   - Added `POST /api/v1/platform/sales/quotes/{quote_id}/onboard` protected by `require_platform_operator`.
+   - Added `scripts/platformctl.py quote-onboard` CLI command.
+5. **Tenant Admin Onboarding Checklist API & UI Widget:**
+   - Implemented `GET /api/v1/admin/onboarding/checklist` (`apps/api/v1/admin_onboarding.py`) evaluating branding, catalog, payments, providers, and bot token status.
+   - Built interactive onboarding progress card in Admin Overview dashboard guiding the customer step-by-step to store launch readiness.
+   - Added 1-click `🚀 Onboard Tenant` action button in the Admin Sales Console for accepted quotes.
+6. **Verification & Live Container Rebuild:**
+   - Added test suite `tests/test_phase14_3_customer_onboarding.py` (2 integration tests).
+   - Bumped Admin cache busters to `v=20260918_03`.
+   - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
+   - Verified live at `http://10.70.5.5:8010/admin/`.
+   - Canonical `make verify` green: 413 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `c3d4e5f6a8b9`.

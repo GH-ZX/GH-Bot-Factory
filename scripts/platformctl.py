@@ -156,6 +156,13 @@ def parser() -> argparse.ArgumentParser:
 
     quote_accept = sub.add_parser("quote-accept")
     quote_accept.add_argument("--id", required=True)
+
+    quote_onboard = sub.add_parser("quote-onboard")
+    quote_onboard.add_argument("--id", required=True)
+    quote_onboard.add_argument("--slug")
+    quote_onboard.add_argument("--name")
+    quote_onboard.add_argument("--owner")
+    quote_onboard.add_argument("--telegram-id", type=int)
     return root
 
 
@@ -300,6 +307,17 @@ def main() -> None:
         result = request_json("GET", f"/sales/quotes/{args.id}", token=token, port=port)
     elif args.command == "quote-accept":
         result = request_json("POST", f"/sales/quotes/{args.id}/accept", token=token, port=port)
+    elif args.command == "quote-onboard":
+        payload = {}
+        if args.slug:
+            payload["tenant_slug"] = args.slug
+        if args.name:
+            payload["tenant_name"] = args.name
+        if args.owner:
+            payload["owner_username"] = args.owner
+        if args.telegram_id:
+            payload["owner_telegram_id"] = args.telegram_id
+        result = request_json("POST", f"/sales/quotes/{args.id}/onboard", token=token, port=port, payload=payload)
     else:  # pragma: no cover
         raise SystemExit(f"Unsupported command: {args.command}")
 

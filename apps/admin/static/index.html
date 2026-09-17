@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css?v=20260918_02">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260918_03">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -49,6 +49,20 @@
       <header><div><small class="eyebrow">OPERATIONS</small><h1 id="viewTitle">Overview</h1></div><div class="header-actions"><button id="refreshButton" class="ghost">Refresh</button><button id="headerSignOut" class="ghost" type="button" title="Sign out / Exit" onclick="handleSignOut(event)">Exit</button></div></header>
 
       <section id="view-dashboard" class="view active">
+        <div id="onboardingChecklistCard" class="panel hidden" style="margin-bottom:18px;border-color:color-mix(in srgb, var(--accent) 40%, var(--line))">
+          <div class="panel-head">
+            <div>
+              <small class="eyebrow">STORE LAUNCH CHECKLIST</small>
+              <h3 id="onboardingTitle" style="margin:4px 0 0">Getting Your Store Ready</h3>
+            </div>
+            <span id="onboardingProgressBadge" class="chip chip-accent">0% Complete</span>
+          </div>
+          <div style="background:#090e1c;height:8px;border-radius:999px;overflow:hidden;margin:10px 0 14px;border:1px solid var(--line)">
+            <div id="onboardingProgressBar" style="background:linear-gradient(90deg,var(--accent),var(--ok));height:100%;width:0%;transition:width 0.3s ease"></div>
+          </div>
+          <p id="onboardingNextStep" class="muted compact" style="margin-bottom:12px;font-size:13px"></p>
+          <div id="onboardingItemsList" class="stack" style="gap:8px"></div>
+        </div>
         <div id="metricGrid" class="metric-grid"></div>
         <div class="panel"><div class="panel-head"><div><small class="eyebrow">SECURITY BOUNDARY</small><h2>Tenant operations</h2></div></div><p class="muted">All data and mutations are resolved from the authenticated principal. The client never submits a tenant ID.</p></div>
       </section>
@@ -420,6 +434,29 @@ orders:read"></textarea></label>
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260918_02" defer></script>
+  <dialog id="onboardTenantDialog">
+    <form id="onboardTenantForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <small class="eyebrow">CUSTOMER ONBOARDING</small>
+          <h2 id="onboardTenantTitle">Onboard Customer Tenant</h2>
+        </div>
+        <button type="button" class="icon" data-close-onboard-tenant>×</button>
+      </div>
+      <input id="onboardQuoteId" type="hidden">
+      <p class="muted">Provision an isolated tenant workspace for this customer from their accepted quote.</p>
+      <div class="grid2">
+        <label>Tenant Name<input id="onboardTenantName" required maxlength="120" placeholder="Acme Store"></label>
+        <label>Tenant Slug<input id="onboardTenantSlug" required maxlength="50" placeholder="acme-store"></label>
+      </div>
+      <label>Owner Username<input id="onboardOwnerUsername" required maxlength="120" placeholder="merchant_owner"></label>
+      <div class="dialog-actions" style="margin-top:20px">
+        <button type="button" class="ghost" data-close-onboard-tenant>Cancel</button>
+        <button type="submit" class="primary">🚀 Provision &amp; Launch Tenant</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/admin/app.js?v=20260918_03" defer></script>
 </body>
 </html>
