@@ -6,7 +6,7 @@ This temporary deployment keeps GH-Bot-Factory reachable only on the local netwo
 
 ```text
 LAN phone/browser
-  -> UDM local DNS: bot.gh-store.me = 10.70.5.5
+  -> UDM local DNS: botfac.gh-store.me = 10.70.5.5
   -> Nginx Proxy Manager on 10.70.5.5:443
   -> http://10.70.5.5:8010
   -> GH-Bot-Factory API/Admin/Mini App
@@ -18,18 +18,18 @@ Only clients using the UDM as their DNS resolver and able to reach the LAN can u
 
 Telegram Web Apps require HTTPS. A local DNS record does not issue a trusted certificate by itself.
 
-In Nginx Proxy Manager, obtain or select a certificate for `bot.gh-store.me`. When public HTTP validation is unavailable, use a DNS-01 challenge with a narrowly scoped DNS-provider token. Keep that token in Nginx Proxy Manager and never place it in this repository or `.env`.
+In Nginx Proxy Manager, obtain or select a certificate for `botfac.gh-store.me`. When public HTTP validation is unavailable, use a DNS-01 challenge with a narrowly scoped DNS-provider token. Keep that token in Nginx Proxy Manager and never place it in this repository or `.env`.
 
 ## 2. Nginx Proxy Manager host
 
 Create one Proxy Host with:
 
-- Domain: `bot.gh-store.me`
+- Domain: `botfac.gh-store.me`
 - Scheme: `http`
 - Forward hostname/IP: `10.70.5.5`
 - Forward port: `8010`
 - WebSocket support: enabled
-- SSL certificate: the trusted `bot.gh-store.me` certificate
+- SSL certificate: the trusted `botfac.gh-store.me` certificate
 - Force SSL: enabled
 - HTTP/2: enabled when available
 
@@ -39,7 +39,7 @@ Do not change or replace the existing Nginx Proxy Manager container. It already 
 
 Create a Host (A) record:
 
-- Domain name: `bot.gh-store.me`
+- Domain name: `botfac.gh-store.me`
 - IPv4 address: `10.70.5.5`
 
 On UniFi Network 9.4 this is under **Settings -> Policy Table -> Create New Policy -> DNS**. On 9.3 it is under **Settings -> Policy Engine -> DNS -> Create DNS Record**.
@@ -52,8 +52,8 @@ After DNS, TLS, and proxy checks succeed, set these destination-owned `.env` val
 
 ```text
 APP_ENV=staging
-MINIAPP_PUBLIC_URL=https://bot.gh-store.me/miniapp/
-ADMIN_PUBLIC_URL=https://bot.gh-store.me/admin/
+MINIAPP_PUBLIC_URL=https://botfac.gh-store.me/miniapp/
+ADMIN_PUBLIC_URL=https://botfac.gh-store.me/admin/
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_BACKEND=redis
 API_BIND_ADDRESS=10.70.5.5
@@ -73,13 +73,13 @@ docker compose up -d --force-recreate api worker bot-runtime
 From a LAN client using UDM DNS, verify:
 
 ```text
-https://bot.gh-store.me/health/ready
-https://bot.gh-store.me/admin/
-https://bot.gh-store.me/miniapp/
+https://botfac.gh-store.me/health/ready
+https://botfac.gh-store.me/admin/
+https://botfac.gh-store.me/miniapp/
 ```
 
 Then request a fresh Telegram `/admin` link and confirm direct sign-in, refresh persistence, and Exit. Run `make doctor-live` on the host and inspect `docker compose ps` before treating the local endpoint as ready.
 
 ## Rollback
 
-If local HTTPS fails, leave `APP_ENV=development`, keep the existing LAN Admin URL, and remove or disable only the new `bot.gh-store.me` proxy/DNS entries. Do not change the React application's apex-domain records or the existing Cloudflare tunnel while using this temporary path.
+If local HTTPS fails, leave `APP_ENV=development`, keep the existing LAN Admin URL, and remove or disable only the new `botfac.gh-store.me` proxy/DNS entries. Do not change the React application's apex-domain records, the existing `bot.gh-store.me` Zero Trust route, or the existing Cloudflare tunnel while using this temporary path.

@@ -1471,9 +1471,21 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 
 **Delivered scope:**
 
-- Preserved the existing React application at `gh-store.me` and selected `bot.gh-store.me` for the temporary bot-factory endpoint.
+- Preserved the existing React application at `gh-store.me` and initially selected `bot.gh-store.me` for the temporary bot-factory endpoint; this was superseded by the hostname correction below.
 - Created and successfully restore-verified a restricted PostgreSQL backup before rotating the placeholder database credential.
 - Rotated the PostgreSQL role and ignored `.env` credential atomically, enabled Redis-backed rate limiting, narrowed port 8010 to the LAN address, and confirmed all project services healthy.
 - Repaired unsafe shell sourcing and non-portable checksum behavior in the backup/restore scripts.
 - Documented the remaining operator-owned UDM local DNS and Nginx Proxy Manager TLS host steps. The Cloudflare tunnel and unrelated host containers were not changed.
 - Implementation commit: `76ce536394f7b4b2088870d53f5bb153551ab390`.
+
+## Local Bot Factory Hostname Correction — 2026-09-17
+
+**User prompt (verbatim):**
+
+> on my domain zero trust, theres already a bot.gh-store.me, i want u to make it botfac.gh-store.me
+
+**Outcome:**
+
+- Changed the planned split-horizon DNS, TLS certificate, reverse-proxy host, Admin URL, and Mini App URL from `bot.gh-store.me` to `botfac.gh-store.me`.
+- Preserved the existing `bot.gh-store.me` Zero Trust route and the `gh-store.me` React application without modification.
+- Active `.env` URLs remain on the working LAN configuration until `botfac.gh-store.me` DNS, certificate, and proxy routing are verified.

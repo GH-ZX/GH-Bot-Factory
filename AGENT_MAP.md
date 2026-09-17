@@ -821,6 +821,6 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 - Enabled Redis-backed rate limiting, narrowed API binding to the server LAN address, and preserved port 8000 for Portainer.
 - Fixed backup/restore scripts to parse `.env` as data instead of executing it as shell and to emit location-independent checksum manifests.
 - Updated the doctor readiness probe to follow a specific `API_BIND_ADDRESS` while retaining loopback probing for wildcard binds.
-- Added `docs/runbooks/local-domain-reverse-proxy.md` for temporary split-horizon HTTPS at `bot.gh-store.me` through the existing Nginx Proxy Manager and UDM local DNS.
+- Added `docs/runbooks/local-domain-reverse-proxy.md` for temporary split-horizon HTTPS at `botfac.gh-store.me` through the existing Nginx Proxy Manager and UDM local DNS; the pre-existing `bot.gh-store.me` Zero Trust route remains untouched.
 - The existing proxy container, Cloudflare tunnel, apex-domain React application, and UDM configuration were not mutated. Staging-mode URL cutover waits for the operator-owned DNS/TLS entries.
 - Canonical gate remained green: 401 fast tests and 13 PostgreSQL tests passed; Alembic drift check remained clean at `f2a3b4c5d6e7`.
