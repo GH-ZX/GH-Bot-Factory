@@ -1670,3 +1670,33 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
    - Verified live at `http://10.70.5.5:8010/admin/`.
    - Canonical `make verify` green: 413 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `c3d4e5f6a8b9`.
+
+## Phase 14.4 — Integration and API Marketplace Delivery — 2026-09-18
+
+**User prompt (verbatim):**
+
+> yes
+
+**Delivered scope:**
+
+1. **ADR-043 Integration Marketplace & Safe Credentials:**
+   - Established ADR-043 (`docs/decisions/ADR-043-integration-marketplace-and-safe-credentials.md`) defining the integration marketplace boundary, tenant entitlements, and write-only secret storage ingress.
+2. **Integration Offering & Entitlement Models & Migration (`d4e5f6a8b9c1`):**
+   - Created `IntegrationOfferingModel` and `TenantIntegrationEntitlement` models (`packages/marketplace/models.py`).
+   - Added database migration `d4e5f6a8b9c1_add_integration_marketplace.py` creating tables `integration_offerings` and `tenant_integration_entitlements`.
+3. **Integration Marketplace Service (`packages/marketplace/integrations_service.py`):**
+   - Implemented `IntegrationMarketplaceService` providing baseline offering seeding, catalog listing annotated with tenant entitlement status (`CONFIGURED`, `ENTITLED`, `LOCKED`), and operator grant/revoke methods with `PlatformAuditLog` audit logging.
+4. **Platform Control Plane & Tenant Admin APIs:**
+   - Platform endpoints (`/api/v1/platform/sales/integrations`, `/tenants/{id}/integrations/{key}/grant`, `DELETE /tenants/{id}/integrations/{key}`).
+   - Tenant Admin discovery API (`GET /api/v1/admin/integrations`).
+   - Write-only credential entry API (`POST /api/v1/admin/integrations/{key}/configure`), failing closed (403 Forbidden) for unentitled tenants and storing secret directly in `SecretStorage`.
+5. **Admin Dashboard UI Integration:**
+   - Added `⚡ Integrations Marketplace` button in the Providers tab.
+   - Added interactive `integrationsMarketplaceDialog` and `configureMarketplaceIntegrationDialog` modals.
+   - Displays real-time entitlement chips and 1-click credential configuration modal.
+6. **Verification & Live Container Rebuild:**
+   - Added test suite `tests/test_phase14_4_integration_marketplace.py`.
+   - Bumped Admin cache busters to `v=20260918_04`.
+   - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
+   - Verified live at `http://10.70.5.5:8010/admin/` and via `GET /api/v1/platform/sales/integrations`.
+   - Canonical `make verify` green: 414 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `d4e5f6a8b9c1`.

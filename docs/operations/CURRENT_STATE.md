@@ -3,14 +3,14 @@
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
 - **Last updated:** 2026-09-18
-- **Current phase:** Phase 14.3 — Customer Onboarding & Tenant Ownership
-- **Implementation status:** Phase 14.3 is complete. Customer onboarding service (`packages/marketplace/onboarding.py`) converts accepted quotes into tenant provisioning, provisions owner user and `Role.OWNER` membership, creates desired bot state with template defaults, issues single-use admin launch grants, and records `PlatformAuditLog`. CommercialQuote is linked to provisioned tenants via migration `c3d4e5f6a8b9`. Tenant Admin exposes an interactive onboarding checklist API (`GET /api/v1/admin/onboarding/checklist`) and Overview dashboard widget guiding the owner through branding, catalog, payments, providers, and bot token verification. `scripts/platformctl.py` provides `quote-onboard` CLI command. ADR-042 records onboarding boundaries. Next is Phase 14.4 (Integration & API Marketplace).
-- **Current migration head:** `c3d4e5f6a8b9`
+- **Current phase:** Phase 14.4 — Integration & API Marketplace
+- **Implementation status:** Phase 14.4 is complete. Integration offerings catalog (`IntegrationOfferingModel`) and tenant entitlements (`TenantIntegrationEntitlement`) are live with migration `d4e5f6a8b9c1`. Integration marketplace service (`packages/marketplace/integrations_service.py`) provides catalog querying, tenant entitlement validation, and grant/revoke operations with `PlatformAuditLog` audit logging. Tenant Admin exposes integration discovery API (`GET /api/v1/admin/integrations`) and write-only credential entry into `SecretStorage` (`POST /api/v1/admin/integrations/{key}/configure`), failing closed (403) for unentitled tenants. Admin UI provides an interactive API Marketplace drawer with status indicators (`CONFIGURED`, `ENTITLED`, `LOCKED`) and one-click connection dialog. ADR-043 records integration boundaries. Next is Phase 14.5 (Dedicated Deployment & Source License Handoff).
+- **Current migration head:** `d4e5f6a8b9c1`
 - **Primary branch:** `main`
-- **Latest milestone commit:** `c8dd007399f92e59df95b32cb39ae57731215437` (`feat(phase14): deliver phase 14.2 platform sales console and immutable quotes`)
+- **Latest milestone commit:** `883a277da20188ef7dbb94098939c3645b08ec8d` (`feat(phase14): deliver phase 14.3 customer onboarding and tenant ownership`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 413 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `c3d4e5f6a8b9`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
-- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_03`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
+- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 414 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `d4e5f6a8b9c1`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_04`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
 ## Delivered Capabilities
@@ -142,6 +142,14 @@
    - Built interactive onboarding progress widget in Admin Overview dashboard guiding the customer step-by-step to store launch readiness.
    - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 
+23. Phase 14.4 Integration & API Marketplace:
+   - ADR-043 defines the integration marketplace boundary, tenant entitlements, and write-only secret storage ingress.
+   - `IntegrationOfferingModel` and `TenantIntegrationEntitlement` models (`packages/marketplace/models.py`) with migration `d4e5f6a8b9c1`.
+   - Integration marketplace service (`packages/marketplace/integrations_service.py`) managing catalog discovery, entitlement granting/revoking, and tenant configuration status.
+   - Platform control plane endpoints (`/api/v1/platform/sales/integrations`, `/tenants/{id}/integrations/{key}/grant`) with `PlatformAuditLog` audit logging.
+   - Tenant Admin integration discovery API (`GET /api/v1/admin/integrations`) and write-only credential entry (`POST /api/v1/admin/integrations/{key}/configure`), failing closed (403) for unentitled tenants.
+   - Interactive Integrations Marketplace modal in Admin Providers tab with status chips (`Active & Configured`, `Entitled`, `Upgrade Required`) and one-click credential configuration.
+   - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 ## Current Trust Boundaries
 - Tenant/user identity always comes from `AuthenticatedPrincipal`; browser clients cannot choose authoritative tenant/user IDs.
 - Money mutates only through ledger services and PostgreSQL serialization/idempotency controls.
@@ -207,4 +215,4 @@ Read in order:
 4. Provider balance monitoring is advisory/read-only by design; routing automation based on balance evidence is deferred until hysteresis/freshness policy is specified.
 
 ## Next Recommended Work
-Proceed with Phase 14.4 (Integration & API Marketplace): public and tenant-admin discovery of wholesale provider adapters, priced tenant entitlements, declarative configuration, and write-only credential entry into `SecretStorage`. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md).
+Proceed with Phase 14.5 (Dedicated Deployment & Source License Handoff): dedicated single-tenant portable export/install packaging, license verification records, managed-runtime shutdown on handoff, and zero-backdoor operational boundaries. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md).

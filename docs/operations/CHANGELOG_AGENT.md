@@ -443,3 +443,17 @@ Current phase checkpoint: **Phase 14 — Customer Marketplace product definition
 - Bumped Admin asset cache busters to `v=20260918_03`.
 - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 - Canonical verification: Ruff clean, 413 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `c3d4e5f6a8b9`.
+
+## 2026-09-18 — Phase 14.4 — Integration & API Marketplace
+
+- Milestone implementation: Phase 14.4 delivered.
+- Added ADR-043 (`docs/decisions/ADR-043-integration-marketplace-and-safe-credentials.md`) establishing the integration marketplace boundary, tenant entitlements, and write-only secret storage ingress.
+- Implemented `IntegrationOfferingModel` and `TenantIntegrationEntitlement` models (`packages/marketplace/models.py`) with migration `d4e5f6a8b9c1_add_integration_marketplace.py`.
+- Implemented `IntegrationMarketplaceService` (`packages/marketplace/integrations_service.py`) providing catalog discovery, tenant entitlement validation, and grant/revoke operations with `PlatformAuditLog` audit logging.
+- Added platform control plane endpoints (`/api/v1/platform/sales/integrations`, `/tenants/{id}/integrations/{key}/grant`) with `PlatformAuditLog` audit logging.
+- Implemented tenant admin integration discovery API (`GET /api/v1/admin/integrations`) and write-only credential entry (`POST /api/v1/admin/integrations/{key}/configure`), failing closed (403) for unentitled tenants.
+- Built interactive Integrations Marketplace modal in Admin Providers tab with status chips (`Active & Configured`, `Entitled`, `Upgrade Required`) and one-click credential configuration.
+- Added test suite `tests/test_phase14_4_integration_marketplace.py` covering catalog discovery, fail-closed unentitled configuration, operator entitlement granting, write-only SecretStorage credential storage, and entitlement revocation.
+- Bumped Admin asset cache busters to `v=20260918_04`.
+- Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+- Canonical verification: Ruff clean, 414 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `d4e5f6a8b9c1`.

@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**
-> *Last Updated: 2026-09-18 (Phase 14.3 Customer Onboarding & Tenant Ownership)*
+> *Last Updated: 2026-09-18 (Phase 14.4 Integration & API Marketplace)*
 
 ---
 
@@ -900,3 +900,18 @@ All verbatim user prompts, architectural requirements, and commit records are ca
   9. Bumped Admin asset cache busters to `v=20260918_03`.
   10. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
   11. Canonical gate passed: Ruff clean, 413 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `c3d4e5f6a8b9`.
+
+## Milestone 51: Phase 14.4 Integration & API Marketplace (2026-09-18)
+
+- **Status:** Delivered & Verified
+- **Key Additions:**
+  1. Added ADR-043 establishing the integration marketplace boundary, tenant entitlements, and write-only secret storage ingress.
+  2. Implemented `IntegrationOfferingModel` and `TenantIntegrationEntitlement` models (`packages/marketplace/models.py`) with migration `d4e5f6a8b9c1_add_integration_marketplace.py`.
+  3. Implemented `IntegrationMarketplaceService` (`packages/marketplace/integrations_service.py`) managing catalog discovery, entitlement granting/revoking, and tenant configuration status.
+  4. Added platform control plane endpoints (`/api/v1/platform/sales/integrations`, `/tenants/{id}/integrations/{key}/grant`) with `PlatformAuditLog` audit logging.
+  5. Implemented tenant Admin integration discovery API (`GET /api/v1/admin/integrations`) and write-only credential entry (`POST /api/v1/admin/integrations/{key}/configure`), failing closed (403) for unentitled tenants.
+  6. Interactive Integrations Marketplace modal in Admin Providers tab with status chips (`Active & Configured`, `Entitled`, `Upgrade Required`) and one-click credential configuration.
+  7. Added test suite `tests/test_phase14_4_integration_marketplace.py` covering catalog discovery, fail-closed unentitled configuration, operator entitlement granting, write-only SecretStorage credential storage, and entitlement revocation.
+  8. Bumped Admin asset cache busters to `v=20260918_04`.
+  9. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+  10. Canonical gate passed: Ruff clean, 414 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `d4e5f6a8b9c1`.

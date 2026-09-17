@@ -13,6 +13,10 @@ from sqlalchemy.orm import selectinload
 
 from apps.api.platform_deps import PlatformOperator, require_platform_operator
 from packages.core.database import get_db_session
+from packages.marketplace.integrations_service import (
+    IntegrationMarketplaceError,
+    IntegrationMarketplaceService,
+)
 from packages.marketplace.models import (
     CommercialQuote,
     CommercialQuoteLine,
@@ -138,6 +142,19 @@ class OnboardCustomerResponse(BaseModel):
     admin_launch_url: str
     login_code: str
     already_existed: bool
+
+
+class GrantEntitlementRequest(BaseModel):
+    granted_by: str = Field(default="OPERATOR", max_length=40)
+
+
+class TenantEntitlementResponse(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    integration_key: str
+    is_enabled: bool
+    granted_by: str
+    granted_at: datetime
 
 
 @router.get("/inquiries", response_model=InquiryListResponse)
@@ -714,3 +731,60 @@ async def onboard_customer_tenant(
         login_code=result.login_code,
         already_existed=result.already_existed,
     )
+
+@router.get("/integrations")
+async def list_platform_integrations(
+    tenant_id: uuid.UUID | None = Query(default=None),
+    _: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[dict[str, Any]]:
+    return await IntegrationMarketplaceService.list_offerings_for_tenant(session, tenant_id=tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/integrations/{integration_key}/grant", response_model=TenantEntitlementResponse)
+async def grant_tenant_integration(
+    tenant_id: uuid.UUID,
+    integration_key: str,
+    payload: GrantEntitlementRequest,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> TenantEntitlementResponse:
+    try:
+        ent = await IntegrationMarketplaceService.grant_entitlement(
+            session,
+            tenant_id=tenant_id,
+            integration_key=integration_key,
+            granted_by=payload.granted_by,
+            actor=operator.actor,
+            ip_address=_client_ip(request),
+        )
+    except IntegrationMarketplaceError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return TenantEntitlementResponse(
+        id=ent.id,
+        tenant_id=ent.tenant_id,
+        integration_key=ent.integration_key,
+        is_enabled=ent.is_enabled,
+        granted_by=ent.granted_by,
+        granted_at=ent.granted_at,
+    )
+
+
+@router.delete("/tenants/{tenant_id}/integrations/{integration_key}")
+async def revoke_tenant_integration(
+    tenant_id: uuid.UUID,
+    integration_key: str,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, bool]:
+    await IntegrationMarketplaceService.revoke_entitlement(
+        session,
+        tenant_id=tenant_id,
+        integration_key=integration_key,
+        actor=operator.actor,
+        ip_address=_client_ip(request),
+    )
+    return {"ok": True}

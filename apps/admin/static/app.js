@@ -1,5 +1,5 @@
 const tg = window.Telegram?.WebApp;
-const state = { token: null, botId: null, bootstrap: null, categories: [], products: [], orders: [], jobs: [], events: [], providerCapabilities: null, providerAdapters: [], suppliers: [], paymentProviders: [], mappings: [], members: [], financialCases: [], paymentOps: null, analytics: null, auditLogs: [], auditNextOffset: null, bots: [], botJobs: [], botTemplates: [], botWizardStep: 1, botWizardMode: "create", botWizardOptions: null, saas: null, billing: null, platformToken: null, inquiries: [], salesQuotes: [], currentInquiry: null, salesActiveTab: "inquiries" };
+const state = { token: null, botId: null, bootstrap: null, categories: [], products: [], orders: [], jobs: [], events: [], providerCapabilities: null, providerAdapters: [], suppliers: [], paymentProviders: [], mappings: [], members: [], financialCases: [], paymentOps: null, analytics: null, auditLogs: [], auditNextOffset: null, bots: [], botJobs: [], botTemplates: [], botWizardStep: 1, botWizardMode: "create", botWizardOptions: null, saas: null, billing: null, platformToken: null, inquiries: [], salesQuotes: [], currentInquiry: null, salesActiveTab: "inquiries", adminIntegrations: [] };
 const el = (id) => document.getElementById(id);
 const escapeHtml = (v) => String(v ?? "").replace(/[&<>'"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 
@@ -566,9 +566,110 @@ async function loadProviderOps(){
   if(!state.providerCapabilities) await loadProviderCapabilities();
   if(!state.products.length) await loadProducts();
   await Promise.all([loadSuppliers(),loadPaymentProviders(),loadMappings()]);
-  const locked=!canConfigureProviders(); ["newSupplier","configurePayment","newMapping"].forEach(id=>el(id).classList.toggle("hidden",locked));
+  const locked=!canConfigureProviders(); ["newSupplier","configurePayment","newMapping","openIntegrationsMarketplaceBtn"].forEach(id=>el(id)?.classList.toggle("hidden",locked));
   el("mappingProduct").innerHTML=state.products.map(p=>`<option value="${p.id}">${escapeHtml(p.title)}</option>`).join("");
   refreshMappingVariants();
+}
+
+async function loadAdminIntegrations() {
+  const container = el("marketplaceIntegrationsList");
+  if (!container) return;
+  try {
+    const items = await api("/api/v1/admin/integrations");
+    state.adminIntegrations = items || [];
+    renderAdminIntegrations();
+  } catch (err) {
+    container.innerHTML = `<div class="status-msg error">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderAdminIntegrations() {
+  const container = el("marketplaceIntegrationsList");
+  if (!container) return;
+  if (!state.adminIntegrations.length) {
+    container.innerHTML = `<div class="empty">No marketplace integrations available.</div>`;
+    return;
+  }
+
+  const statusBadges = {
+    CONFIGURED: `<span class="chip chip-ok">✓ Active &amp; Configured</span>`,
+    ENTITLED: `<span class="chip chip-accent">🔓 Entitled (Setup required)</span>`,
+    LOCKED: `<span class="chip chip-muted">🔒 Upgrade Required</span>`,
+  };
+
+  container.innerHTML = state.adminIntegrations
+    .map((it) => {
+      const badge = statusBadges[it.status] || `<span class="chip">${escapeHtml(it.status)}</span>`;
+      const isEntitled = it.is_entitled || it.status === "CONFIGURED";
+      const isConfigured = it.is_configured || it.status === "CONFIGURED";
+
+      return `
+        <article class="guidance-card ${isConfigured ? "current" : ""}">
+          <div>
+            <div class="guidance-card-head">
+              <h3>${escapeHtml(it.name)}</h3>
+              <span class="chip">${escapeHtml(it.category)}</span>
+            </div>
+            <div class="guidance-badges">
+              ${badge}
+              <span class="price-tag">+$${escapeHtml(it.setup_fee)} setup · +$${escapeHtml(it.monthly_fee)}/mo</span>
+            </div>
+            <p class="muted" style="margin:0 0 10px;font-size:13px">${escapeHtml(it.description)}</p>
+            <div class="guidance-detail">
+              <strong>Supported Features</strong>
+              <ul>${it.features.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>
+              <strong>Requirements</strong>
+              <ul>${it.requirements.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>
+            </div>
+          </div>
+          <div class="guidance-card-actions">
+            ${
+              isEntitled
+                ? `<button type="button" class="${isConfigured ? "ghost" : "primary"}" data-configure-integration="${escapeHtml(it.key)}">
+                    ${isConfigured ? "Update API Key / Settings" : "⚡ Connect Integration"}
+                   </button>`
+                : `<button type="button" class="ghost" disabled title="Contact the platform owner to unlock this integration for your plan.">
+                    🔒 Locked (Contact Owner)
+                   </button>`
+            }
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function openConfigureIntegrationModal(key) {
+  const item = state.adminIntegrations.find((x) => x.key === key);
+  if (!item) return;
+  el("configureMarketplaceKey").value = item.key;
+  el("configureMarketplaceTitle").textContent = `Connect ${item.name}`;
+  el("configureMarketplaceDesc").textContent = `${item.description} Your API credentials will be stored in encrypted SecretStorage.`;
+  el("configureMarketplaceApiKey").value = "";
+  el("configureMarketplaceDisplayName").value = item.name;
+  el("configureMarketplaceIntegrationDialog").showModal();
+}
+
+async function saveConfigureIntegration(event) {
+  event.preventDefault();
+  const key = el("configureMarketplaceKey").value;
+  const apiKey = el("configureMarketplaceApiKey").value.trim();
+  const displayName = el("configureMarketplaceDisplayName").value.trim();
+
+  try {
+    const result = await api(`/api/v1/admin/integrations/${encodeURIComponent(key)}/configure`, {
+      method: "POST",
+      body: JSON.stringify({
+        api_key: apiKey || null,
+        display_name: displayName || null,
+      }),
+    });
+    alert(`Success: ${result.message}`);
+    el("configureMarketplaceIntegrationDialog").close();
+    await Promise.all([loadAdminIntegrations(), loadProviderOps()]);
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 function canManageMember(member){
@@ -1159,6 +1260,17 @@ function bind(){
   el("createQuoteForm")?.addEventListener("submit", saveCreateQuote);
   document.querySelectorAll("[data-close-inquiry-detail]").forEach((b) => b.addEventListener("click", () => el("inquiryDetailDialog").close()));
   document.querySelectorAll("[data-close-create-quote]").forEach((b) => b.addEventListener("click", () => el("createQuoteDialog").close()));
+  el("openIntegrationsMarketplaceBtn")?.addEventListener("click", () => {
+    loadAdminIntegrations().catch((err) => alert(err.message));
+    el("integrationsMarketplaceDialog").showModal();
+  });
+  document.querySelectorAll("[data-close-integrations-marketplace]").forEach((b) => b.addEventListener("click", () => el("integrationsMarketplaceDialog").close()));
+  el("marketplaceIntegrationsList")?.addEventListener("click", (e) => {
+    const key = e.target.closest("[data-configure-integration]")?.dataset.configureIntegration;
+    if (key) openConfigureIntegrationModal(key);
+  });
+  el("configureMarketplaceIntegrationForm")?.addEventListener("submit", saveConfigureIntegration);
+  document.querySelectorAll("[data-close-configure-marketplace]").forEach((b) => b.addEventListener("click", () => el("configureMarketplaceIntegrationDialog").close()));
 }
 
 function handleSignOut(event) {

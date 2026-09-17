@@ -21,7 +21,10 @@ from packages.marketplace.models import (
     ContactMethod,
     CustomerInquiry,
     InquiryStatus,
+    IntegrationLifecycle,
+    IntegrationOfferingModel,
     QuoteStatus,
+    TenantIntegrationEntitlement,
 )
 from packages.payments.economics_models import (
     AssetLedgerTransaction,
@@ -108,6 +111,8 @@ __all__ = [
     "FxPolicy",
     "FxPolicyMode",
     "InquiryStatus",
+    "IntegrationLifecycle",
+    "IntegrationOfferingModel",
     "LedgerTransaction",
     "MarkupMode",
     "Membership",
@@ -151,6 +156,7 @@ __all__ = [
     "SubscriptionStatus",
     "SystemInstallState",
     "Tenant",
+    "TenantIntegrationEntitlement",
     "TenantSubscription",
     "TenantTelegramUser",
     "TransactionType",

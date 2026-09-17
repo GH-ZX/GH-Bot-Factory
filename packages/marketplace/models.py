@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -134,3 +135,60 @@ class CommercialQuoteLine(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     quote: Mapped[CommercialQuote] = relationship("CommercialQuote", back_populates="lines")
+
+
+class IntegrationLifecycle(str, enum.Enum):
+    DRAFT = "DRAFT"
+    SANDBOX_REVIEW = "SANDBOX_REVIEW"
+    ACTIVE = "ACTIVE"
+    DEPRECATED = "DEPRECATED"
+    RETIRED = "RETIRED"
+
+
+class IntegrationOfferingModel(Base, UUIDMixin, TimestampMixin):
+    """Platform-managed catalog of third-party integration offerings."""
+
+    __tablename__ = "integration_offerings"
+    __table_args__ = (
+        Index("ix_integration_offerings_key", "key", unique=True),
+        Index("ix_integration_offerings_category_lifecycle", "category", "lifecycle"),
+    )
+
+    key: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    category: Mapped[str] = mapped_column(String(40), nullable=False, default="OTHER")
+    adapter_key: Mapped[str] = mapped_column(String(60), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    lifecycle: Mapped[IntegrationLifecycle] = mapped_column(
+        Enum(IntegrationLifecycle, native_enum=False, length=20),
+        nullable=False,
+        default=IntegrationLifecycle.ACTIVE,
+    )
+    setup_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0.00"))
+    monthly_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal("0.00"))
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    required_credentials: Mapped[list[str]] = mapped_column(JSON_TYPE, default=list, nullable=False)
+    supported_templates: Mapped[list[str]] = mapped_column(JSON_TYPE, default=list, nullable=False)
+    features: Mapped[list[str]] = mapped_column(JSON_TYPE, default=list, nullable=False)
+    requirements: Mapped[list[str]] = mapped_column(JSON_TYPE, default=list, nullable=False)
+    docs_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class TenantIntegrationEntitlement(Base, UUIDMixin, TimestampMixin):
+    """Tenant-specific commercial entitlement granting access to configure an integration."""
+
+    __tablename__ = "tenant_integration_entitlements"
+    __table_args__ = (
+        Index("ix_tenant_integration_entitlements_unique", "tenant_id", "integration_key", unique=True),
+        Index("ix_tenant_integration_entitlements_tenant", "tenant_id"),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    integration_key: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    granted_by: Mapped[str] = mapped_column(String(40), nullable=False, default="OPERATOR")
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+
+    tenant: Mapped[Tenant] = relationship("Tenant")

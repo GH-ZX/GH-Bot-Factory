@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css?v=20260918_03">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260918_04">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -113,7 +113,7 @@
       </section>
 
       <section id="view-providers" class="view">
-        <div class="toolbar provider-toolbar"><div></div><button id="newMapping" class="ghost">New mapping</button><button id="newSupplier" class="primary">New supplier</button><button id="configurePayment" class="primary">Configure payment</button></div>
+        <div class="toolbar provider-toolbar"><button id="openIntegrationsMarketplaceBtn" class="ghost" type="button">⚡ Integrations Marketplace</button><button id="newMapping" class="ghost">New mapping</button><button id="newSupplier" class="primary">New supplier</button><button id="configurePayment" class="primary">Configure payment</button></div>
         <div class="panel operation-note"><strong>Secret-safe configuration.</strong><span class="muted"> Store environment/vault references only. Secret values are never returned to this client.</span></div>
         <div class="provider-grid">
           <div><div class="panel-head"><div><small class="eyebrow">SUPPLIERS</small><h2>Fulfillment providers</h2></div></div><div id="supplierProviderList" class="stack"></div></div>
@@ -457,6 +457,50 @@ orders:read"></textarea></label>
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260918_03" defer></script>
+
+  <dialog id="integrationsMarketplaceDialog" class="help-drawer">
+    <div class="dialog-head">
+      <div>
+        <small class="eyebrow">API MARKETPLACE</small>
+        <h2>Wholesale Supplier &amp; Payment Integrations</h2>
+      </div>
+      <button type="button" class="icon" data-close-integrations-marketplace>×</button>
+    </div>
+    <div class="panel operation-note">
+      <strong>Write-only credential boundary.</strong>
+      <span class="muted"> Entitled integrations allow you to connect your own supplier API keys directly into encrypted SecretStorage. Plaintext keys are never stored in the database or returned to the browser.</span>
+    </div>
+    <div id="marketplaceIntegrationsList" class="guidance-grid" style="margin-top:14px"></div>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" data-close-integrations-marketplace>Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="configureMarketplaceIntegrationDialog">
+    <form id="configureMarketplaceIntegrationForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <small class="eyebrow">INTEGRATION SETUP</small>
+          <h2 id="configureMarketplaceTitle">Connect Integration</h2>
+        </div>
+        <button type="button" class="icon" data-close-configure-marketplace>×</button>
+      </div>
+      <input id="configureMarketplaceKey" type="hidden">
+      <p id="configureMarketplaceDesc" class="muted" style="margin:6px 0 14px"></p>
+      <label id="configureApiKeyLabel">
+        API Key / Secret Token (Write-Only)
+        <input id="configureMarketplaceApiKey" type="password" autocomplete="new-password" placeholder="Paste your API key or token">
+      </label>
+      <label style="margin-top:10px">
+        Display Name (Optional)
+        <input id="configureMarketplaceDisplayName" placeholder="e.g. Primary 5sim Provider">
+      </label>
+      <div class="dialog-actions" style="margin-top:20px">
+        <button type="button" class="ghost" data-close-configure-marketplace>Cancel</button>
+        <button type="submit" class="primary">Save &amp; Activate Integration</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/admin/app.js?v=20260918_04" defer></script>
 </body>
 </html>
