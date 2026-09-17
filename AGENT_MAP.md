@@ -832,3 +832,12 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 - Nginx Proxy Manager host ID 41 forwards HTTP/WebSockets to `10.70.5.5:8010`; a consistent pre-change database backup is stored beside the NPM database.
 - GH-Bot-Factory uses `http://botfac.gh-store.me/admin/` for local Admin links. DNS, Nginx syntax, readiness, Admin HTTP, and all project service health checks passed.
 - TLS/Mini App staging cutover remains pending because Nginx Proxy Manager has no trusted certificate covering `gh-store.me`; no Cloudflare tunnel or existing `bot.gh-store.me` route was modified.
+
+## Milestone 46: Phase 14 Customer Marketplace Product Definition (2026-09-17)
+
+- Recorded the proposed commercial journey from public Bot/Mini App discovery through manual quote, tenant onboarding, customer operation, and optional external handoff.
+- Defined separate Factory Owner, Customer/Tenant Owner, customer staff, shopper, and self-hosted customer boundaries.
+- Cataloged plain-language meanings for all eleven templates and proposed one shared metadata source for Admin **? Help** and public discovery.
+- Proposed platform-owned offering/integration prices and entitlements while keeping tenant provider connections, credentials, catalog, supplier costs, retail prices, and orders tenant-owned.
+- Defined managed subscription, dedicated portable deployment, and source-code license products with no implicit Factory Owner control after handoff.
+- Full proposal: `docs/plans/phase-14-customer-marketplace.md`. No Phase 14 runtime, schema, route, or deployment implementation has started.

@@ -1505,3 +1505,20 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 - Updated the destination-owned `.env` Admin URL to `http://botfac.gh-store.me/admin/` and recreated the API and bot runtime.
 - Trusted TLS and Mini App activation remain pending because the proxy has no certificate covering `gh-store.me`; existing Cloudflare/Zero Trust configuration was not changed.
 - Network-activation handoff commit: `11f3257cb08315ec2f51c700f4e2b6f78eb00b0c`.
+
+## Phase 14 Customer Marketplace, Ownership, APIs, and Source Delivery — 2026-09-17
+
+**User prompt (verbatim):**
+
+> now tell me the plan for phase 14, and write it, so, my goal is : im the owner of this GH Bot Factory, i have customers need telegram bots/ and or miniapps of telegram, those should have stored products and/or api products using providers, he choose or i suggest the providers as he what he want, so as owner i need to know what all teplates there means so i can decide (in the admin page as a ? buttom to show meaning of all templates, and after doing those im as admin, not the one who do store his products, the customer that asked for his bot should add the stored products, and manage his api on his own, he might ask for his bot code so he should get it (might be pricy for him), and, the customer has his own customers that buys from the bot he bought from me, i could control his bot but not if he got the files and hosted on his own, tho, this should be a page for custmers can search and choose the plan, a good modern page that make customer choose what he wants, so after that i manually do the rest, and able to message me too, after that, an idea, the apis should be able to be added , as owner of bot factory, i should be able to add new apis to the factory, and new customers could get all apis added but every api is priced, all should be balanced and controllable (even pricing), now, what can you suggest me for all what i said?, we are just talking now, dont code, u can record this prompt and ur suggest for this matters
+
+**Recorded proposal:**
+
+- Created `docs/plans/phase-14-customer-marketplace.md`; no application code, schema, route, or deployment was changed.
+- Defined Factory Owner, Customer/Tenant Owner, staff, shopper, and externally hosted customer as separate authority boundaries.
+- Documented plain-language meanings for all eleven current templates and proposed one server-owned guide reused by an Admin **? Help** drawer and public configurator.
+- Proposed a modern Build Your Bot request flow covering Bot/Mini App, template, stored/API/hybrid products, integrations, managed/self-hosted delivery, support, itemized estimate, messaging, and manual owner review.
+- Proposed platform-owned offering/integration prices and immutable quotes while keeping supplier costs and shopper retail pricing separate.
+- Proposed an integration marketplace in which all customers may discover APIs, entitled tenants configure their own connections, and secret values remain write-only in `SecretStorage`.
+- Proposed managed subscription, dedicated portable deployment, and premium source-license products. A completed self-hosted handoff ends implicit Factory Owner control and must exclude all other tenant/platform data and secrets.
+- Split proposed delivery into Phase 14.0 through 14.6. Implementation awaits product decisions and explicit authorization.

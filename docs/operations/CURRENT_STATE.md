@@ -3,8 +3,8 @@
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
 - **Last updated:** 2026-09-17
-- **Current phase:** Phase 13 — Advanced Bot Factory UX & Storefront Vertical Delivery
-- **Implementation status:** Phase 13 Advanced Bot Factory and Storefront Vertical Delivery complete. Telegram Mini App dynamic vertical adaptation, module navigation visibility bounds, delivered fulfillment artifact exposure with copy-to-clipboard, and Admin Console fleet business profile badges implemented and verified.
+- **Current phase:** Phase 14 — Customer Marketplace product definition
+- **Implementation status:** Phase 13 Advanced Bot Factory and Storefront Vertical Delivery are complete. The Phase 14 customer marketplace, tenant handoff, integration catalog, commercial quote, and source-license scope is documented as a proposal only; no Phase 14 application code, schema, route, or deployment change has started.
 - **Current migration head:** `f2a3b4c5d6e7`
 - **Primary branch:** `main`
 - **Latest milestone commit:** `76ce536394f7b4b2088870d53f5bb153551ab390` (`chore(ops): harden local deployment and backup recovery`)
@@ -110,6 +110,7 @@
    - interactive clipboard copy with haptic and toast feedback for codes, numbers, and credentials
    - Admin fleet overview cards displaying vertical business profile tags, provider counts, and routing strategies
 17. Agent-maintainability layer: current-state checkpoint, handoff protocol, changelog, ADRs, roadmap, prompt history, and machine consistency check.
+18. Phase 14 product definition: public discovery/configuration, template guidance, manual sales/quotes, customer tenant ownership, priced integration entitlements, and managed versus self-hosted/source-delivery boundaries. This is a proposal only.
 
 ## Current Trust Boundaries
 
@@ -146,6 +147,7 @@ Read in order:
 6. relevant ADRs under `docs/decisions/`
 7. `docs/prompts/prompt_history.md`
 8. `.agents/skills/gh-bot-factory-core/SKILL.md`
+9. `docs/plans/phase-14-customer-marketplace.md` for the proposed next product phase
 
 ## Historical Packaging Verification (superseded by repair notes)
 
@@ -177,4 +179,4 @@ Read in order:
 
 ## Next Recommended Work
 
-Phase 13 implementation and its Admin mobile repairs are complete. Finish the temporary local HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md): attach a publicly trusted certificate for `botfac.gh-store.me` to the active Nginx Proxy Manager host, enable Force SSL/HTTP2, validate the three HTTPS endpoints, and then switch `.env` to `APP_ENV=staging` with the Admin/Mini App HTTPS URLs. After that, run `make release-gate`, staging failure injection, and the encrypted backup/restore plus portability drills. The principal remaining code hardening is per-item upstream correlation for multi-item asynchronous fulfillment.
+Review and approve the commercial decisions in [the Phase 14 customer marketplace plan](../plans/phase-14-customer-marketplace.md), especially launch packages, public templates, integration pricing, and source-license terms. The recommended first implementation slice is Phase 14.0 template guidance followed by the public request-and-quote configurator. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md), then run the release gate, staging failure injection, and encrypted backup/restore plus portability drills. Per-item upstream correlation for multi-item asynchronous fulfillment remains the principal existing runtime hardening gap.

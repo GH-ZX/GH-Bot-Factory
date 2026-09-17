@@ -533,3 +533,19 @@ Delivered on 2026-09-17 upon user authorization:
 - Selected `botfac.gh-store.me` as a dedicated temporary local endpoint so the existing React application at `gh-store.me` and existing `bot.gh-store.me` Zero Trust route are unaffected.
 - Added and verified the UDM local DNS record plus Nginx Proxy Manager HTTP host; the local Admin URL is active at `http://botfac.gh-store.me/admin/`.
 - Remaining operator step: attach a publicly trusted certificate to the active proxy host, validate local HTTPS, then switch `APP_ENV`, `ADMIN_PUBLIC_URL`, and `MINIAPP_PUBLIC_URL` to staging values.
+
+### Phase 14 — Customer Marketplace, Tenant Handoff & Integration Catalog 📝 Planned
+
+The product and architecture proposal is recorded in [the Phase 14 plan](plans/phase-14-customer-marketplace.md). No Phase 14 application code or schema has been authorized or implemented yet.
+
+- Separate Factory Owner platform authority, Customer/Tenant Owner authority, customer staff, shoppers, and externally hosted customers.
+- Explain all eleven current templates through one server-owned guide reused by an Admin **? Help** drawer and the public customer configurator.
+- Add a modern public Build Your Bot journey for template, Bot/Mini App, product source, integrations, hosting, support, and contact choices.
+- Start with human-reviewed inquiries and immutable quotes; keep automatic provisioning and charging out of the first release.
+- Hand routine catalog, inventory, provider credential, mapping, pricing, payment, and staff management to the customer as tenant `OWNER`.
+- Add a platform-owned integration/API catalog with explicit prices and tenant entitlements while keeping connections and credentials tenant-owned.
+- Offer clearly separated managed hosting, dedicated portable deployment, and premium source-code licensing.
+- Treat self-hosting/source delivery as a formal handoff after which the Factory Owner has no implicit technical control.
+- Keep platform commercial pricing, tenant supplier costs, and shopper retail prices as three separate authorities.
+
+Proposed delivery sequence: product contract/template guidance → public configurator and inquiries → owner sales/quote console → tenant onboarding → integration marketplace → deployment/source handoff → release qualification.

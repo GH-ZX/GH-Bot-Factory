@@ -377,3 +377,12 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 - Activated `ADMIN_PUBLIC_URL=http://botfac.gh-store.me/admin/` for the local development environment and recreated API/bot-runtime services.
 - Verified UDM DNS, Nginx syntax, proxied readiness with PostgreSQL/Redis healthy, Admin HTTP 200, and all five GH-Bot-Factory services healthy.
 - Trusted TLS is not yet available for `gh-store.me` in Nginx Proxy Manager. `APP_ENV=staging` and `MINIAPP_PUBLIC_URL` remain intentionally unset until a trusted certificate is attached; no Cloudflare tunnel was changed.
+
+## 2026-09-17 — Phase 14 Customer Marketplace Product Definition
+
+Current phase checkpoint: **Phase 14 — Customer Marketplace product definition**.
+
+- Recorded the Factory Owner's intended business model for selling Telegram bots and Mini Apps, allowing customers to operate their own tenant catalogs/providers, pricing API integrations, and offering premium self-hosted/source delivery.
+- Added `docs/plans/phase-14-customer-marketplace.md` with actor boundaries, explanations for all eleven current templates, the public configurator journey, manual inquiry/quote workflow, pricing composition, integration catalog, tenant onboarding, and deployment/source handoff proposal.
+- Recommended a strict split between platform authority, tenant ownership, and shopper identity, with no owner impersonation and no implicit control after an external handoff.
+- Defined six proposed implementation slices from template guidance through release qualification. This is documentation and discussion only; no Phase 14 application code, schema, route, or deployment change was made.
