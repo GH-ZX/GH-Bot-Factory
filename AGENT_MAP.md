@@ -806,3 +806,11 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 - Admin Console bot fleet cards now display vertical business profile badges, provider counts, and routing strategies.
 - Updated `docker-compose.yml` to bind API port 8010 on `0.0.0.0` for LAN testing, keeping port 8000 reserved for Portainer under Law 4.
 - Verification: 399 fast tests passed; 13 PostgreSQL tests passed; Ruff clean; handoff consistency clean.
+
+## Milestone 43: Admin Persistent Session & Direct Link Sign-In (2026-09-17)
+
+- Added `localStorage` session persistence (`ghbf_admin_token`) so refreshing the Admin browser keeps the active session without re-prompting for a token.
+- Telegram bot `/admin` command now issues a ready clickable direct URL (`http://10.70.5.5:8010/admin/?code=...`) for one-click access.
+- Admin client captures `?code=` query or hash, exchanges it for a JWT session, and clears URL parameters cleanly via `history.replaceState`.
+- Added explicit Exit / Sign out buttons in the header (`#headerSignOut`) and sidebar (`#signOut`).
+- Added test coverage in `tests/test_admin_browser_login.py`.

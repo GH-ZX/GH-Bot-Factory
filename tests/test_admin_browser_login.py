@@ -119,3 +119,50 @@ async def test_expired_or_malformed_code_fails_closed(db_session):
     for code in ("x" * 32, "not-a-code"):
         with pytest.raises(AdminLoginError):
             await service.consume(db_session, code)
+
+
+@pytest.mark.asyncio
+async def test_admin_command_issues_direct_url_in_private_chat(db_session, monkeypatch):
+    tenant, user, _, bot = await identity(db_session)
+    tenant_context = SimpleNamespace(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        bot_id=bot.id,
+        display_name="Test Store",
+        tenant_settings={},
+    )
+    message = SimpleNamespace(chat=SimpleNamespace(type="private"), answer=AsyncMock())
+    service = AdminLoginService(MemoryGrants())
+    monkeypatch.setattr("packages.telegram.routers.admin.AdminLoginService", lambda: service)
+    monkeypatch.setattr("packages.telegram.routers.admin.settings.admin_public_url", None)
+
+    await handle_admin_command(message, tenant_context, db_session)
+    assert message.answer.called
+    text = message.answer.call_args.args[0]
+    assert "Browser Admin Access" in text
+    assert "http://127.0.0.1:8010/admin/?code=" in text
+
+
+@pytest.mark.asyncio
+async def test_admin_command_with_configured_public_url(db_session, monkeypatch):
+    tenant, user, _, bot = await identity(db_session)
+    tenant_context = SimpleNamespace(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        bot_id=bot.id,
+        display_name="Test Store",
+        tenant_settings={"admin_public_url": "https://admin.gh-store.me/admin/"},
+    )
+    message = SimpleNamespace(chat=SimpleNamespace(type="private"), answer=AsyncMock())
+    service = AdminLoginService(MemoryGrants())
+    monkeypatch.setattr("packages.telegram.routers.admin.AdminLoginService", lambda: service)
+
+    await handle_admin_command(message, tenant_context, db_session)
+    assert message.answer.called
+    text = message.answer.call_args.args[0]
+    assert "https://admin.gh-store.me/admin/?code=" in text
+    keyboard = message.answer.call_args.kwargs.get("reply_markup")
+    assert keyboard is not None
+    # Check that the browser sign-in button is present in the keyboard
+    urls = [b.url for row in keyboard.inline_keyboard for b in row if hasattr(b, "url") and b.url]
+    assert any("https://admin.gh-store.me/admin/?code=" in u for u in urls)

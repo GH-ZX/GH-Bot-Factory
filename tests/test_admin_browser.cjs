@@ -47,14 +47,17 @@ const server = http.createServer((req, res) => {
     await page.locator('#loginSubmit').click();
     await page.locator('#app').waitFor({state: 'visible'});
     assert.deepEqual(loginBody, {code: 'b'.repeat(32)});
-    assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
+    assert.equal(await page.evaluate(() => localStorage.getItem('ghbf_admin_token')), 'browser-test-session');
+    await page.reload();
+    await page.locator('#app').waitFor({state: 'visible'});
     await page.locator('#signOut').click();
     await page.locator('#login').waitFor({state: 'visible'});
+    assert.equal(await page.evaluate(() => localStorage.getItem('ghbf_admin_token')), null);
     await page.setViewportSize({width: 390, height: 844});
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({path: '/tmp/ghbf-admin-login-mobile.png'});
     assert.deepEqual(errors, []);
-    console.log('Admin browser checks passed: direct entry, invalid code recovery, login, logout, no token storage, mobile layout.');
+    console.log('Admin browser checks passed: direct entry, invalid code recovery, login, reload persistence, logout, mobile layout.');
     const store = await browser.newPage({viewport: {width: 390, height: 844}});
     store.on('pageerror', error => errors.push(error.message));
     await store.addInitScript(() => {

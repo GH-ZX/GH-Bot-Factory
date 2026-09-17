@@ -3,6 +3,28 @@ const state = { token: null, botId: null, bootstrap: null, categories: [], produ
 const el = (id) => document.getElementById(id);
 const escapeHtml = (v) => String(v ?? "").replace(/[&<>'"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 
+const TOKEN_KEY = "ghbf_admin_token";
+
+function setSessionToken(token) {
+  state.token = token;
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch (_) {}
+}
+
+function clearSessionToken() {
+  setSessionToken(null);
+}
+
+function getStoredToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -10,6 +32,10 @@ async function api(path, options = {}) {
   if (!response.ok) {
     let detail = `Request failed (${response.status})`;
     try { const parsed=(await response.json()).detail; detail=typeof parsed==="string"?parsed:(parsed?.message||JSON.stringify(parsed)||detail); } catch (_) {}
+    if (response.status === 401 && !path.includes("/auth/")) {
+      clearSessionToken();
+      showLogin("Session expired. Send /admin to your bot for a new sign-in link.");
+    }
     throw new Error(detail);
   }
   if (response.status === 204) return null;
@@ -31,7 +57,7 @@ async function authenticate() {
 
 let bound = false;
 function showLogin(message = "") {
-  state.token = null;
+  clearSessionToken();
   el("app").classList.add("hidden");
   el("login").classList.remove("hidden");
   el("loginError").textContent = message;
@@ -56,7 +82,7 @@ async function signIn(event) {
       method: "POST", body: JSON.stringify({ code: el("loginCode").value.trim() }),
     });
     el("loginCode").value = "";
-    state.token = result.access_token;
+    setSessionToken(result.access_token);
     await openConsole();
   } catch (error) {
     el("loginCode").value = "";
@@ -474,13 +500,64 @@ function bind(){
   el("supplierProviderList").addEventListener("click",async e=>{const health=e.target.closest("[data-health-provider]")?.dataset.healthProvider;const toggle=e.target.closest("[data-toggle-provider]")?.dataset.toggleProvider;try{if(health)await healthSupplier(health);else if(toggle)await toggleSupplier(toggle);}catch(err){alert(err.message||"Provider operation failed.");}});el("paymentProviderList").addEventListener("click",e=>{const name=e.target.closest("[data-edit-payment-provider]")?.dataset.editPaymentProvider;if(name)openPaymentProvider(name);});el("memberList").addEventListener("click",e=>{const id=e.target.closest("[data-edit-member]")?.dataset.editMember;if(id){const member=state.members.find(m=>m.id===id);if(member)openMember(member);}});el("memberForm").addEventListener("submit",e=>saveMember(e).catch(err=>alert(err.message)));
 }
 
+function handleSignOut() {
+  clearSessionToken();
+  location.replace("/admin/");
+}
+
 el("loginForm").addEventListener("submit", signIn);
-el("signOut").addEventListener("click", () => { state.token = null; location.replace("/admin/"); });
-(async () => {
-  try {
-    if (await authenticate()) await openConsole();
-    else showLogin();
-  } catch (error) {
-    showLogin(error.message || "Sign-in failed. Try a browser sign-in code below.");
+el("signOut")?.addEventListener("click", handleSignOut);
+el("headerSignOut")?.addEventListener("click", handleSignOut);
+
+async function initSession() {
+  const urlParams = new URLSearchParams(location.search);
+  const hashStr = location.hash.startsWith("#") ? location.hash.slice(1) : location.hash;
+  const hashParams = new URLSearchParams(hashStr);
+  const urlCode = (urlParams.get("code") || hashParams.get("code") || "").trim();
+
+  if (urlCode) {
+    try {
+      urlParams.delete("code");
+      const cleanSearch = urlParams.toString() ? `?${urlParams.toString()}` : "";
+      window.history.replaceState({}, document.title, location.pathname + cleanSearch);
+    } catch (_) {}
+
+    try {
+      const result = await api("/api/v1/auth/admin-code", {
+        method: "POST",
+        body: JSON.stringify({ code: urlCode }),
+      });
+      setSessionToken(result.access_token);
+      await openConsole();
+      return;
+    } catch (error) {
+      showLogin(error.message || "Sign-in link is invalid or expired. Send /admin to your bot for a new one.");
+      return;
+    }
   }
-})();
+
+  if (await authenticate()) {
+    setSessionToken(state.token);
+    await openConsole();
+    return;
+  }
+
+  const storedToken = getStoredToken();
+  if (storedToken) {
+    state.token = storedToken;
+    try {
+      await openConsole();
+      return;
+    } catch (error) {
+      clearSessionToken();
+      showLogin("Session expired. Please sign in again.");
+      return;
+    }
+  }
+
+  showLogin();
+}
+
+initSession().catch((error) => {
+  showLogin(error.message || "Sign-in failed. Try a browser sign-in code below.");
+});

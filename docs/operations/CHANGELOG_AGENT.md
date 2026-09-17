@@ -320,3 +320,11 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 - Enhanced Admin console fleet list (`apps/admin/static/app.js`, `styles.css`) with vertical business profile badges, provider counts, and routing strategies.
 - Updated `docker-compose.yml` and `.env.example` to bind `API_BIND_ADDRESS` (default `0.0.0.0`) on port 8010 for accessible LAN testing while strictly preserving port 8000 for Portainer (Law 4).
 - Verification: 399 fast tests passed; 13 PostgreSQL tests passed; Ruff clean; JavaScript syntax clean; handoff consistency clean.
+
+## 2026-09-17 — Admin Persistent Session & Ready URL Sign-In
+
+- Added `localStorage` session persistence (`ghbf_admin_token`) in `apps/admin/static/app.js` so browser reload preserves the active admin session instead of logging out.
+- Added direct URL sign-in: Telegram bot `/admin` command now formats a ready clickable link (`f"{base_admin}/?code={code}"`), and frontend automatically captures `code` from query/hash params, signs in, and cleans the URL via `history.replaceState`.
+- Added explicit Exit buttons in both header (`#headerSignOut`) and sidebar (`#signOut`) that clear stored session credentials.
+- Configured default `ADMIN_PUBLIC_URL` LAN binding (`http://10.70.5.5:8010/admin/`).
+- Added test coverage in `tests/test_admin_browser_login.py` (private chat direct URL generation and public URL handling).

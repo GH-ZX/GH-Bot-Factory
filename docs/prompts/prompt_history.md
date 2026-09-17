@@ -1375,3 +1375,21 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Strict customer order ownership checks ensuring isolation between tenants and customers.
 3. **Admin Console Fleet Integration:**
    - Business type chips, provider count, and routing strategy directly in the bot fleet list.
+
+## Milestone: Admin Persistent Session & Ready URL Sign-In — 2026-09-17
+
+**User prompt (verbatim):**
+
+> go for it, btw when i put the generated code from the bot /admin, and the browser is refreshed, it clears the token and ask for new token, i mean its better if the bot shows a ready url to enter, then not cleared until exit button ,
+
+**Delivered Scope:**
+1. **Persistent Browser Session (`localStorage`):**
+   - Stored session token in `localStorage` (`ghbf_admin_token`) so refreshing the browser preserves the active session without re-prompting for a code.
+   - Session remains active until explicit exit or server revocation.
+2. **Explicit Exit / Sign Out Buttons:**
+   - Updated sign out action to clear `localStorage` and redirect cleanly.
+   - Added an Exit button in the header (`#headerSignOut`) for immediate accessibility on mobile and desktop alongside the sidebar button.
+3. **One-Click Ready URL Direct Sign-In:**
+   - Bot `/admin` command now issues a ready clickable direct link with `?code=...` (e.g. `http://10.70.5.5:8010/admin/?code=...`).
+   - Admin frontend automatically captures `?code=` from URL or hash, exchanges it for an authenticated session, strips the code from the address bar history via `history.replaceState`, and opens the dashboard seamlessly.
+   - Added HTTPS inline keyboard button in Telegram when `admin_public_url` is HTTPS.

@@ -9,3 +9,4 @@
 
 .login-card{width:min(560px,calc(100% - 32px));margin:clamp(24px,8vh,80px) auto;padding:28px}.login-card .brand-mark{margin-bottom:20px}.login-card h1{margin-bottom:16px}.login-card p{line-height:1.6}.login-card form{padding:0}.login-card a{color:#b8b1ff;text-underline-offset:3px}.login-card button{width:100%;min-height:44px}.login-card input{min-height:44px}.login-card :focus-visible{outline:3px solid #b8b1ff;outline-offset:3px}.sidebar-foot button{margin-top:12px}
 .chip-accent{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.header-actions{display:flex;align-items:center;gap:8px}

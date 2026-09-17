@@ -72,27 +72,44 @@ async def handle_admin_command(
         fallback=settings.admin_public_url,
     )
     keyboard = None
+    buttons = []
     if public_url:
         try:
             launch_url = build_admin_url(public_url, tenant_context.bot_id)
         except ValueError:
             launch_url = None
         if launch_url:
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+            buttons.append([
                 InlineKeyboardButton(text="Open Admin", web_app=WebAppInfo(url=launch_url))
-            ]])
+            ])
     try:
         code = await AdminLoginService().issue(
             db_session, tenant_id=tenant_context.tenant_id,
             user_id=membership.user_id, bot_id=tenant_context.bot_id,
         )
+        base_admin = (public_url or "http://127.0.0.1:8010/admin/").rstrip("/")
+        if not base_admin.endswith("/admin"):
+            direct_url = f"{base_admin}/admin/?code={code}"
+        else:
+            direct_url = f"{base_admin}/?code={code}"
+
+        if direct_url.startswith("https://"):
+            buttons.append([
+                InlineKeyboardButton(text="🔑 Sign in (Browser)", url=direct_url)
+            ])
+
         instructions = (
-            "\n\nFor browser access, open your installation's Admin page "
-            "(on this laptop: http://127.0.0.1:8010/admin/) and paste this code:\n"
-            f"<code>{code}</code>\nValid for 5 minutes and one sign-in. Do not share it."
+            "\n\n<b>🔑 Browser Admin Access</b>\n"
+            f"Click the link to sign in directly:\n"
+            f'👉 <a href="{direct_url}">{direct_url}</a>\n\n'
+            f"Or enter this code manually:\n"
+            f"<code>{code}</code>\n\n"
+            "<i>Valid for 5 minutes. Your session remains active in this browser until you click Exit.</i>"
         )
     except (RedisError, AdminLoginError):
         instructions = "\n\nBrowser sign-in is temporarily unavailable. Try /admin again shortly."
+    if buttons:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer(
         f"<b>{html.escape(tenant_context.display_name)}</b> administration{instructions}",
         reply_markup=keyboard,
