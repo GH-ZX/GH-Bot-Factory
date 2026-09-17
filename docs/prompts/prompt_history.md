@@ -1413,3 +1413,25 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Clears `localStorage.removeItem("ghbf_admin_token")` and directly transitions UI to `showLogin("You have signed out.")` without requiring full navigation.
 5. **Container Rebuild & Recreate:**
    - Rebuilt local Docker image `gh-bot-factory:local` and recreated `api`, `worker`, and `bot-runtime` services to immediately serve the live cache-busted assets.
+
+## Admin Mobile Responsiveness Optimization — 2026-09-17
+
+**User prompt (verbatim):**
+
+> dont over do this, i need the admin page to be responsive with mobile screen, btw it workes now, i can enter the admin page using url from telegram /admin
+
+**Delivered Scope:**
+1. **Mobile-First Horizontal Swipeable Nav (`apps/admin/static/styles.css`):**
+   - Transformed desktop sidebar navigation into a touch-scrollable horizontal pill bar with active accent states on mobile screens (`max-width: 820px`).
+   - Hidden desktop sidebar-foot and made header brand compact.
+2. **Vertical Stacking for Controls & Toolbars:**
+   - Replaced multi-column desktop toolbars, provider grids, analytics currency cards, and dialog action grids with responsive single-column layouts.
+   - Form inputs, selects, and action buttons dynamically span 100% width on phone viewports.
+3. **Viewport & Typography Scaling:**
+   - Ensured `16px` font size on all form inputs and selects to prevent automatic zoom on iOS Safari.
+   - Constrained layout bounds (`overflow-x: hidden`) to eliminate horizontal page wobble.
+   - Scaled metrics grid to 2 columns on mobile with word-break and auto font-size adjustment.
+   - Constrained modals and wizard dialogs to `calc(100vw - 20px)` with internal scroll and swipeable step indicators.
+4. **Cache Busting & Container Deployment:**
+   - Updated static cache bust query strings to `v=20260917_04` in `apps/admin/static/index.html`.
+   - Rebuilt Docker image `gh-bot-factory:local` and restarted `api`, `worker`, and `bot-runtime` containers.

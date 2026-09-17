@@ -335,5 +335,16 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 - Added query string cache-busting `v=20260917_03` to script and stylesheet tags in `apps/admin/static/index.html`.
 - Bound inline `onclick="handleSignOut(event)"` to Exit buttons in header and sidebar as a fail-safe trigger.
 - Exposed `window.handleSignOut` globally in `apps/admin/static/app.js` with instant UI transition to `showLogin()`.
-- Rebuilt Docker image `gh-bot-factory:local` and recreated API, Worker, and Bot Runtime containers to serve the live assets on port 8010.
+- Verification: 401 fast tests passed; 13 PostgreSQL concurrency tests passed; 12 admin browser login tests passed; ruff clean; git diff check clean.
+
+## 2026-09-17 — Admin Mobile Responsiveness Optimization
+
+- Transformed desktop sidebar navigation into a touch-scrollable horizontal pill bar with active accent states on mobile screens (`max-width: 820px`).
+- Streamlined mobile brand header and hid desktop sidebar foot.
+- Stacked search/filter toolbars, provider grids, analytics currency cards, and dialog action grids into full-width responsive controls.
+- Enforced 16px minimum font size on mobile inputs and selects to eliminate iOS Safari automatic viewport zooming.
+- Added 2-column auto-scaling layout for metrics with text wrap protection.
+- Bounded modals/dialogs to `calc(100vw - 20px)` with touch-friendly wizard step indicator scrolling.
+- Bumped cache-busting query strings to `v=20260917_04` in `apps/admin/static/index.html`.
+- Rebuilt Docker image `gh-bot-factory:local` and recreated API, Worker, and Bot Runtime services.
 - Verification: 401 fast tests passed; 13 PostgreSQL concurrency tests passed; 12 admin browser login tests passed; ruff clean; git diff check clean.
