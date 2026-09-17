@@ -1456,3 +1456,23 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 4. **Cache Invalidation & Deployment:**
    - Bumped cache bust query strings to `v=20260917_05` in `apps/admin/static/index.html`.
    - Rebuilt Docker image `gh-bot-factory:local` and recreated `api`, `worker`, and `bot-runtime` services.
+
+## Next Steps and Local Hardening — 2026-09-17
+
+**User prompts (verbatim):**
+
+> what is next steps on this project?
+
+> our goal in this project is to reach
+
+> the five thimgs u told me firsts, how would u fix?
+
+> ok fix them, but for the url, it should be in my domain (gh-store.me) it is working domain as a gh store react webapp,, but for now i have some problems in zero trust tunnel that connected to my domain, so, for now, i need it to stay local might we do a reverse proxy? and a dns record in my udm pro max, for now, and then ill tell you what the goal that i wanted from this project
+
+**Delivered scope:**
+
+- Preserved the existing React application at `gh-store.me` and selected `bot.gh-store.me` for the temporary bot-factory endpoint.
+- Created and successfully restore-verified a restricted PostgreSQL backup before rotating the placeholder database credential.
+- Rotated the PostgreSQL role and ignored `.env` credential atomically, enabled Redis-backed rate limiting, narrowed port 8010 to the LAN address, and confirmed all project services healthy.
+- Repaired unsafe shell sourcing and non-portable checksum behavior in the backup/restore scripts.
+- Documented the remaining operator-owned UDM local DNS and Nginx Proxy Manager TLS host steps. The Cloudflare tunnel and unrelated host containers were not changed.

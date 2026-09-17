@@ -524,3 +524,12 @@ Delivered on 2026-09-17 upon user authorization:
 - One-touch copy-to-clipboard for delivered codes, numbers, vouchers, and credentials with haptic and toast feedback.
 - Admin console fleet cards displaying business profile chips, provider count, and routing strategy.
 - LAN-accessible port 8010 binding via `${API_BIND_ADDRESS:-0.0.0.0}` while strictly preserving port 8000 for Portainer (Law 4).
+
+### Local Staging Hardening & Split-Horizon HTTPS 🚧 Operator Network Step Pending
+
+- Rotated the placeholder PostgreSQL credential after a successful isolated backup restore.
+- Enabled Redis-backed rate limiting and narrowed API exposure to the server LAN address.
+- Repaired backup/restore `.env` parsing and checksum portability.
+- Selected `bot.gh-store.me` as a dedicated temporary local endpoint so the existing React application at `gh-store.me` is unaffected.
+- Added the UDM local DNS and Nginx Proxy Manager TLS/proxy procedure in `docs/runbooks/local-domain-reverse-proxy.md`.
+- Remaining operator step: create the UDM Host (A) record and Nginx Proxy Manager host/certificate, validate local HTTPS, then switch `APP_ENV`, `ADMIN_PUBLIC_URL`, and `MINIAPP_PUBLIC_URL` to staging values.

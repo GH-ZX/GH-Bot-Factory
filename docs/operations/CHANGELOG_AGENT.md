@@ -356,3 +356,13 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 - Bumped cache-busting query strings to `v=20260917_05` in `apps/admin/static/index.html`.
 - Rebuilt Docker image `gh-bot-factory:local` and recreated API, Worker, and Bot Runtime services.
 - Verification: 401 fast tests passed; 13 PostgreSQL concurrency tests passed; 12 admin browser login tests passed; ruff clean; git diff check clean.
+
+## 2026-09-17 — Local Installation Security Hardening
+
+- Created a restricted PostgreSQL dump and proved it by restoring into an isolated temporary database at migration head `f2a3b4c5d6e7` with tenant data readable.
+- Rotated the Compose PostgreSQL role and matching ignored `.env` credentials atomically without printing or committing the secret; recreated this project's PostgreSQL/API/worker/bot-runtime services and confirmed them healthy.
+- Enabled Redis-backed request rate limiting and narrowed the host API bind from all interfaces to `10.70.5.5:8010`.
+- Repaired backup/restore scripts so `.env` is parsed as data rather than sourced as shell code and checksum files remain valid when verified from their containing directory.
+- Updated the live doctor to probe the configured API bind address instead of assuming loopback; `make doctor-live` now passes with all five services, readiness, and Alembic head verified.
+- Added a split-horizon local HTTPS runbook for `bot.gh-store.me` using the existing Nginx Proxy Manager plus UDM local DNS. The application remains in development mode with the existing LAN Admin URL until the operator creates the DNS/TLS proxy entries; no Cloudflare tunnel or unrelated host container was changed.
+- Canonical verification: Ruff/static/secret/handoff/JavaScript/dependency checks passed, 401 fast tests passed, 13 PostgreSQL tests passed, and Alembic reported no drift at `f2a3b4c5d6e7`.

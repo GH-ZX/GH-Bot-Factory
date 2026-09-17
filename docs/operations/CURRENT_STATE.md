@@ -9,7 +9,8 @@
 - **Primary branch:** `main`
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
 - **Verification:** Canonical gate green on 2026-09-17: Ruff clean; 401 fast tests passed; 13 PostgreSQL tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `f2a3b4c5d6e7`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
-- **Deployment:** The Compose application serves port 8010 on LAN (`0.0.0.0:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets, image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
+- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets, image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
+- **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. The stack is healthy. `APP_ENV=staging` and the `bot.gh-store.me` public URLs remain pending until the operator creates the local UDM DNS record and Nginx Proxy Manager TLS host.
 
 ## Delivered Capabilities
 
@@ -175,4 +176,4 @@ Read in order:
 
 ## Next Recommended Work
 
-User authorized committing and pushing the imported baseline plus repairs on 2026-09-17. Canonical verification was rerun successfully (396 fast and 13 PostgreSQL tests). Deployment remains operator-run under Law 4: back up PostgreSQL and the vault, build the new image before migrating, and restart application services only after a successful migration. Collect `make release-gate`, staging failure-injection, and restore-drill evidence before production cutover. Deferred recommendations and acceptance order live in [REPAIR_PATCH_NOTES_2026-09-16.md](REPAIR_PATCH_NOTES_2026-09-16.md). Do not begin new Phase 13 work until the user explicitly requests it.
+Phase 13 implementation and its Admin mobile repairs are complete. Finish the temporary local HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md): create `bot.gh-store.me -> 10.70.5.5` in UDM local DNS, configure the existing Nginx Proxy Manager host with a trusted DNS-challenge certificate, validate the three HTTPS endpoints, and then switch `.env` to `APP_ENV=staging` with the new Admin/Mini App URLs. After that, run `make release-gate`, staging failure injection, and the encrypted backup/restore plus portability drills. The principal remaining code hardening is per-item upstream correlation for multi-item asynchronous fulfillment.

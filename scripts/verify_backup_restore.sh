@@ -8,7 +8,21 @@ if [[ -f "$FILE.sha256" ]]; then
 fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-[[ -f .env ]] && set -a && source .env && set +a
+
+dotenv_get() {
+  local key="$1"
+  [[ -f .env ]] || return 0
+  awk -v prefix="${key}=" '
+    index($0, prefix) == 1 { value = substr($0, length(prefix) + 1); found = 1 }
+    END { if (found) print value }
+  ' .env
+}
+
+POSTGRES_DB="${POSTGRES_DB:-$(dotenv_get POSTGRES_DB)}"
+POSTGRES_USER="${POSTGRES_USER:-$(dotenv_get POSTGRES_USER)}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(dotenv_get POSTGRES_PASSWORD)}"
+POSTGRES_DB="${POSTGRES_DB:-gh_bot_factory}"
+POSTGRES_USER="${POSTGRES_USER:-gh_bot_factory}"
 DB="ghbf_restore_verify_$(date +%s)_$RANDOM"
 cleanup(){ docker compose exec -T postgres sh -lc "PGPASSWORD=\"\$POSTGRES_PASSWORD\" dropdb -h 127.0.0.1 -U \"\$POSTGRES_USER\" --if-exists '$DB'" >/dev/null 2>&1 || true; }
 trap cleanup EXIT

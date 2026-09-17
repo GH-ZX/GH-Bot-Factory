@@ -144,7 +144,13 @@ def _check_live(doctor: Doctor, values: dict[str, str], *, require_running: bool
             doctor.warn(f"service {service} is not running")
 
     port = values.get("API_HOST_PORT") or "8010"
-    ready_url = f"http://127.0.0.1:{port}/health/ready"
+    bind_address = (values.get("API_BIND_ADDRESS") or "0.0.0.0").strip()
+    readiness_host = (
+        "127.0.0.1" if bind_address in {"0.0.0.0", "::", "[::]"} else bind_address
+    )
+    if ":" in readiness_host and not readiness_host.startswith("["):
+        readiness_host = f"[{readiness_host}]"
+    ready_url = f"http://{readiness_host}:{port}/health/ready"
     try:
         with urllib.request.urlopen(ready_url, timeout=4) as response:
             if response.status == 200:

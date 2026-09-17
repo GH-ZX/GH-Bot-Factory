@@ -814,3 +814,13 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 - Admin client captures `?code=` query or hash, exchanges it for a JWT session, and clears URL parameters cleanly via `history.replaceState`.
 - Added explicit Exit / Sign out buttons in the header (`#headerSignOut`) and sidebar (`#signOut`).
 - Added test coverage in `tests/test_admin_browser_login.py`.
+
+## Milestone 44: Local Installation Security Hardening (2026-09-17)
+
+- Rotated the live Compose PostgreSQL role and destination-owned `.env` credential after proving a restricted dump through an isolated restore. No secret value was printed or committed.
+- Enabled Redis-backed rate limiting, narrowed API binding to the server LAN address, and preserved port 8000 for Portainer.
+- Fixed backup/restore scripts to parse `.env` as data instead of executing it as shell and to emit location-independent checksum manifests.
+- Updated the doctor readiness probe to follow a specific `API_BIND_ADDRESS` while retaining loopback probing for wildcard binds.
+- Added `docs/runbooks/local-domain-reverse-proxy.md` for temporary split-horizon HTTPS at `bot.gh-store.me` through the existing Nginx Proxy Manager and UDM local DNS.
+- The existing proxy container, Cloudflare tunnel, apex-domain React application, and UDM configuration were not mutated. Staging-mode URL cutover waits for the operator-owned DNS/TLS entries.
+- Canonical gate remained green: 401 fast tests and 13 PostgreSQL tests passed; Alembic drift check remained clean at `f2a3b4c5d6e7`.
