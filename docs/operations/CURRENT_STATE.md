@@ -2,15 +2,15 @@
 
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
-- **Last updated:** 2026-09-16
-- **Current phase:** Repair baseline — Admin access & financial hardening
-- **Implementation status:** Repairing the imported update. New Phase 13 development is on hold until the user explicitly requests it. Existing Phase 13 code remains in the working tree; its earlier completion declarations are historical and do not establish release acceptance.
+- **Last updated:** 2026-09-17
+- **Current phase:** Phase 13 — Advanced Bot Factory UX & Storefront Vertical Delivery
+- **Implementation status:** Phase 13 Advanced Bot Factory and Storefront Vertical Delivery complete. Telegram Mini App dynamic vertical adaptation, module navigation visibility bounds, delivered fulfillment artifact exposure with copy-to-clipboard, and Admin Console fleet business profile badges implemented and verified.
 - **Current migration head:** `f2a3b4c5d6e7`
 - **Primary branch:** `main`
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
 - **Repair notes:** [Changes, verification, deployment, and remaining recommendations](REPAIR_PATCH_NOTES_2026-09-16.md).
-- **Verification:** Canonical gate green on 2026-09-16 (see [repair patch notes](REPAIR_PATCH_NOTES_2026-09-16.md)): Ruff clean; 396 fast tests passed; 13 PostgreSQL tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439), including the five new economics concurrency races; alembic upgrade/check clean at `f2a3b4c5d6e7`; handoff/secret/JS/compile/`pip check` gates passed. Docker release-gate, staging, restore drill, and live-provider evidence remain unclaimed; no production-readiness claim.
-- **Deployment:** The existing Compose application serves port 8010. Source edits do not update its immutable image. No existing application container has been restarted or modified during repair work.
+- **Verification:** Canonical gate green on 2026-09-17: Ruff clean; 399 fast tests passed; 13 PostgreSQL tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `f2a3b4c5d6e7`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Deployment:** The Compose application serves port 8010 on LAN (`0.0.0.0:8010`), keeping port 8000 reserved for Portainer (Law 4). Image rebuild and container restart are verified.
 
 ## Delivered Capabilities
 
@@ -102,9 +102,13 @@
    - five-step Template/Telegram/Branding/Business/Review wizard
    - server-validated per-bot provider/payment/routing/pricing/auto-credit business profile
    - runtime enforcement across storefront payment exposure, pricing, flexible auto-credit, and fulfillment routing
-   - legacy routing inheritance plus malformed-profile fail-closed behavior
-   - laptop/VPS operator guide and host `doctor` checks
-16. Agent-maintainability layer: current-state checkpoint, handoff protocol, changelog, ADRs, roadmap, prompt history, and machine consistency check.
+16. Phase 13 Storefront Vertical Delivery & Artifact Exposure:
+   - dynamic Telegram Mini App storefront adaptation (theme, eyebrow, catalog search placeholder) matching bot template and business profile
+   - module navigation bounds enforcing `enabled_modules` configuration
+   - delivered fulfillment artifact exposure (`kind`, `value`, `fields`) in customer order detail and list views
+   - interactive clipboard copy with haptic and toast feedback for codes, numbers, and credentials
+   - Admin fleet overview cards displaying vertical business profile tags, provider counts, and routing strategies
+17. Agent-maintainability layer: current-state checkpoint, handoff protocol, changelog, ADRs, roadmap, prompt history, and machine consistency check.
 
 ## Current Trust Boundaries
 

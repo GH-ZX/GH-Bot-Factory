@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**
-> *Last Updated: 2026-09-16 (Repair baseline / new Phase 13 work on hold)*
+> *Last Updated: 2026-09-17 (Phase 13 Storefront Vertical Delivery & Polish)*
 
 ---
 
@@ -795,3 +795,14 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 - [Repair patch notes and recommendations](docs/operations/REPAIR_PATCH_NOTES_2026-09-16.md) are the current acceptance checklist; [ADR-038](docs/decisions/ADR-038-repair-auth-and-financial-boundaries.md) records security/accounting decisions.
 - Canonical verification gate completed green on 2026-09-16 after resuming the interrupted session: Ruff clean, 396 fast + 13 PostgreSQL tests passed, alembic clean at `f2a3b4c5d6e7`, Playwright Admin/Mini App browser checks passed. Docker release-gate, staging, and restore evidence remain pending.
 - 2026-09-17: user requested Admin testing instructions and authorized commit/push, then requested continuation; prompts recorded in `docs/prompts/prompt_history.md`. Canonical verification rerun: 396 fast + 13 PostgreSQL tests passed; focused Admin authentication and mocked browser checks passed. Deployment remains operator-run under Law 4; live application containers were not changed.
+
+## Milestone 42: Phase 13 — Advanced Bot Factory UX & Storefront Vertical Delivery (2026-09-17)
+
+- User authorized continuation to complete Phase 13 UX polish and storefront vertical delivery.
+- Telegram Mini App dynamically tailors UI theme, eyebrow badge (`NUMBER_SMS`, `ACCOUNT_SHOP`, `GIFT_CARDS`, `DIGITAL_PRODUCTS`, `MULTI_RESELLER`), and catalog search placeholder from bot template and business profile.
+- Navigation buttons dynamically hide modules excluded from `enabled_modules`.
+- Exposed provider fulfillment delivery artifacts (`kind`, `value`, `fields`) through `FulfillmentSummary` in `/api/v1/storefront/orders` and `/orders/{order_id}` with strict customer ownership checks.
+- Mini App orders screen renders interactive delivery boxes with one-touch clipboard copy, haptic feedback, and toast notification for codes, accounts, numbers, and keys.
+- Admin Console bot fleet cards now display vertical business profile badges, provider counts, and routing strategies.
+- Updated `docker-compose.yml` to bind API port 8010 on `0.0.0.0` for LAN testing, keeping port 8000 reserved for Portainer under Law 4.
+- Verification: 399 fast tests passed; 13 PostgreSQL tests passed; Ruff clean; handoff consistency clean.

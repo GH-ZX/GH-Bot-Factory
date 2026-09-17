@@ -412,3 +412,131 @@ select.recipient-input { appearance: none; cursor: pointer; }
   .catalog-toolbar { grid-template-columns: 1fr; }
   .availability-filter select { width: 100%; max-width: none; height: 40px; }
 }
+
+/* Phase 13 Storefront Vertical & Fulfillment Delivery Styles */
+.vertical-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+
+.delivery-box {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.delivery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.delivery-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--accent);
+}
+.delivery-items {
+  display: grid;
+  gap: 8px;
+}
+.delivery-item {
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .28);
+  border: 1px solid var(--border);
+}
+.delivery-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.delivery-kind-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .1);
+  color: var(--text);
+  text-transform: uppercase;
+}
+.delivery-kind-badge.kind-code {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+}
+.delivery-kind-badge.kind-phone_number {
+  background: color-mix(in srgb, var(--success) 25%, transparent);
+  color: var(--success);
+}
+.delivery-kind-badge.kind-account {
+  background: color-mix(in srgb, var(--warning) 25%, transparent);
+  color: var(--warning);
+}
+.copy-artifact-btn {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--accent);
+  padding: 3px 9px;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.copy-artifact-btn:active {
+  transform: scale(0.96);
+}
+.delivery-val-row {
+  margin: 4px 0;
+  word-break: break-all;
+}
+.delivery-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  user-select: all;
+  -webkit-user-select: all;
+}
+.delivery-fields {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.delivery-subfield {
+  background: rgba(255, 255, 255, .04);
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+.delivery-status-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .03);
+  border: 1px dashed var(--border);
+}
+.delivery-badge-chip {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--warning);
+  letter-spacing: .05em;
+}

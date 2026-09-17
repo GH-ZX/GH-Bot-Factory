@@ -310,3 +310,13 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 - User authorized commit/push of the imported baseline and repairs; preserved existing host containers under Law 4.
 - Reran canonical verification: 396 fast and 13 PostgreSQL tests passed, PostgreSQL migration drift clean. Focused Admin authentication (10 tests) and mocked Admin/Mini App browser checks passed.
 - Corrected repair notes to identify the actual funding gate, reversal service, quote service, and failed-import limitations. Supplied operator-run rebuild/migration/restart and private Telegram Admin sign-in instructions; no deployment or production-readiness claim.
+
+## 2026-09-17 — Phase 13 — Advanced Bot Factory UX & Storefront Vertical Delivery
+
+- Delivered storefront vertical adaptation in Telegram Mini App (`apps/miniapp/static/app.js`, `index.html`, `styles.css`) adapting dynamically to bot template and business profile (`NUMBER_SMS`, `ACCOUNT_SHOP`, `GIFT_CARDS`, `DIGITAL_PRODUCTS`, `MULTI_RESELLER`).
+- Dynamic navigation filtering based on bot `enabled_modules` (`catalog`, `orders`, etc.).
+- Exposed provider fulfillment delivery artifacts (`kind`, `value`, `fields`) in `FulfillmentSummary` via `apps/api/v1/storefront.py` (`/orders` and `/orders/{order_id}`) for the authenticated order owner.
+- Added interactive copy-to-clipboard functionality with haptic and toast feedback for delivered codes, vouchers, keys, credentials, and virtual numbers.
+- Enhanced Admin console fleet list (`apps/admin/static/app.js`, `styles.css`) with vertical business profile badges, provider counts, and routing strategies.
+- Updated `docker-compose.yml` and `.env.example` to bind `API_BIND_ADDRESS` (default `0.0.0.0`) on port 8010 for accessible LAN testing while strictly preserving port 8000 for Portainer (Law 4).
+- Verification: 399 fast tests passed; 13 PostgreSQL tests passed; Ruff clean; JavaScript syntax clean; handoff consistency clean.

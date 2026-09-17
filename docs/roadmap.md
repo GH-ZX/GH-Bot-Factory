@@ -514,3 +514,13 @@ User directive on 2026-09-16 supersedes the earlier roadmap-closure claim: repai
 - Complete the canonical gate and browser regression checks before deployment.
 - See [repair patch notes](operations/REPAIR_PATCH_NOTES_2026-09-16.md) for evidence and recommendations across earlier phases.
 - Status: repairs complete and canonical gate green on 2026-09-16 (Ruff clean, 396 fast + 13 PostgreSQL tests, alembic clean at `f2a3b4c5d6e7`). Commit/push authorized on 2026-09-17; canonical gate rerun successfully. Remaining: operator-run immutable-image deployment and release-gate/staging/restore evidence. Existing host containers remain untouched under Law 4.
+
+### Phase 13 — Advanced Bot Factory UX & Storefront Vertical Delivery ✅ Implementation
+
+Delivered on 2026-09-17 upon user authorization:
+- Telegram Mini App vertical adaptation (`NUMBER_SMS`, `ACCOUNT_SHOP`, `GIFT_CARDS`, `DIGITAL_PRODUCTS`, `MULTI_RESELLER`) for eyebrows, badges, theme styling, and search placeholders.
+- Dynamic module navigation visibility enforcing bot `enabled_modules`.
+- Order fulfillment delivery artifact exposure (`DeliveryArtifactResponse`) for authenticated customer order history and order detail.
+- One-touch copy-to-clipboard for delivered codes, numbers, vouchers, and credentials with haptic and toast feedback.
+- Admin console fleet cards displaying business profile chips, provider count, and routing strategy.
+- LAN-accessible port 8010 binding via `${API_BIND_ADDRESS:-0.0.0.0}` while strictly preserving port 8000 for Portainer (Law 4).

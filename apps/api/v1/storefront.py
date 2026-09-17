@@ -94,6 +94,9 @@ class StoreSummary(BaseModel):
     name: str
     slug: str
     settings: dict[str, Any]
+    template_key: str | None = None
+    business_type: str | None = None
+    enabled_modules: list[str] = Field(default_factory=lambda: ["catalog", "orders", "account"])
 
 
 class WalletResponse(BaseModel):
@@ -336,10 +339,17 @@ class OrderItemResponse(BaseModel):
     total_price: Decimal
 
 
+class DeliveryArtifactResponse(BaseModel):
+    kind: str
+    value: str
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+
 class FulfillmentSummary(BaseModel):
     id: uuid.UUID
     status: str
-    external_order_id: str | None
+    external_order_id: str | None = None
+    delivery: list[DeliveryArtifactResponse] = Field(default_factory=list)
 
 
 class OrderResponse(BaseModel):
@@ -439,6 +449,19 @@ def _order_response(
     order: Order,
     fulfillment: FulfillmentAttempt | None = None,
 ) -> OrderResponse:
+    delivery_artifacts: list[DeliveryArtifactResponse] = []
+    if fulfillment is not None and isinstance(fulfillment.response_payload, dict):
+        raw_delivery = fulfillment.response_payload.get("delivery")
+        if isinstance(raw_delivery, list):
+            for item in raw_delivery:
+                if isinstance(item, dict) and "kind" in item and "value" in item:
+                    delivery_artifacts.append(
+                        DeliveryArtifactResponse(
+                            kind=str(item.get("kind", "TEXT")),
+                            value=str(item.get("value", "")),
+                            fields=item.get("fields") if isinstance(item.get("fields"), dict) else {},
+                        )
+                    )
     return OrderResponse(
         id=order.id,
         order_number=order.order_number,
@@ -461,6 +484,7 @@ def _order_response(
                 id=fulfillment.id,
                 status=fulfillment.status.value,
                 external_order_id=fulfillment.external_order_id,
+                delivery=delivery_artifacts,
             )
             if fulfillment is not None
             else None
@@ -890,6 +914,21 @@ async def storefront_bootstrap(
     )
     asset_wallets = list((await session.execute(asset_wallet_stmt)).scalars().all())
 
+    template_key = None
+    business_type = None
+    enabled_modules = ["catalog", "orders", "account"]
+    if bot is not None and isinstance(bot.config, dict):
+        template_key = (
+            bot.config.get("_factory", {}).get("template_key")
+            or bot.config.get("template_key")
+        )
+        business_profile = bot.config.get("_business")
+        if isinstance(business_profile, dict):
+            business_type = business_profile.get("business_type")
+        raw_modules = bot.config.get("enabled_modules")
+        if isinstance(raw_modules, list):
+            enabled_modules = [str(m) for m in raw_modules if isinstance(m, str)]
+
     return StorefrontBootstrapResponse(
         store=StoreSummary(
             id=tenant.id,
@@ -899,6 +938,9 @@ async def storefront_bootstrap(
                 **_public_tenant_settings(tenant.settings),
                 **_bot_public_store_settings(bot),
             },
+            template_key=template_key,
+            business_type=business_type,
+            enabled_modules=enabled_modules,
         ),
         user=UserSummary(
             id=user.id,
@@ -1051,7 +1093,23 @@ async def list_orders(
         stmt = stmt.where(Order.user_id == principal.user_id)
 
     orders = list((await session.execute(stmt)).scalars().unique().all())
-    return [_order_response(order) for order in orders]
+    fulfillment_map: dict[uuid.UUID, FulfillmentAttempt] = {}
+    if orders:
+        order_ids = [order.id for order in orders]
+        attempts_stmt = (
+            select(FulfillmentAttempt)
+            .where(
+                FulfillmentAttempt.tenant_id == principal.tenant_id,
+                FulfillmentAttempt.order_id.in_(order_ids),
+            )
+            .order_by(FulfillmentAttempt.attempt_number.desc())
+        )
+        attempts = list((await session.execute(attempts_stmt)).scalars().all())
+        for attempt in attempts:
+            if attempt.order_id not in fulfillment_map:
+                fulfillment_map[attempt.order_id] = attempt
+
+    return [_order_response(order, fulfillment_map.get(order.id)) for order in orders]
 
 
 @router.get("/orders/{order_id}", response_model=OrderResponse)
@@ -1074,7 +1132,16 @@ async def get_order(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer cannot access another user's order.",
         )
-    return _order_response(order)
+    fulfillment = await session.scalar(
+        select(FulfillmentAttempt)
+        .where(
+            FulfillmentAttempt.tenant_id == principal.tenant_id,
+            FulfillmentAttempt.order_id == order.id,
+        )
+        .order_by(FulfillmentAttempt.attempt_number.desc())
+        .limit(1)
+    )
+    return _order_response(order, fulfillment)
 
 
 @router.get("/wallet/topups/options", response_model=TopUpOptionsResponse)

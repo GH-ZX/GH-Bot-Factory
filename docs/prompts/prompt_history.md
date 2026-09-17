@@ -1340,5 +1340,38 @@ Inspected the complete repository, running services, database schema and rows, t
 
 User successfully signed into the Admin web app (`http://10.70.5.5:8010/admin/`) using the Telegram one-time code grant.
 
+## Next Coding Steps Request — 2026-09-17
 
+**User prompt (verbatim):**
 
+> now on the coding, where should we go now? next steps?
+
+Outlined the concrete coding paths forward:
+1. Phase 13 Advanced Bot Factory UX & Business Profiles: End-to-end integration and polish in Admin & Mini App.
+2. Provider & Payment Gateway Live Adapters / Hardening (e.g. real SMS/number providers, digital cards, or payment gateway validation).
+3. Multi-Item Asynchronous Fulfillment Saga: Enhancing fulfillment attempts from 1-to-1 to 1-to-many correlated provider items.
+4. Release Qualification Gate: Running immutable release gate, failure injection, and staging tests.
+
+## Milestone: Phase 13 Advanced Bot Factory & Storefront Delivery — 2026-09-17
+
+**User prompt (verbatim):**
+
+> ok do it then, work on that
+
+Authorized Option 1: Complete and polish Phase 13 Advanced Bot Factory UX and Storefront vertical templates.
+
+**Continuation prompt (verbatim):**
+
+Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
+
+**Delivered Scope:**
+1. **Vertical-Aware Storefront Mini App:**
+   - Dynamic vertical eyebrow badge and themed UI adaptation (`NUMBER_SMS`, `ACCOUNT_SHOP`, `GIFT_CARDS`, `DIGITAL_PRODUCTS`, `MULTI_RESELLER`).
+   - Module navigation visibility dynamically bounded by `enabled_modules` in bot configuration.
+   - Dynamic search placeholder tailored to product category (e.g., search numbers/countries, accounts/plans, cards/brands).
+2. **Delivered Fulfillment Artifact Exposure:**
+   - Exposing provider delivery artifacts (`DeliveryArtifactResponse`) in order history and order detail endpoints.
+   - Safe interactive copy to clipboard with haptic and toast feedback in Mini App orders view.
+   - Strict customer order ownership checks ensuring isolation between tenants and customers.
+3. **Admin Console Fleet Integration:**
+   - Business type chips, provider count, and routing strategy directly in the bot fleet list.

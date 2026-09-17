@@ -254,6 +254,42 @@ function renderBootstrap() {
   el("accountName").textContent = fullName;
   el("accountUsername").textContent = user.username ? `@${user.username}` : "Secure Mini App session";
 
+  const bType = store.business_type || "GENERAL";
+  const tKey = store.template_key || "general-commerce";
+  document.body.dataset.businessType = bType;
+  document.body.dataset.templateKey = tKey;
+
+  const verticalLabels = {
+    NUMBER_SMS: { eyebrow: "📱 VIRTUAL NUMBERS & SMS", badge: "⚡ Real-time SMS Activation", search: "Search services (Telegram, WhatsApp, Google…)" },
+    ACCOUNT: { eyebrow: "👤 ACCOUNTS STORE", badge: "🛡️ Verified Platform Accounts", search: "Search accounts, platforms, regions…" },
+    GIFT_CARD: { eyebrow: "🎁 GIFT CARDS & CODES", badge: "💳 Instant Digital Delivery", search: "Search gift cards, games, vouchers…" },
+    DIGITAL_PRODUCT: { eyebrow: "⚡ DIGITAL PRODUCTS", badge: "🔑 Instant Keys & Licenses", search: "Search digital products, keys, licenses…" },
+    RESELLER: { eyebrow: "🌐 MULTI-API RESELLER", badge: "🚀 Automated Multi-Supplier Routing", search: "Search products across suppliers…" },
+    HYBRID: { eyebrow: "✨ HYBRID DIGITAL STORE", badge: "⭐ Unified Products & Services", search: "Search catalog…" },
+  };
+
+  const vertical = verticalLabels[bType] || { eyebrow: "TELEGRAM STORE", badge: "", search: "Search products, plans, or SKU" };
+  const storeEyebrow = el("storeEyebrow");
+  if (storeEyebrow) storeEyebrow.textContent = vertical.eyebrow;
+  const verticalBadge = el("verticalBadge");
+  if (verticalBadge) {
+    if (vertical.badge) {
+      verticalBadge.textContent = vertical.badge;
+      verticalBadge.classList.remove("hidden");
+    } else {
+      verticalBadge.classList.add("hidden");
+    }
+  }
+  if (catalogSearchInput && vertical.search) {
+    catalogSearchInput.placeholder = vertical.search;
+  }
+
+  const enabledModules = Array.isArray(store.enabled_modules) ? store.enabled_modules : ["catalog", "orders", "account"];
+  const ordersNav = document.querySelector('.nav-button[data-target="orders"]');
+  if (ordersNav) ordersNav.classList.toggle("hidden", !enabledModules.includes("orders"));
+  const accountNav = document.querySelector('.nav-button[data-target="account"]');
+  if (accountNav) accountNav.classList.toggle("hidden", !enabledModules.includes("account"));
+
   const accent = store.settings?.brand_accent;
   if (/^#[0-9a-fA-F]{6}$/.test(accent ?? "")) document.documentElement.style.setProperty("--accent", accent);
 
@@ -363,12 +399,53 @@ function renderOrders() {
     const date = new Date(order.created_at);
     const label = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
     const units = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const fulfillment = order.fulfillment;
+    let deliveryHtml = "";
+    if (fulfillment?.delivery?.length) {
+      deliveryHtml = `
+        <div class="delivery-box">
+          <div class="delivery-header">
+            <span class="delivery-title">📦 Delivered Items</span>
+          </div>
+          <div class="delivery-items">
+            ${fulfillment.delivery.map(art => {
+              const kind = escapeHtml(art.kind || "CODE");
+              const val = escapeHtml(art.value || "");
+              const fields = art.fields || {};
+              const fieldEntries = Object.entries(fields)
+                .map(([k, v]) => `<span class="delivery-subfield"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(v)}</span>`)
+                .join(" ");
+              return `
+                <div class="delivery-item">
+                  <div class="delivery-item-top">
+                    <span class="delivery-kind-badge kind-${kind.toLowerCase()}">${kind}</span>
+                    <button class="copy-artifact-btn" data-copy-val="${val}" type="button">Copy</button>
+                  </div>
+                  <div class="delivery-val-row">
+                    <code class="delivery-code">${val}</code>
+                  </div>
+                  ${fieldEntries ? `<div class="delivery-fields">${fieldEntries}</div>` : ""}
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    } else if (order.status === "PAID" && (!fulfillment || fulfillment.status === "PROCESSING" || fulfillment.status === "PENDING")) {
+      deliveryHtml = `
+        <div class="delivery-status-box processing">
+          <span class="delivery-badge-chip">⏳ FULFILLMENT IN PROGRESS</span>
+          <p class="muted">Automated fulfillment is in progress. Check back shortly.</p>
+        </div>
+      `;
+    }
     return `
       <article class="order-card">
         <div class="order-top">
           <div><span class="order-number">${escapeHtml(order.order_number)}</span><span class="order-date">${escapeHtml(label)}</span></div>
           <span class="status-chip ${orderStatusClass(order.status)}">${escapeHtml(order.status)}</span>
         </div>
+        ${deliveryHtml}
         <div class="order-divider"></div>
         <div class="order-bottom">
           <span class="order-items-count">${units} item${units === 1 ? "" : "s"}</span>
@@ -868,6 +945,24 @@ function bindEvents() {
       topupAmountInput.value = quickAmountButton.dataset.topupAmount;
       state.topupKey = null;
       haptic("light");
+      return;
+    }
+
+    const copyButton = event.target.closest(".copy-artifact-btn");
+    if (copyButton) {
+      const text = copyButton.dataset.copyVal || "";
+      if (text) {
+        try {
+          await navigator.clipboard.writeText(text);
+          const orig = copyButton.textContent;
+          copyButton.textContent = "Copied!";
+          setTimeout(() => { copyButton.textContent = orig; }, 2000);
+          showToast("Copied to clipboard!");
+          haptic("medium");
+        } catch (_) {
+          showToast(text);
+        }
+      }
       return;
     }
 

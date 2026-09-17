@@ -12,11 +12,13 @@ from apps.api.deps import get_auth_token_service
 from apps.api.main import app
 from packages.commerce.economics import PricingService
 from packages.commerce.economics_models import PricingTier
-from packages.commerce.models import Product, ProductVariant
+from packages.commerce.models import Order, OrderItem, Product, ProductVariant
+from packages.commerce.state_machine import OrderStatus
 from packages.core.auth import AuthSource, AuthTokenService
 from packages.core.database import get_db_session
 from packages.factory.business_profiles import business_profile_from_config
 from packages.factory.models import BotProvisioningJob
+from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
 from packages.payments.models import PaymentMethodConfig, PaymentMethodType, PaymentVerificationMode
 from packages.providers.models import (
     Provider,
@@ -401,3 +403,162 @@ async def test_profile_bot_cannot_use_legacy_funding_or_deleted_bot_context(clie
     await session.flush()
     denied = await client.get("/api/v1/storefront/wallet/payment-methods", headers=auth(token))
     assert denied.status_code == 403
+
+
+async def test_storefront_bootstrap_exposes_bot_vertical_template_and_business_profile(client_env):
+    client, session = client_env["client"], client_env["session"]
+    tenant = Tenant(name="Vertical Store", slug=f"vertical-{uuid.uuid4().hex[:6]}", is_active=True)
+    session.add(tenant)
+    await session.flush()
+    bot = Bot(
+        tenant_id=tenant.id,
+        telegram_bot_id=1234567890,
+        display_name="SMS Activator Bot",
+        token_secret_ref="SECRET_REF",
+        is_enabled=True,
+        config={
+            "_factory": {"template_key": "numbers-sms", "version": 1},
+            "_business": {
+                "business_type": "NUMBER_SMS",
+                "provider_ids": [],
+                "payment_method_ids": [],
+                "routing_strategy": "AVAILABILITY",
+                "allow_flexible_auto_credit": False,
+            },
+            "enabled_modules": ["catalog", "orders"],
+            "branding": {
+                "brand_accent": "#00A8E8",
+                "store_tagline": "Real-time SMS activation",
+            },
+        },
+    )
+    session.add(bot)
+    await session.flush()
+    _, token = await create_identity(session, tenant, role=Role.CUSTOMER, bot_id=bot.id)
+
+    response = await client.get("/api/v1/storefront/bootstrap", headers=auth(token))
+    assert response.status_code == 200
+    data = response.json()
+    store = data["store"]
+    assert store["name"] == "SMS Activator Bot"
+    assert store["template_key"] == "numbers-sms"
+    assert store["business_type"] == "NUMBER_SMS"
+    assert store["enabled_modules"] == ["catalog", "orders"]
+    assert store["settings"]["brand_accent"] == "#00A8E8"
+
+
+async def test_storefront_orders_expose_fulfillment_delivery_artifacts_for_owner(client_env):
+    client, session = client_env["client"], client_env["session"]
+    tenant = Tenant(name="Digital Delivery Store", slug=f"digital-{uuid.uuid4().hex[:6]}", is_active=True)
+    session.add(tenant)
+    await session.flush()
+    user, token = await create_identity(session, tenant, role=Role.CUSTOMER)
+
+    product = Product(tenant_id=tenant.id, title="Gift Voucher", is_active=True)
+    session.add(product)
+    await session.flush()
+    variant = ProductVariant(product_id=product.id, title="$50 Card", sku=f"SKU-{uuid.uuid4().hex[:6]}",
+                             price=Decimal("50.00"), currency="USD", stock_quantity=10, is_active=True)
+    session.add(variant)
+    await session.flush()
+
+    order = Order(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        order_number=f"ORD-{uuid.uuid4().hex[:8].upper()}",
+        status=OrderStatus.FULFILLED,
+        total_amount=Decimal("50.00"),
+        currency="USD",
+    )
+    session.add(order)
+    await session.flush()
+    item = OrderItem(
+        order_id=order.id,
+        product_variant_id=variant.id,
+        quantity=1,
+        unit_price=Decimal("50.00"),
+        total_price=Decimal("50.00"),
+    )
+    session.add(item)
+    await session.flush()
+
+    attempt = FulfillmentAttempt(
+        tenant_id=tenant.id,
+        order_id=order.id,
+        order_item_id=item.id,
+        attempt_number=1,
+        idempotency_key=f"order:{order.id}:attempt:1",
+        status=FulfillmentStatus.SUCCEEDED,
+        external_order_id="EXT-PROV-999",
+        cost_amount=Decimal("45.00"),
+        cost_currency="USD",
+        request_payload={"sku": "voucher-50"},
+        response_payload={
+            "canonical_state": "COMPLETED",
+            "external_order_id": "EXT-PROV-999",
+            "delivery": [
+                {
+                    "kind": "CODE",
+                    "value": "AMZN-XXXX-YYYY-ZZZZ",
+                    "fields": {"pin": "1234", "expires": "2027-01-01"},
+                }
+            ],
+        },
+    )
+    session.add(attempt)
+    await session.flush()
+
+    # Test list_orders
+    list_resp = await client.get("/api/v1/storefront/orders", headers=auth(token))
+    assert list_resp.status_code == 200
+    orders_data = list_resp.json()
+    assert len(orders_data) == 1
+    found_order = orders_data[0]
+    assert found_order["id"] == str(order.id)
+    assert found_order["fulfillment"] is not None
+    assert found_order["fulfillment"]["status"] == "SUCCEEDED"
+    assert found_order["fulfillment"]["external_order_id"] == "EXT-PROV-999"
+    assert len(found_order["fulfillment"]["delivery"]) == 1
+    artifact = found_order["fulfillment"]["delivery"][0]
+    assert artifact["kind"] == "CODE"
+    assert artifact["value"] == "AMZN-XXXX-YYYY-ZZZZ"
+    assert artifact["fields"]["pin"] == "1234"
+
+    # Test get_order
+    detail_resp = await client.get(f"/api/v1/storefront/orders/{order.id}", headers=auth(token))
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["fulfillment"]["delivery"][0]["value"] == "AMZN-XXXX-YYYY-ZZZZ"
+
+
+async def test_storefront_orders_isolation_between_customers(client_env):
+    client, session = client_env["client"], client_env["session"]
+    tenant = Tenant(name="Isolation Store", slug=f"iso-{uuid.uuid4().hex[:6]}", is_active=True)
+    session.add(tenant)
+    await session.flush()
+    user_a, token_a = await create_identity(session, tenant, role=Role.CUSTOMER)
+    _user_b, token_b = await create_identity(session, tenant, role=Role.CUSTOMER)
+
+    order_a = Order(
+        tenant_id=tenant.id,
+        user_id=user_a.id,
+        order_number=f"ORD-A-{uuid.uuid4().hex[:6].upper()}",
+        status=OrderStatus.FULFILLED,
+        total_amount=Decimal("10.00"),
+        currency="USD",
+    )
+    session.add(order_a)
+    await session.flush()
+
+    # User A can access their own order
+    own_resp = await client.get(f"/api/v1/storefront/orders/{order_a.id}", headers=auth(token_a))
+    assert own_resp.status_code == 200
+
+    # User B cannot access User A's order detail
+    forbidden = await client.get(f"/api/v1/storefront/orders/{order_a.id}", headers=auth(token_b))
+    assert forbidden.status_code == 403
+
+    # User B's order list does not include User A's order
+    b_orders = await client.get("/api/v1/storefront/orders", headers=auth(token_b))
+    assert b_orders.status_code == 200
+    assert len(b_orders.json()) == 0
