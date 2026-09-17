@@ -1522,3 +1522,4 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 - Proposed an integration marketplace in which all customers may discover APIs, entitled tenants configure their own connections, and secret values remain write-only in `SecretStorage`.
 - Proposed managed subscription, dedicated portable deployment, and premium source-license products. A completed self-hosted handoff ends implicit Factory Owner control and must exclude all other tenant/platform data and secrets.
 - Split proposed delivery into Phase 14.0 through 14.6. Implementation awaits product decisions and explicit authorization.
+- Planning commit: `9d2e8585312159363390f9df6433e18600ecf2c8`.
