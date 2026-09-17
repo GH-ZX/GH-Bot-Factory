@@ -15,7 +15,14 @@ from packages.core.database import Base
 from packages.core.system_models import SystemInstallState
 from packages.factory.models import BotProvisioningJob, BotProvisioningStatus
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
-from packages.marketplace.models import ContactMethod, CustomerInquiry, InquiryStatus
+from packages.marketplace.models import (
+    CommercialQuote,
+    CommercialQuoteLine,
+    ContactMethod,
+    CustomerInquiry,
+    InquiryStatus,
+    QuoteStatus,
+)
 from packages.payments.economics_models import (
     AssetLedgerTransaction,
     AssetLedgerTransactionType,
@@ -88,6 +95,8 @@ __all__ = [
     "BotProvisioningStatus",
     "Category",
     "CommercePriceQuote",
+    "CommercialQuote",
+    "CommercialQuoteLine",
     "ContactMethod",
     "CustomerInquiry",
     "FinancialResolutionCase",
@@ -135,6 +144,7 @@ __all__ = [
     "ProviderProductMapping",
     "ProviderRoutingPolicy",
     "ProviderRoutingStrategy",
+    "QuoteStatus",
     "Role",
     "SaaSPlan",
     "SaaSPlanPrice",

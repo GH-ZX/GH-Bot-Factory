@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css?v=20260918_01">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260918_02">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -41,6 +41,7 @@
         <button class="nav" data-view="finance">Financial Center</button>
         <button class="nav" data-view="audit">Audit</button>
         <button class="nav" data-view="reconciliation">Evidence</button>
+        <button class="nav" data-view="sales" data-admin-only>Sales &amp; Leads</button>
       </nav>
       <div class="sidebar-foot"><span id="actorName">Telegram staff</span><small>Tenant-scoped access</small><button id="signOut" class="ghost" type="button" onclick="handleSignOut(event)">Sign out / Exit</button></div>
     </aside>
@@ -131,6 +132,47 @@
       <section id="view-reconciliation" class="view">
         <div class="toolbar"><select id="reviewFilter"><option value="true">Needs review</option><option value="">All events</option><option value="false">Resolved / informational</option></select></div>
         <div id="reconciliationList" class="stack"></div>
+      </section>
+
+      <section id="view-sales" class="view">
+        <div class="toolbar">
+          <input id="salesSearch" placeholder="Search inquiries or contact handle">
+          <select id="salesStatusFilter">
+            <option value="">All statuses</option>
+            <option value="NEW">New</option>
+            <option value="CONTACTED">Contacted</option>
+            <option value="QUOTED">Quoted</option>
+            <option value="CONVERTED">Converted</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
+          <button id="unlockSalesBtn" class="ghost" type="button">Unlock Platform Sales</button>
+        </div>
+        <div class="panel operation-note">
+          <strong>Commercial sales boundary.</strong>
+          <span class="muted"> Inquiries captured from the public configurator (/build/) are managed here. Platform operator authority is verified in memory and never persisted in browser storage.</span>
+        </div>
+
+        <div id="salesOperatorGate" class="panel hidden" style="margin-bottom:18px">
+          <div class="panel-head">
+            <div>
+              <small class="eyebrow">PLATFORM OPERATOR ACCESS</small>
+              <h3>Enter Platform Operator Token</h3>
+            </div>
+          </div>
+          <p class="muted">This view requires the installation-level platform credential to review leads, issue quotes, and update inquiry status.</p>
+          <div style="display:flex;gap:10px;max-width:560px;margin-top:10px">
+            <input id="platformTokenInput" type="password" placeholder="Enter PLATFORM_ADMIN_TOKEN" style="flex:1">
+            <button id="submitPlatformToken" class="primary" type="button">Authenticate</button>
+          </div>
+        </div>
+
+        <div id="salesTabNav" class="filter-chips" style="margin-bottom:16px">
+          <button type="button" class="chip active" data-sales-tab="inquiries">Incoming Inquiries</button>
+          <button type="button" class="chip" data-sales-tab="quotes">Commercial Quotes</button>
+        </div>
+
+        <div id="salesInquiryList" class="stack"></div>
+        <div id="salesQuotesList" class="stack hidden"></div>
       </section>
     </main>
   </div>
@@ -308,6 +350,76 @@ orders:read"></textarea></label>
     </div>
   </dialog>
 
-  <script src="/admin/app.js?v=20260918_01" defer></script>
+  <dialog id="inquiryDetailDialog">
+    <form id="inquiryDetailForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <small class="eyebrow">PROSPECT LEAD</small>
+          <h2 id="inquiryDetailTitle">Inquiry Details</h2>
+        </div>
+        <button type="button" class="icon" data-close-inquiry-detail>×</button>
+      </div>
+      <input id="inquiryDetailId" type="hidden">
+      <div id="inquiryDetailContent" class="stack" style="margin: 14px 0; max-height: 480px; overflow-y: auto;"></div>
+      <div class="grid2" style="margin-top: 14px">
+        <label>
+          Update Status
+          <select id="inquiryUpdateStatus">
+            <option value="NEW">New</option>
+            <option value="CONTACTED">Contacted</option>
+            <option value="QUOTED">Quoted</option>
+            <option value="CONVERTED">Converted</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
+        </label>
+        <div style="display:flex;align-items:flex-end;gap:8px">
+          <button type="button" id="saveInquiryStatusBtn" class="primary" style="flex:1">Update Status</button>
+        </div>
+      </div>
+      <div class="dialog-actions" style="margin-top: 20px">
+        <button type="button" class="ghost" data-close-inquiry-detail>Close</button>
+        <button type="button" id="openCreateQuoteFromInquiryBtn" class="primary">Generate Formal Quote →</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="createQuoteDialog" class="wizard-dialog">
+    <form id="createQuoteForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <small class="eyebrow">COMMERCIAL PROPOSAL</small>
+          <h2>Generate Commercial Quote</h2>
+        </div>
+        <button type="button" class="icon" data-close-create-quote>×</button>
+      </div>
+      <input id="quoteInquiryId" type="hidden">
+      <div class="grid2">
+        <label>Customer Name<input id="quoteCustomerName" required maxlength="120" placeholder="Acme Corp / Merchant"></label>
+        <label>Customer Contact<input id="quoteCustomerContact" required maxlength="120" placeholder="@telegram_handle or email"></label>
+      </div>
+      <div class="grid2">
+        <label>Validity (Days)<input id="quoteValidDays" type="number" min="1" max="365" value="30"></label>
+        <label>Currency<input id="quoteCurrency" maxlength="3" value="USD" required></label>
+      </div>
+
+      <div style="margin: 14px 0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong>Itemized Line Items</strong>
+          <button type="button" id="addQuoteLineBtn" class="chip">+ Add Item</button>
+        </div>
+        <div id="quoteLineItemsContainer" class="stack" style="max-height: 240px; overflow-y: auto;"></div>
+      </div>
+
+      <label>Terms &amp; SLA<textarea id="quoteTerms" rows="2" placeholder="Standard managed hosting terms, 99.9% uptime SLA..."></textarea></label>
+      <label>Notes (Customer visible)<textarea id="quoteNotes" rows="2" placeholder="Custom deployment notes or deliverables..."></textarea></label>
+
+      <div class="dialog-actions">
+        <button type="button" class="ghost" data-close-create-quote>Cancel</button>
+        <button type="submit" class="primary">Create &amp; Issue Quote</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/admin/app.js?v=20260918_02" defer></script>
 </body>
 </html>

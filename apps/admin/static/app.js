@@ -1,5 +1,5 @@
 const tg = window.Telegram?.WebApp;
-const state = { token: null, botId: null, bootstrap: null, categories: [], products: [], orders: [], jobs: [], events: [], providerCapabilities: null, providerAdapters: [], suppliers: [], paymentProviders: [], mappings: [], members: [], financialCases: [], paymentOps: null, analytics: null, auditLogs: [], auditNextOffset: null, bots: [], botJobs: [], botTemplates: [], botWizardStep: 1, botWizardMode: "create", botWizardOptions: null, saas: null, billing: null };
+const state = { token: null, botId: null, bootstrap: null, categories: [], products: [], orders: [], jobs: [], events: [], providerCapabilities: null, providerAdapters: [], suppliers: [], paymentProviders: [], mappings: [], members: [], financialCases: [], paymentOps: null, analytics: null, auditLogs: [], auditNextOffset: null, bots: [], botJobs: [], botTemplates: [], botWizardStep: 1, botWizardMode: "create", botWizardOptions: null, saas: null, billing: null, platformToken: null, inquiries: [], salesQuotes: [], currentInquiry: null, salesActiveTab: "inquiries" };
 const el = (id) => document.getElementById(id);
 const escapeHtml = (v) => String(v ?? "").replace(/[&<>'"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 
@@ -619,7 +619,336 @@ async function saveProduct(event){
   el("productDialog").close(); await Promise.all([loadProducts(),loadBootstrap()]);
 }
 
-async function refreshCurrent(){ const active=document.querySelector(".nav.active")?.dataset.view; if(active==="plan") await loadSaas(); else if(active==="bots") await loadBots(); else if(active==="products") await Promise.all([loadCategories(),loadProducts()]); else if(active==="orders") await loadOrders(); else if(active==="fulfillment") await loadFulfillment(); else if(active==="providers") await loadProviderOps(); else if(active==="members") await loadMembers(); else if(active==="finance") await Promise.all([loadFinancialCases(),loadPaymentOperationsHealth()]); else if(active==="analytics") await loadAnalytics(); else if(active==="audit") await loadAuditLogs(0); else if(active==="reconciliation") await loadEvents(); else await loadBootstrap(); }
+async function platformApi(path, options = {}) {
+  if (!state.platformToken) {
+    el("salesOperatorGate")?.classList.remove("hidden");
+    throw new Error("Platform operator token required to access sales console.");
+  }
+  const headers = {
+    "Content-Type": "application/json",
+    "X-GHBF-Platform-Token": state.platformToken,
+    ...(options.headers || {}),
+  };
+  const res = await fetch(path, { ...options, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    if (res.status === 401 || res.status === 403) {
+      state.platformToken = null;
+      el("salesOperatorGate")?.classList.remove("hidden");
+    }
+    throw new Error(err.detail || "Platform request failed.");
+  }
+  return res.json();
+}
+
+async function loadSales() {
+  if (!state.platformToken) {
+    el("salesOperatorGate")?.classList.remove("hidden");
+    if (el("salesInquiryList")) el("salesInquiryList").innerHTML = "";
+    if (el("salesQuotesList")) el("salesQuotesList").innerHTML = "";
+    return;
+  }
+  el("salesOperatorGate")?.classList.add("hidden");
+
+  const tab = state.salesActiveTab || "inquiries";
+  const status = el("salesStatusFilter")?.value || "";
+  const q = el("salesSearch")?.value.trim() || "";
+
+  if (tab === "inquiries") {
+    el("salesInquiryList")?.classList.remove("hidden");
+    el("salesQuotesList")?.classList.add("hidden");
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (q) params.set("search", q);
+
+    try {
+      const data = await platformApi(`/api/v1/platform/sales/inquiries?${params}`);
+      state.inquiries = data.items || [];
+      renderSalesInquiries();
+    } catch (err) {
+      if (el("salesInquiryList")) el("salesInquiryList").innerHTML = `<div class="status-msg error">${escapeHtml(err.message)}</div>`;
+    }
+  } else {
+    el("salesInquiryList")?.classList.add("hidden");
+    el("salesQuotesList")?.classList.remove("hidden");
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (q) params.set("search", q);
+
+    try {
+      const data = await platformApi(`/api/v1/platform/sales/quotes?${params}`);
+      state.salesQuotes = data.items || [];
+      renderSalesQuotes();
+    } catch (err) {
+      if (el("salesQuotesList")) el("salesQuotesList").innerHTML = `<div class="status-msg error">${escapeHtml(err.message)}</div>`;
+    }
+  }
+}
+
+function renderSalesInquiries() {
+  const container = el("salesInquiryList");
+  if (!container) return;
+  if (!state.inquiries.length) {
+    container.innerHTML = `<div class="empty">No customer inquiries found.</div>`;
+    return;
+  }
+
+  const statusBadges = {
+    NEW: "chip-accent",
+    CONTACTED: "chip",
+    QUOTED: "chip-warn",
+    CONVERTED: "chip-ok",
+    ARCHIVED: "chip-muted",
+  };
+
+  container.innerHTML = state.inquiries
+    .map((inq) => {
+      const badgeClass = statusBadges[inq.status] || "chip";
+      return `
+        <article class="item">
+          <div class="item-row">
+            <div>
+              <h3>
+                ${escapeHtml(inq.contact_handle)}
+                <span class="chip">${escapeHtml(inq.contact_method)}</span>
+                <span class="chip ${badgeClass}">${escapeHtml(inq.status)}</span>
+              </h3>
+              <div class="item-meta">
+                <span>Inquiry #${inq.id.slice(0, 8)}</span>
+                <span>Format: ${escapeHtml(inq.format || "—")}</span>
+                <span>Template: ${escapeHtml(inq.template_key || "—")}</span>
+                <span>Source: ${escapeHtml(inq.product_source || "—")}</span>
+                <span>Hosting: ${escapeHtml(inq.delivery_model || "—")}</span>
+                <span>${new Date(inq.created_at).toLocaleString()}</span>
+              </div>
+              <p class="muted compact">
+                <strong>Estimate:</strong> $${escapeHtml(inq.total_one_time || "0.00")} setup · $${escapeHtml(inq.total_monthly || "0.00")}/mo
+                ${inq.project_notes ? ` — <em>"${escapeHtml(inq.project_notes)}"</em>` : ""}
+              </p>
+            </div>
+            <div class="ops-actions">
+              <button type="button" class="primary" data-inspect-inquiry="${inq.id}">Inspect &amp; Quote →</button>
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderSalesQuotes() {
+  const container = el("salesQuotesList");
+  if (!container) return;
+  if (!state.salesQuotes.length) {
+    container.innerHTML = `<div class="empty">No commercial quotes created yet.</div>`;
+    return;
+  }
+
+  const quoteBadges = {
+    DRAFT: "chip",
+    SENT: "chip-accent",
+    ACCEPTED: "chip-ok",
+    REJECTED: "chip-danger",
+    EXPIRED: "chip-muted",
+    SUPERSEDED: "chip-muted",
+  };
+
+  container.innerHTML = state.salesQuotes
+    .map((q) => {
+      const bClass = quoteBadges[q.status] || "chip";
+      const isAccepted = q.status === "ACCEPTED";
+      return `
+        <article class="item">
+          <div class="item-row">
+            <div>
+              <h3>
+                ${escapeHtml(q.quote_number)} · v${q.version}
+                <span class="chip ${bClass}">${escapeHtml(q.status)}</span>
+                <span class="chip">${escapeHtml(q.customer_name)}</span>
+              </h3>
+              <div class="item-meta">
+                <span>Contact: ${escapeHtml(q.customer_contact)}</span>
+                <span>One-time: $${escapeHtml(q.total_one_time)}</span>
+                <span>Monthly: $${escapeHtml(q.total_monthly)}</span>
+                <span>Created: ${new Date(q.created_at).toLocaleString()}</span>
+                ${q.accepted_at ? `<span>Accepted: ${new Date(q.accepted_at).toLocaleString()}</span>` : ""}
+              </div>
+              <p class="muted compact">${escapeHtml(q.notes || q.terms || "Standard commercial quote.")}</p>
+            </div>
+            <div class="ops-actions">
+              ${!isAccepted && q.status !== "SUPERSEDED" ? `<button type="button" class="primary" data-accept-quote="${q.id}">Accept &amp; Lock Quote</button>` : `<span class="chip ${bClass}">Locked</span>`}
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function openInquiryDetail(id) {
+  try {
+    const inq = await platformApi(`/api/v1/platform/sales/inquiries/${id}`);
+    state.currentInquiry = inq;
+    el("inquiryDetailId").value = inq.id;
+    el("inquiryDetailTitle").textContent = `Inquiry #${inq.id.slice(0, 8)} — ${inq.contact_handle}`;
+    el("inquiryUpdateStatus").value = inq.status;
+
+    const conf = inq.configuration || {};
+    const est = inq.estimated_quote || {};
+    const items = (est.items || [])
+      .map((it) => `<li>${escapeHtml(it.name)} (${escapeHtml(it.item_type)}): $${escapeHtml(it.amount)}</li>`)
+      .join("");
+
+    el("inquiryDetailContent").innerHTML = `
+      <article class="item">
+        <div class="item-row">
+          <div>
+            <strong>Contact Information</strong>
+            <div class="item-meta">
+              <span>Method: ${escapeHtml(inq.contact_method)}</span>
+              <span>Handle: ${escapeHtml(inq.contact_handle)}</span>
+              <span>Client IP Hash: ${escapeHtml(inq.ip_hash || "—")}</span>
+              <span>Created: ${new Date(inq.created_at).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="item">
+        <div class="item-row">
+          <div>
+            <strong>Requested Configuration</strong>
+            <div class="item-meta">
+              <span>Format: ${escapeHtml(conf.format || "—")}</span>
+              <span>Template: ${escapeHtml(conf.template_key || "—")}</span>
+              <span>Source: ${escapeHtml(conf.product_source || "—")}</span>
+              <span>Hosting: ${escapeHtml(conf.delivery_model || "—")}</span>
+            </div>
+            ${conf.integration_keys?.length ? `<p class="muted compact"><strong>Integrations:</strong> ${escapeHtml(conf.integration_keys.join(", "))}</p>` : ""}
+            ${inq.project_notes ? `<p class="muted compact"><strong>Project Notes:</strong> ${escapeHtml(inq.project_notes)}</p>` : ""}
+          </div>
+        </div>
+      </article>
+
+      <article class="item">
+        <div class="item-row">
+          <div>
+            <strong>Estimated Quote Breakdown</strong>
+            <div class="item-meta">
+              <span>Total Setup: $${escapeHtml(est.total_one_time || "0.00")}</span>
+              <span>Total Monthly: $${escapeHtml(est.total_monthly || "0.00")}</span>
+            </div>
+            ${items ? `<ul style="margin:6px 0 0 16px;font-size:12px;color:var(--muted)">${items}</ul>` : ""}
+          </div>
+        </div>
+      </article>
+    `;
+
+    el("inquiryDetailDialog").showModal();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function openCreateQuoteDialog(inquiry) {
+  if (!inquiry) return;
+  el("quoteInquiryId").value = inquiry.id;
+  el("quoteCustomerName").value = inquiry.contact_handle.replace(/^@/, "") || "Merchant";
+  el("quoteCustomerContact").value = inquiry.contact_handle;
+  el("quoteValidDays").value = 30;
+  el("quoteCurrency").value = "USD";
+  el("quoteTerms").value = "Standard managed hosting agreement with 99.9% uptime SLA.";
+  el("quoteNotes").value = inquiry.project_notes || "";
+
+  const container = el("quoteLineItemsContainer");
+  const estItems = inquiry.estimated_quote?.items || [
+    { name: "Telegram Bot Setup", category: "product_format", item_type: "one_time", amount: "89.00", description: "Base setup" },
+    { name: "Monthly Cloud Hosting", category: "product_format", item_type: "recurring", amount: "49.00", description: "Hosting" },
+  ];
+
+  container.innerHTML = estItems
+    .map(
+      (item) => `
+      <div class="grid2 quote-line-row" style="background:#0c1322;padding:8px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px">
+        <div>
+          <input type="text" class="quote-line-name" value="${escapeHtml(item.name)}" placeholder="Item name" required>
+          <input type="text" class="quote-line-desc" value="${escapeHtml(item.description || "")}" placeholder="Description" style="margin-top:4px;font-size:12px">
+        </div>
+        <div style="display:flex;gap:6px">
+          <select class="quote-line-type">
+            <option value="one_time" ${item.item_type === "one_time" ? "selected" : ""}>One-time</option>
+            <option value="recurring" ${item.item_type === "recurring" ? "selected" : ""}>Monthly</option>
+          </select>
+          <input type="number" step="0.01" min="0" class="quote-line-amount" value="${escapeHtml(item.amount)}" style="width:100px" required>
+          <button type="button" class="icon remove-quote-line" title="Remove line">×</button>
+        </div>
+      </div>
+    `
+    )
+    .join("");
+
+  el("createQuoteDialog").showModal();
+}
+
+async function saveCreateQuote(event) {
+  event.preventDefault();
+  const inquiryId = el("quoteInquiryId").value;
+  const rows = document.querySelectorAll("#quoteLineItemsContainer .quote-line-row");
+  const lines = [];
+
+  rows.forEach((r) => {
+    const name = r.querySelector(".quote-line-name").value.trim();
+    const desc = r.querySelector(".quote-line-desc").value.trim() || null;
+    const item_type = r.querySelector(".quote-line-type").value;
+    const amount = r.querySelector(".quote-line-amount").value.trim();
+    if (name && amount) {
+      lines.push({ name, description: desc, item_type, amount, category: "general" });
+    }
+  });
+
+  if (!lines.length) {
+    alert("Add at least one line item to the quote.");
+    return;
+  }
+
+  const payload = {
+    customer_name: el("quoteCustomerName").value.trim(),
+    customer_contact: el("quoteCustomerContact").value.trim(),
+    currency: el("quoteCurrency").value.trim().toUpperCase() || "USD",
+    terms: el("quoteTerms").value.trim() || null,
+    notes: el("quoteNotes").value.trim() || null,
+    valid_days: Number(el("quoteValidDays").value || 30),
+    lines,
+  };
+
+  try {
+    const result = await platformApi(`/api/v1/platform/sales/inquiries/${inquiryId}/quotes`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    alert(`Quote ${result.quote_number} v${result.version} created successfully! Total: $${result.total_one_time} setup, $${result.total_monthly}/mo`);
+    el("createQuoteDialog").close();
+    el("inquiryDetailDialog").close();
+    await loadSales();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function acceptQuote(quoteId) {
+  if (!confirm("Are you sure you want to accept and lock this quote? Preceding drafts will be superseded and the inquiry will be marked CONVERTED.")) return;
+  try {
+    const result = await platformApi(`/api/v1/platform/sales/quotes/${quoteId}/accept`, {
+      method: "POST",
+    });
+    alert(`Quote ${result.quote_number} accepted and frozen immutably!`);
+    await loadSales();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function refreshCurrent(){ const active=document.querySelector(".nav.active")?.dataset.view; if(active==="plan") await loadSaas(); else if(active==="bots") await loadBots(); else if(active==="products") await Promise.all([loadCategories(),loadProducts()]); else if(active==="orders") await loadOrders(); else if(active==="fulfillment") await loadFulfillment(); else if(active==="providers") await loadProviderOps(); else if(active==="members") await loadMembers(); else if(active==="finance") await Promise.all([loadFinancialCases(),loadPaymentOperationsHealth()]); else if(active==="analytics") await loadAnalytics(); else if(active==="audit") await loadAuditLogs(0); else if(active==="reconciliation") await loadEvents(); else if(active==="sales") await loadSales(); else await loadBootstrap(); }
 
 function bind(){
   document.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".nav,.view").forEach(n=>n.classList.remove("active"));b.classList.add("active");el(`view-${b.dataset.view}`).classList.add("active");el("viewTitle").textContent=b.textContent;await refreshCurrent();}));
@@ -661,6 +990,87 @@ function bind(){
   el("fulfillmentList").addEventListener("click",async e=>{const requeue=e.target.closest("[data-requeue-job]")?.dataset.requeueJob;const reconcile=e.target.closest("[data-reconcile-order]")?.dataset.reconcileOrder;try{if(requeue) await requeueJob(requeue);else if(reconcile) await reconcileOrder(reconcile);}catch(error){alert(error.message||"Fulfillment operation failed.");}});
   el("newSupplier").addEventListener("click",openSupplier);el("supplierType").addEventListener("change",refreshSupplierAdapterFields);el("supplierForm").addEventListener("submit",e=>saveSupplier(e).catch(err=>alert(err.message)));el("configurePayment").addEventListener("click",()=>openPaymentProvider());el("paymentProviderForm").addEventListener("submit",e=>savePaymentProvider(e).catch(err=>alert(err.message)));el("paymentProviderName").addEventListener("change",e=>{const name=e.target.value;if(!state.paymentProviders.some(p=>p.provider_name===name))el("paymentProviderSettings").value=JSON.stringify(defaultPaymentSettings(name),null,2);});el("newMapping").addEventListener("click",()=>{try{openMapping();}catch(err){alert(err.message);}});el("mappingForm").addEventListener("submit",e=>saveMapping(e).catch(err=>alert(err.message)));el("mappingProduct").addEventListener("change",refreshMappingVariants);
   el("supplierProviderList").addEventListener("click",async e=>{const health=e.target.closest("[data-health-provider]")?.dataset.healthProvider;const toggle=e.target.closest("[data-toggle-provider]")?.dataset.toggleProvider;try{if(health)await healthSupplier(health);else if(toggle)await toggleSupplier(toggle);}catch(err){alert(err.message||"Provider operation failed.");}});el("paymentProviderList").addEventListener("click",e=>{const name=e.target.closest("[data-edit-payment-provider]")?.dataset.editPaymentProvider;if(name)openPaymentProvider(name);});el("memberList").addEventListener("click",e=>{const id=e.target.closest("[data-edit-member]")?.dataset.editMember;if(id){const member=state.members.find(m=>m.id===id);if(member)openMember(member);}});el("memberForm").addEventListener("submit",e=>saveMember(e).catch(err=>alert(err.message)));
+  el("unlockSalesBtn")?.addEventListener("click", () => {
+    el("salesOperatorGate")?.classList.toggle("hidden");
+    el("platformTokenInput")?.focus();
+  });
+  el("submitPlatformToken")?.addEventListener("click", async () => {
+    const val = el("platformTokenInput")?.value.trim();
+    if (!val) {
+      alert("Enter platform operator token.");
+      return;
+    }
+    state.platformToken = val;
+    await loadSales();
+  });
+  document.querySelectorAll("[data-sales-tab]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      document.querySelectorAll("[data-sales-tab]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.salesActiveTab = btn.dataset.salesTab;
+      await loadSales();
+    });
+  });
+  el("salesSearch")?.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(loadSales, 250);
+  });
+  el("salesStatusFilter")?.addEventListener("change", loadSales);
+  el("salesInquiryList")?.addEventListener("click", (e) => {
+    const id = e.target.closest("[data-inspect-inquiry]")?.dataset.inspectInquiry;
+    if (id) openInquiryDetail(id);
+  });
+  el("salesQuotesList")?.addEventListener("click", (e) => {
+    const id = e.target.closest("[data-accept-quote]")?.dataset.acceptQuote;
+    if (id) acceptQuote(id);
+  });
+  el("saveInquiryStatusBtn")?.addEventListener("click", async () => {
+    const inqId = el("inquiryDetailId").value;
+    const newStatus = el("inquiryUpdateStatus").value;
+    try {
+      await platformApi(`/api/v1/platform/sales/inquiries/${inqId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      alert(`Inquiry status updated to ${newStatus}.`);
+      await loadSales();
+      openInquiryDetail(inqId);
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+  el("openCreateQuoteFromInquiryBtn")?.addEventListener("click", () => {
+    openCreateQuoteDialog(state.currentInquiry);
+  });
+  el("addQuoteLineBtn")?.addEventListener("click", () => {
+    const container = el("quoteLineItemsContainer");
+    const row = document.createElement("div");
+    row.className = "grid2 quote-line-row";
+    row.style = "background:#0c1322;padding:8px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px";
+    row.innerHTML = `
+      <div>
+        <input type="text" class="quote-line-name" placeholder="Item name" required>
+        <input type="text" class="quote-line-desc" placeholder="Description" style="margin-top:4px;font-size:12px">
+      </div>
+      <div style="display:flex;gap:6px">
+        <select class="quote-line-type">
+          <option value="one_time">One-time</option>
+          <option value="recurring">Monthly</option>
+        </select>
+        <input type="number" step="0.01" min="0" class="quote-line-amount" value="50.00" style="width:100px" required>
+        <button type="button" class="icon remove-quote-line" title="Remove line">×</button>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+  el("quoteLineItemsContainer")?.addEventListener("click", (e) => {
+    if (e.target.closest(".remove-quote-line")) {
+      e.target.closest(".quote-line-row")?.remove();
+    }
+  });
+  el("createQuoteForm")?.addEventListener("submit", saveCreateQuote);
+  document.querySelectorAll("[data-close-inquiry-detail]").forEach((b) => b.addEventListener("click", () => el("inquiryDetailDialog").close()));
+  document.querySelectorAll("[data-close-create-quote]").forEach((b) => b.addEventListener("click", () => el("createQuoteDialog").close()));
 }
 
 function handleSignOut(event) {

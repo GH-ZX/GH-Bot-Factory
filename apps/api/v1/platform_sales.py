@@ -1,0 +1,653 @@
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from apps.api.platform_deps import PlatformOperator, require_platform_operator
+from packages.core.database import get_db_session
+from packages.marketplace.models import (
+    CommercialQuote,
+    CommercialQuoteLine,
+    CustomerInquiry,
+    InquiryStatus,
+    QuoteStatus,
+)
+from packages.saas.control_plane import append_platform_audit
+
+router = APIRouter(prefix="/platform/sales", tags=["platform-sales"])
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
+class InquiryItemResponse(BaseModel):
+    id: uuid.UUID
+    contact_method: str
+    contact_handle: str
+    project_notes: str | None
+    status: str
+    format: str | None
+    template_key: str | None
+    product_source: str | None
+    delivery_model: str | None
+    total_one_time: str | None
+    total_monthly: str | None
+    created_at: datetime
+
+
+class InquiryListResponse(BaseModel):
+    items: list[InquiryItemResponse]
+    total: int
+
+
+class InquiryDetailResponse(BaseModel):
+    id: uuid.UUID
+    contact_method: str
+    contact_handle: str
+    project_notes: str | None
+    status: str
+    configuration: dict[str, Any]
+    estimated_quote: dict[str, Any]
+    ip_hash: str | None
+    created_at: datetime
+    updated_at: datetime
+    quotes_count: int
+
+
+class UpdateInquiryStatusRequest(BaseModel):
+    status: str = Field(..., description="NEW, CONTACTED, QUOTED, CONVERTED, ARCHIVED")
+
+
+class QuoteLineInput(BaseModel):
+    name: str = Field(..., min_length=2, max_length=160)
+    category: str = Field(default="general", max_length=60)
+    item_type: str = Field(default="one_time", description="'one_time' or 'recurring'")
+    amount: str = Field(..., description="Decimal amount string, e.g. '49.00'")
+    description: str | None = Field(default=None, max_length=500)
+
+
+class CreateQuoteRequest(BaseModel):
+    customer_name: str = Field(..., min_length=2, max_length=120)
+    customer_contact: str = Field(..., min_length=2, max_length=120)
+    lines: list[QuoteLineInput] = Field(..., min_length=1)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    terms: str | None = Field(default=None, max_length=3000)
+    notes: str | None = Field(default=None, max_length=2000)
+    valid_days: int = Field(default=30, ge=1, le=365)
+
+
+class QuoteLineResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    category: str
+    item_type: str
+    amount: str
+    description: str | None
+
+
+class QuoteResponse(BaseModel):
+    id: uuid.UUID
+    quote_number: str
+    version: int
+    inquiry_id: uuid.UUID | None
+    customer_name: str
+    customer_contact: str
+    status: str
+    currency: str
+    total_one_time: str
+    total_monthly: str
+    terms: str | None
+    notes: str | None
+    valid_until: datetime | None
+    accepted_at: datetime | None
+    created_at: datetime
+    lines: list[QuoteLineResponse] = Field(default_factory=list)
+
+
+class QuoteListResponse(BaseModel):
+    items: list[QuoteResponse]
+    total: int
+
+
+@router.get("/inquiries", response_model=InquiryListResponse)
+async def list_inquiries(
+    status_filter: str | None = Query(default=None, alias="status"),
+    search: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> InquiryListResponse:
+    query = select(CustomerInquiry)
+    count_query = select(func.count(CustomerInquiry.id))
+
+    if status_filter:
+        norm_status = status_filter.strip().upper()
+        if norm_status in InquiryStatus.__members__:
+            query = query.where(CustomerInquiry.status == InquiryStatus[norm_status])
+            count_query = count_query.where(CustomerInquiry.status == InquiryStatus[norm_status])
+
+    if search:
+        s = f"%{search.strip()}%"
+        cond = or_(
+            CustomerInquiry.contact_handle.ilike(s),
+            CustomerInquiry.project_notes.ilike(s),
+        )
+        query = query.where(cond)
+        count_query = count_query.where(cond)
+
+    total = (await session.execute(count_query)).scalar_one()
+    rows = (
+        (
+            await session.execute(
+                query.order_by(CustomerInquiry.created_at.desc()).limit(limit).offset(offset)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    items = []
+    for r in rows:
+        conf = r.configuration or {}
+        quote = r.estimated_quote or {}
+        items.append(
+            InquiryItemResponse(
+                id=r.id,
+                contact_method=r.contact_method.value,
+                contact_handle=r.contact_handle,
+                project_notes=r.project_notes,
+                status=r.status.value,
+                format=conf.get("format"),
+                template_key=conf.get("template_key"),
+                product_source=conf.get("product_source"),
+                delivery_model=conf.get("delivery_model"),
+                total_one_time=quote.get("total_one_time"),
+                total_monthly=quote.get("total_monthly"),
+                created_at=r.created_at,
+            )
+        )
+
+    return InquiryListResponse(items=items, total=total)
+
+
+@router.get("/inquiries/{inquiry_id}", response_model=InquiryDetailResponse)
+async def get_inquiry(
+    inquiry_id: uuid.UUID,
+    _: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> InquiryDetailResponse:
+    stmt = (
+        select(CustomerInquiry)
+        .where(CustomerInquiry.id == inquiry_id)
+        .options(selectinload(CustomerInquiry.quotes))
+    )
+    inquiry = (await session.execute(stmt)).scalar_one_or_none()
+    if not inquiry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found.")
+
+    return InquiryDetailResponse(
+        id=inquiry.id,
+        contact_method=inquiry.contact_method.value,
+        contact_handle=inquiry.contact_handle,
+        project_notes=inquiry.project_notes,
+        status=inquiry.status.value,
+        configuration=inquiry.configuration,
+        estimated_quote=inquiry.estimated_quote,
+        ip_hash=inquiry.ip_hash,
+        created_at=inquiry.created_at,
+        updated_at=inquiry.updated_at,
+        quotes_count=len(inquiry.quotes),
+    )
+
+
+@router.patch("/inquiries/{inquiry_id}/status", response_model=InquiryDetailResponse)
+async def update_inquiry_status(
+    inquiry_id: uuid.UUID,
+    payload: UpdateInquiryStatusRequest,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> InquiryDetailResponse:
+    inquiry = await session.get(CustomerInquiry, inquiry_id)
+    if not inquiry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found.")
+
+    norm_status = payload.status.strip().upper()
+    if norm_status not in InquiryStatus.__members__:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid status: {payload.status}")
+
+    old_status = inquiry.status.value
+    inquiry.status = InquiryStatus[norm_status]
+
+    await append_platform_audit(
+        session,
+        action="inquiry.status_updated",
+        resource_type="customer_inquiry",
+        resource_id=str(inquiry.id),
+        details={"old_status": old_status, "new_status": norm_status},
+        ip_address=_client_ip(request),
+        actor=operator.actor,
+    )
+
+    await session.commit()
+    await session.refresh(inquiry)
+
+    quotes_count = (
+        await session.execute(
+            select(func.count(CommercialQuote.id)).where(CommercialQuote.inquiry_id == inquiry.id)
+        )
+    ).scalar_one()
+
+    return InquiryDetailResponse(
+        id=inquiry.id,
+        contact_method=inquiry.contact_method.value,
+        contact_handle=inquiry.contact_handle,
+        project_notes=inquiry.project_notes,
+        status=inquiry.status.value,
+        configuration=inquiry.configuration,
+        estimated_quote=inquiry.estimated_quote,
+        ip_hash=inquiry.ip_hash,
+        created_at=inquiry.created_at,
+        updated_at=inquiry.updated_at,
+        quotes_count=quotes_count,
+    )
+
+
+@router.post("/inquiries/{inquiry_id}/quotes", response_model=QuoteResponse, status_code=status.HTTP_201_CREATED)
+async def create_quote_for_inquiry(
+    inquiry_id: uuid.UUID,
+    payload: CreateQuoteRequest,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> QuoteResponse:
+    inquiry = await session.get(CustomerInquiry, inquiry_id)
+    if not inquiry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found.")
+
+    # Calculate version and quote number
+    existing_quotes = (
+        (
+            await session.execute(
+                select(CommercialQuote)
+                .where(CommercialQuote.inquiry_id == inquiry.id)
+                .order_by(CommercialQuote.version.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    now = datetime.now(UTC)
+    if existing_quotes:
+        quote_number = existing_quotes[0].quote_number
+        version = existing_quotes[0].version + 1
+    else:
+        quote_number = f"Q-{now.year}-{str(uuid.uuid4().int % 100000).zfill(5)}"
+        version = 1
+
+    # Compute totals
+    total_one_time = Decimal("0.00")
+    total_monthly = Decimal("0.00")
+    line_models = []
+
+    for l in payload.lines:
+        try:
+            amt = Decimal(l.amount)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid line amount: {l.amount}"
+            ) from exc
+
+        item_type = l.item_type.strip().lower()
+        if item_type == "one_time":
+            total_one_time += amt
+        elif item_type == "recurring":
+            total_monthly += amt
+        else:
+            item_type = "one_time"
+            total_one_time += amt
+
+        line_models.append(
+            CommercialQuoteLine(
+                name=l.name.strip(),
+                category=l.category.strip().lower(),
+                item_type=item_type,
+                amount=amt,
+                description=l.description.strip() if l.description else None,
+            )
+        )
+
+    valid_until = now.replace(tzinfo=UTC) + datetime.timedelta(days=payload.valid_days) if hasattr(datetime, "timedelta") else None
+    from datetime import timedelta
+    valid_until = now + timedelta(days=payload.valid_days)
+
+    quote = CommercialQuote(
+        quote_number=quote_number,
+        version=version,
+        inquiry_id=inquiry.id,
+        customer_name=payload.customer_name.strip(),
+        customer_contact=payload.customer_contact.strip(),
+        status=QuoteStatus.DRAFT,
+        currency=payload.currency.strip().upper(),
+        total_one_time=total_one_time,
+        total_monthly=total_monthly,
+        terms=payload.terms.strip() if payload.terms else None,
+        notes=payload.notes.strip() if payload.notes else None,
+        valid_until=valid_until,
+        lines=line_models,
+    )
+    session.add(quote)
+
+    inquiry.status = InquiryStatus.QUOTED
+
+    await append_platform_audit(
+        session,
+        action="quote.created",
+        resource_type="commercial_quote",
+        resource_id=quote_number,
+        details={
+            "quote_id": str(quote.id),
+            "version": version,
+            "inquiry_id": str(inquiry.id),
+            "total_one_time": str(total_one_time),
+            "total_monthly": str(total_monthly),
+            "currency": quote.currency,
+        },
+        ip_address=_client_ip(request),
+        actor=operator.actor,
+    )
+
+    await session.commit()
+    stmt = (
+        select(CommercialQuote)
+        .where(CommercialQuote.id == quote.id)
+        .options(selectinload(CommercialQuote.lines))
+    )
+    quote = (await session.execute(stmt)).scalar_one()
+
+    return QuoteResponse(
+        id=quote.id,
+        quote_number=quote.quote_number,
+        version=quote.version,
+        inquiry_id=quote.inquiry_id,
+        customer_name=quote.customer_name,
+        customer_contact=quote.customer_contact,
+        status=quote.status.value,
+        currency=quote.currency,
+        total_one_time=str(quote.total_one_time),
+        total_monthly=str(quote.total_monthly),
+        terms=quote.terms,
+        notes=quote.notes,
+        valid_until=quote.valid_until,
+        accepted_at=quote.accepted_at,
+        created_at=quote.created_at,
+        lines=[
+            QuoteLineResponse(
+                id=item.id,
+                name=item.name,
+                category=item.category,
+                item_type=item.item_type,
+                amount=str(item.amount),
+                description=item.description,
+            )
+            for item in quote.lines
+        ],
+    )
+
+
+@router.get("/quotes", response_model=QuoteListResponse)
+async def list_quotes(
+    status_filter: str | None = Query(default=None, alias="status"),
+    search: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> QuoteListResponse:
+    query = select(CommercialQuote).options(selectinload(CommercialQuote.lines))
+    count_query = select(func.count(CommercialQuote.id))
+
+    if status_filter:
+        norm_status = status_filter.strip().upper()
+        if norm_status in QuoteStatus.__members__:
+            query = query.where(CommercialQuote.status == QuoteStatus[norm_status])
+            count_query = count_query.where(CommercialQuote.status == QuoteStatus[norm_status])
+
+    if search:
+        s = f"%{search.strip()}%"
+        cond = or_(
+            CommercialQuote.quote_number.ilike(s),
+            CommercialQuote.customer_name.ilike(s),
+            CommercialQuote.customer_contact.ilike(s),
+        )
+        query = query.where(cond)
+        count_query = count_query.where(cond)
+
+    total = (await session.execute(count_query)).scalar_one()
+    rows = (
+        (
+            await session.execute(
+                query.order_by(CommercialQuote.created_at.desc()).limit(limit).offset(offset)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    items = [
+        QuoteResponse(
+            id=q.id,
+            quote_number=q.quote_number,
+            version=q.version,
+            inquiry_id=q.inquiry_id,
+            customer_name=q.customer_name,
+            customer_contact=q.customer_contact,
+            status=q.status.value,
+            currency=q.currency,
+            total_one_time=str(q.total_one_time),
+            total_monthly=str(q.total_monthly),
+            terms=q.terms,
+            notes=q.notes,
+            valid_until=q.valid_until,
+            accepted_at=q.accepted_at,
+            created_at=q.created_at,
+            lines=[
+                QuoteLineResponse(
+                    id=l.id,
+                    name=l.name,
+                    category=l.category,
+                    item_type=l.item_type,
+                    amount=str(l.amount),
+                    description=l.description,
+                )
+                for l in q.lines
+            ],
+        )
+        for q in rows
+    ]
+
+    return QuoteListResponse(items=items, total=total)
+
+
+@router.get("/quotes/{quote_id}", response_model=QuoteResponse)
+async def get_quote(
+    quote_id: uuid.UUID,
+    _: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> QuoteResponse:
+    stmt = (
+        select(CommercialQuote)
+        .where(CommercialQuote.id == quote_id)
+        .options(selectinload(CommercialQuote.lines))
+    )
+    quote = (await session.execute(stmt)).scalar_one_or_none()
+    if not quote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found.")
+
+    return QuoteResponse(
+        id=quote.id,
+        quote_number=quote.quote_number,
+        version=quote.version,
+        inquiry_id=quote.inquiry_id,
+        customer_name=quote.customer_name,
+        customer_contact=quote.customer_contact,
+        status=quote.status.value,
+        currency=quote.currency,
+        total_one_time=str(quote.total_one_time),
+        total_monthly=str(quote.total_monthly),
+        terms=quote.terms,
+        notes=quote.notes,
+        valid_until=quote.valid_until,
+        accepted_at=quote.accepted_at,
+        created_at=quote.created_at,
+        lines=[
+            QuoteLineResponse(
+                id=l.id,
+                name=l.name,
+                category=l.category,
+                item_type=l.item_type,
+                amount=str(l.amount),
+                description=l.description,
+            )
+            for l in quote.lines
+        ],
+    )
+
+
+@router.post("/quotes/{quote_id}/accept", response_model=QuoteResponse)
+async def accept_quote(
+    quote_id: uuid.UUID,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> QuoteResponse:
+    stmt = (
+        select(CommercialQuote)
+        .where(CommercialQuote.id == quote_id)
+        .options(selectinload(CommercialQuote.lines))
+    )
+    quote = (await session.execute(stmt)).scalar_one_or_none()
+    if not quote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found.")
+
+    if quote.status == QuoteStatus.ACCEPTED:
+        return QuoteResponse(
+            id=quote.id,
+            quote_number=quote.quote_number,
+            version=quote.version,
+            inquiry_id=quote.inquiry_id,
+            customer_name=quote.customer_name,
+            customer_contact=quote.customer_contact,
+            status=quote.status.value,
+            currency=quote.currency,
+            total_one_time=str(quote.total_one_time),
+            total_monthly=str(quote.total_monthly),
+            terms=quote.terms,
+            notes=quote.notes,
+            valid_until=quote.valid_until,
+            accepted_at=quote.accepted_at,
+            created_at=quote.created_at,
+            lines=[
+                QuoteLineResponse(
+                    id=l.id,
+                    name=l.name,
+                    category=l.category,
+                    item_type=l.item_type,
+                    amount=str(l.amount),
+                    description=l.description,
+                )
+                for l in quote.lines
+            ],
+        )
+
+    now = datetime.now(UTC)
+    quote.status = QuoteStatus.ACCEPTED
+    quote.accepted_at = now
+
+    # Mark prior drafts superseded
+    if quote.inquiry_id:
+        prior_quotes = (
+            (
+                await session.execute(
+                    select(CommercialQuote).where(
+                        CommercialQuote.inquiry_id == quote.inquiry_id,
+                        CommercialQuote.id != quote.id,
+                        CommercialQuote.status.in_([QuoteStatus.DRAFT, QuoteStatus.SENT]),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for pq in prior_quotes:
+            pq.status = QuoteStatus.SUPERSEDED
+
+        # Update inquiry status to CONVERTED
+        inquiry = await session.get(CustomerInquiry, quote.inquiry_id)
+        if inquiry:
+            inquiry.status = InquiryStatus.CONVERTED
+
+    await append_platform_audit(
+        session,
+        action="quote.accepted",
+        resource_type="commercial_quote",
+        resource_id=quote.quote_number,
+        details={
+            "quote_id": str(quote.id),
+            "version": quote.version,
+            "total_one_time": str(quote.total_one_time),
+            "total_monthly": str(quote.total_monthly),
+            "customer_name": quote.customer_name,
+            "customer_contact": quote.customer_contact,
+        },
+        ip_address=_client_ip(request),
+        actor=operator.actor,
+    )
+
+    await session.commit()
+    stmt = (
+        select(CommercialQuote)
+        .where(CommercialQuote.id == quote.id)
+        .options(selectinload(CommercialQuote.lines))
+    )
+    quote = (await session.execute(stmt)).scalar_one()
+
+    return QuoteResponse(
+        id=quote.id,
+        quote_number=quote.quote_number,
+        version=quote.version,
+        inquiry_id=quote.inquiry_id,
+        customer_name=quote.customer_name,
+        customer_contact=quote.customer_contact,
+        status=quote.status.value,
+        currency=quote.currency,
+        total_one_time=str(quote.total_one_time),
+        total_monthly=str(quote.total_monthly),
+        terms=quote.terms,
+        notes=quote.notes,
+        valid_until=quote.valid_until,
+        accepted_at=quote.accepted_at,
+        created_at=quote.created_at,
+        lines=[
+            QuoteLineResponse(
+                id=l.id,
+                name=l.name,
+                category=l.category,
+                item_type=l.item_type,
+                amount=str(l.amount),
+                description=l.description,
+            )
+            for l in quote.lines
+        ],
+    )

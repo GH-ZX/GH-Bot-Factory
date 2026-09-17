@@ -22,6 +22,7 @@ from apps.api.v1.admin_saas import router as admin_saas_router
 from apps.api.v1.auth import router as auth_router
 from apps.api.v1.payments import router as payments_router
 from apps.api.v1.platform import router as platform_router
+from apps.api.v1.platform_sales import router as platform_sales_router
 from apps.api.v1.public_marketplace import router as public_marketplace_router
 from apps.api.v1.saas_billing import router as saas_billing_router
 from apps.api.v1.setup import router as setup_router
@@ -119,6 +120,7 @@ async def prometheus_metrics() -> PlainTextResponse:
 
 app.include_router(payments_router, prefix="/api/v1")
 app.include_router(platform_router, prefix="/api/v1")
+app.include_router(platform_sales_router, prefix="/api/v1")
 app.include_router(saas_billing_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 app.include_router(admin_analytics_router, prefix="/api/v1")

@@ -1596,3 +1596,38 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
    - Verified live at `http://10.70.5.5:8010/build/` and verified `/api/v1/public/estimate` and `/api/v1/public/inquiries`.
    - Canonical `make verify` green: 408 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `a1b2c3d4e5f7`.
+
+## Phase 14.2 — Platform Sales Console and Immutable Quotes Delivery — 2026-09-18
+
+**User prompt (verbatim):**
+
+> ok go ahead
+
+**Delivered scope:**
+
+1. **Platform Sales Boundary & ADR-041:**
+   - Established ADR-041 (`docs/decisions/ADR-041-platform-sales-console-and-immutable-quotes.md`) governing platform sales boundaries, commercial quote immutability, in-memory operator credential gate, and CLI/API operations.
+2. **Commercial Quote Models & Migration (`packages/marketplace/models.py`):**
+   - Implemented `CommercialQuote` and `CommercialQuoteLine` models.
+   - Added database migration `b2c3d4e5f6a8_add_commercial_quotes.py` creating `commercial_quotes` and `commercial_quote_lines` with status, version, and foreign keys.
+3. **Platform Sales API Router (`apps/api/v1/platform_sales.py`):**
+   - Protected by `require_platform_operator` (`X-GHBF-Platform-Token`).
+   - `GET /api/v1/platform/sales/inquiries`: List customer inquiries with pagination, status filter, and keyword search.
+   - `GET /api/v1/platform/sales/inquiries/{id}`: Detailed inquiry view with full configuration and quote history.
+   - `PATCH /api/v1/platform/sales/inquiries/{id}/status`: Update lead status (`NEW`, `CONTACTED`, `QUOTED`, `CONVERTED`, `ARCHIVED`) and emit `PlatformAuditLog`.
+   - `POST /api/v1/platform/sales/inquiries/{id}/quotes`: Generate a new versioned `CommercialQuote`.
+   - `GET /api/v1/platform/sales/quotes`: List commercial quotes.
+   - `GET /api/v1/platform/sales/quotes/{id}`: Full quote with itemized lines.
+   - `POST /api/v1/platform/sales/quotes/{id}/accept`: Immutably freeze quote status to `ACCEPTED`, supersede prior draft revisions, update inquiry status to `CONVERTED`, and record `PlatformAuditLog`.
+4. **Admin Dashboard Sales & Leads Console (`apps/admin/static/`):**
+   - Added `Sales & Leads` navigation item (`view-sales`) in Admin dashboard.
+   - In-memory operator token gate (session-only, never saved to `localStorage` or `sessionStorage`).
+   - Real-time lead review, status chips, lead inspection drawer, and formal quote generator dialog.
+5. **Platform CLI Subcommands (`scripts/platformctl.py`):**
+   - Added `inquiries`, `inquiry`, `inquiry-status`, `quotes`, `quote`, and `quote-accept` subcommands with auto-resolved LAN bind host.
+6. **Verification & Live Container Rebuild:**
+   - Added test suite `tests/test_phase14_2_sales_quotes.py` (3 integration tests).
+   - Bumped Admin cache busters to `v=20260918_02`.
+   - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
+   - Verified live at `http://10.70.5.5:8010/admin/` and verified with `platformctl.py`.
+   - Canonical `make verify` green: 411 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `b2c3d4e5f6a8`.

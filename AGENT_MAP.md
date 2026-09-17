@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**
-> *Last Updated: 2026-09-18 (Phase 14.1 Public Configurator & Messaging)*
+> *Last Updated: 2026-09-18 (Phase 14.2 Platform Sales Console & Quotes)*
 
 ---
 
@@ -870,3 +870,17 @@ All verbatim user prompts, architectural requirements, and commit records are ca
   6. Added test suite `tests/test_phase14_1_public_configurator.py` covering all public endpoints, quote calculations, lead persistence, and static page loading.
   7. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
   8. Canonical gate passed: Ruff clean, 408 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `a1b2c3d4e5f7`.
+
+## Milestone 49: Phase 14.2 Platform Sales Console & Quotes (2026-09-18)
+
+- **Status:** Delivered & Verified
+- **Key Additions:**
+  1. Added ADR-041 establishing the platform sales boundary, commercial quote immutability, in-memory operator credential gate, and CLI/API operations.
+  2. Implemented `CommercialQuote` and `CommercialQuoteLine` models (`packages/marketplace/models.py`) with migration `b2c3d4e5f6a8_add_commercial_quotes.py`.
+  3. Implemented platform sales API router `apps/api/v1/platform_sales.py` (`/api/v1/platform/sales/inquiries`, `/quotes`, `/quotes/{id}/accept`) with `require_platform_operator` and non-repudiable `PlatformAuditLog` audit logging.
+  4. Built Sales & Leads console in Admin dashboard (`apps/admin/static/`) with in-memory operator token gate (never persisted in browser storage), real-time inquiry inspection, status transitions, and formal quote generator.
+  5. Updated `scripts/platformctl.py` with `inquiries`, `inquiry`, `inquiry-status`, `quotes`, `quote`, and `quote-accept` subcommands and auto-resolved LAN bind host.
+  6. Added test suite `tests/test_phase14_2_sales_quotes.py` covering platform auth, inquiry lifecycle, quote generation, acceptance immutability, and audit logging.
+  7. Bumped Admin asset cache busters to `v=20260918_02`.
+  8. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+  9. Canonical gate passed: Ruff clean, 411 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `b2c3d4e5f6a8`.

@@ -3,14 +3,14 @@
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
 - **Last updated:** 2026-09-18
-- **Current phase:** Phase 14.1 — Public Configurator & Messaging
-- **Implementation status:** Phase 14.1 is complete. Public marketplace API router (`/api/v1/public/templates`, `/integrations`, `/estimate`, `/inquiries`) is live. Server-authoritative `QuoteEngine` calculates one-time setup and monthly hosting fees. Durable `CustomerInquiry` model and migration `a1b2c3d4e5f7` capture prospect leads with IP hashing, quote snapshots, and instant Telegram deep-link CTA. Modern public Build Your Bot configurator is live at `/build/` on `botfac.gh-store.me` (preserving the `gh-store.me` apex domain untouched). ADR-040 documents public sales boundaries. Next is Phase 14.2 (Platform Sales Console & Quotes).
-- **Current migration head:** `a1b2c3d4e5f7`
+- **Current phase:** Phase 14.2 — Platform Sales Console & Quotes
+- **Implementation status:** Phase 14.2 is complete. Platform sales console API router (`/api/v1/platform/sales/inquiries`, `/quotes`, `/quotes/{id}/accept`) is live, guarded by `require_platform_operator` and audited via `PlatformAuditLog`. Versioned `CommercialQuote` and `CommercialQuoteLine` models and database migration `b2c3d4e5f6a8` provide immutable quote freezing and acceptance locking. Admin console features a dedicated "Sales & Leads" view with in-memory operator token verification (never stored in browser persistence), inquiry inspection, status transitions, and formal quote generation. `scripts/platformctl.py` CLI is updated with `inquiries`, `inquiry`, `inquiry-status`, `quotes`, `quote`, and `quote-accept` subcommands. ADR-041 records sales boundaries. Next is Phase 14.3 (Customer Onboarding & Tenant Ownership).
+- **Current migration head:** `b2c3d4e5f6a8`
 - **Primary branch:** `main`
-- **Latest milestone commit:** `b38e5730a911f99c2ea559a4be24ddb59c7d415d` (`feat(phase14): deliver phase 14.0 template guidance and marketplace boundaries`)
+- **Latest milestone commit:** `4cfb5608ad01e9d0a68d0ee5a51352e82e36780c` (`feat(phase14): deliver phase 14.1 public configurator and messaging`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 408 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `a1b2c3d4e5f7`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
-- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_01`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
+- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 411 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `b2c3d4e5f6a8`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_02`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
 ## Delivered Capabilities
@@ -125,6 +125,14 @@
    - Modern, mobile-first Web App in `apps/build/static/` mounted at `/build/` on `botfac.gh-store.me`, strictly preserving the apex domain `gh-store.me`.
    - Direct Telegram contact deep-link with URL-encoded inquiry summary.
    - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+21. Phase 14.2 Platform Sales Console & Immutable Quotes:
+   - ADR-041 records the platform sales boundary, commercial quote immutability, in-memory operator credential gate, and CLI/API operations.
+   - `CommercialQuote` and `CommercialQuoteLine` models (`packages/marketplace/models.py`) with migration `b2c3d4e5f6a8`.
+   - Platform sales router `apps/api/v1/platform_sales.py` for inquiry inspection, status progression, quote creation, and quote acceptance locking.
+   - `PlatformAuditLog` tracking for inquiry status updates, quote creation, and quote acceptance.
+   - Admin dashboard Sales & Leads console with in-memory operator token verification, lead inspection drawer, and formal quote generator dialog.
+   - `scripts/platformctl.py` CLI subcommands (`inquiries`, `inquiry`, `inquiry-status`, `quotes`, `quote`, `quote-accept`) with auto-resolved LAN bind host.
+   - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 ## Current Trust Boundaries
 
 - Tenant/user identity always comes from `AuthenticatedPrincipal`; browser clients cannot choose authoritative tenant/user IDs.
@@ -191,4 +199,4 @@ Read in order:
 4. Provider balance monitoring is advisory/read-only by design; routing automation based on balance evidence is deferred until hysteresis/freshness policy is specified.
 
 ## Next Recommended Work
-Proceed with Phase 14.2 (Platform Sales Console & Quotes): owner-only platform control plane UI and API for reviewing customer inquiries, issuing versioned immutable quotes, and sending customer proposals. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md), then run the release gate, staging failure injection, and encrypted backup/restore plus portability drills.
+Proceed with Phase 14.3 (Customer Onboarding & Tenant Ownership): convert accepted commercial quotes into tenant provisioning, assign customer as tenant `OWNER`, apply subscription and integration entitlements via platform authority, and guide customer setup. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md).

@@ -40,9 +40,13 @@ def request_json(
     *,
     token: str,
     port: str,
+    host: str | None = None,
     payload: dict[str, Any] | None = None,
 ) -> Any:
-    url = f"http://127.0.0.1:{port}/api/v1/platform{path}"
+    effective_host = host or read_env().get("API_HOST", read_env().get("API_BIND_ADDRESS", "127.0.0.1")).strip()
+    if effective_host == "0.0.0.0":
+        effective_host = "127.0.0.1"
+    url = f"http://{effective_host}:{port}/api/v1/platform{path}"
     data = None
     headers = {"X-GHBF-Platform-Token": token, "Accept": "application/json"}
     if payload is not None:
@@ -130,6 +134,28 @@ def parser() -> argparse.ArgumentParser:
 
     audit = sub.add_parser("audit")
     audit.add_argument("--tenant")
+    inquiries = sub.add_parser("inquiries")
+    inquiries.add_argument("--status", choices=["NEW", "CONTACTED", "QUOTED", "CONVERTED", "ARCHIVED"])
+    inquiries.add_argument("--q")
+    inquiries.add_argument("--limit", type=int, default=50)
+
+    inquiry_get = sub.add_parser("inquiry")
+    inquiry_get.add_argument("--id", required=True)
+
+    inquiry_status = sub.add_parser("inquiry-status")
+    inquiry_status.add_argument("--id", required=True)
+    inquiry_status.add_argument("--status", required=True, choices=["NEW", "CONTACTED", "QUOTED", "CONVERTED", "ARCHIVED"])
+
+    quotes = sub.add_parser("quotes")
+    quotes.add_argument("--status", choices=["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED", "SUPERSEDED"])
+    quotes.add_argument("--q")
+    quotes.add_argument("--limit", type=int, default=50)
+
+    quote_get = sub.add_parser("quote")
+    quote_get.add_argument("--id", required=True)
+
+    quote_accept = sub.add_parser("quote-accept")
+    quote_accept.add_argument("--id", required=True)
     return root
 
 
@@ -142,7 +168,9 @@ def main() -> None:
             "PLATFORM_ADMIN_TOKEN is missing/weak in .env. Run scripts/easy_start.py or configure it explicitly."
         )
     port = env.get("API_HOST_PORT", "8010")
-
+    host = env.get("API_HOST", env.get("API_BIND_ADDRESS", "127.0.0.1")).strip()
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
     if args.command == "overview":
         result = request_json("GET", "/overview", token=token, port=port)
     elif args.command == "plans":
@@ -244,6 +272,34 @@ def main() -> None:
     elif args.command == "audit":
         query = "?" + urllib.parse.urlencode({"tenant_id": args.tenant}) if args.tenant else ""
         result = request_json("GET", f"/audit{query}", token=token, port=port)
+    elif args.command == "inquiries":
+        params = {"limit": args.limit}
+        if args.status:
+            params["status"] = args.status
+        if args.q:
+            params["search"] = args.q
+        result = request_json("GET", f"/sales/inquiries?{urllib.parse.urlencode(params)}", token=token, port=port)
+    elif args.command == "inquiry":
+        result = request_json("GET", f"/sales/inquiries/{args.id}", token=token, port=port)
+    elif args.command == "inquiry-status":
+        result = request_json(
+            "PATCH",
+            f"/sales/inquiries/{args.id}/status",
+            token=token,
+            port=port,
+            payload={"status": args.status},
+        )
+    elif args.command == "quotes":
+        params = {"limit": args.limit}
+        if args.status:
+            params["status"] = args.status
+        if args.q:
+            params["search"] = args.q
+        result = request_json("GET", f"/sales/quotes?{urllib.parse.urlencode(params)}", token=token, port=port)
+    elif args.command == "quote":
+        result = request_json("GET", f"/sales/quotes/{args.id}", token=token, port=port)
+    elif args.command == "quote-accept":
+        result = request_json("POST", f"/sales/quotes/{args.id}/accept", token=token, port=port)
     else:  # pragma: no cover
         raise SystemExit(f"Unsupported command: {args.command}")
 
