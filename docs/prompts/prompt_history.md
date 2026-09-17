@@ -1489,3 +1489,4 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 - Changed the planned split-horizon DNS, TLS certificate, reverse-proxy host, Admin URL, and Mini App URL from `bot.gh-store.me` to `botfac.gh-store.me`.
 - Preserved the existing `bot.gh-store.me` Zero Trust route and the `gh-store.me` React application without modification.
 - Active `.env` URLs remain on the working LAN configuration until `botfac.gh-store.me` DNS, certificate, and proxy routing are verified.
+- Hostname-correction commit: `c1a1d207181cc6aef99c01fed306dd78c6e4acdb`.
