@@ -457,3 +457,18 @@ Current phase checkpoint: **Phase 14 — Customer Marketplace product definition
 - Bumped Admin asset cache busters to `v=20260918_04`.
 - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 - Canonical verification: Ruff clean, 414 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `d4e5f6a8b9c1`.
+
+## 2026-09-18 — Phase 14.5 — Dedicated Deployment & Source License Handoff
+
+- Milestone implementation: Phase 14.5 delivered.
+- Added ADR-044 (`docs/decisions/ADR-044-dedicated-deployment-and-source-license-handoff.md`) establishing single-tenant data isolation, digital license tracking, managed runtime deactivation safety, and zero-backdoor operational boundaries.
+- Implemented `DeploymentHandoff` model (`packages/marketplace/models.py`) with migration `e5f6a8b9c1d2_add_deployment_handoffs.py` managing unique license keys (`LIC-GHBF-YYYY-XXXX`), version tags, and handoff status.
+- Implemented `DeploymentHandoffService` (`packages/marketplace/handoff_service.py`) generating sanitized single-tenant export bundles (`bundle.json`, `manifest.json`, `docker-compose.standalone.yml`) with SHA-256 checksums and credentials extracted from `SecretStorage`.
+- Implemented managed runtime deactivation terminating factory cluster polling prior to customer standalone launch, eliminating Telegram HTTP 409 polling conflicts.
+- Added platform sales API endpoints (`/api/v1/platform/sales/handoffs`, `/generate-bundle`, `/deactivate-managed`) with `PlatformAuditLog` audit logging.
+- Updated `scripts/platformctl.py` with `handoffs`, `handoff`, `handoff-create`, `handoff-bundle`, and `handoff-deactivate` subcommands.
+- Built interactive Deployment Handoffs tab in Admin Sales Console with bundle generation and runtime deactivation controls.
+- Added test suite `tests/test_phase14_5_deployment_handoff.py` covering handoff lifecycle, sanitized single-tenant export isolation, checksum verification, and runtime deactivation.
+- Bumped Admin asset cache busters to `v=20260918_05`.
+- Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+- Canonical verification: Ruff clean, 415 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `e5f6a8b9c1d2`.

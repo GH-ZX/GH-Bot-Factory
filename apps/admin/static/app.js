@@ -1,5 +1,5 @@
 const tg = window.Telegram?.WebApp;
-const state = { token: null, botId: null, bootstrap: null, categories: [], products: [], orders: [], jobs: [], events: [], providerCapabilities: null, providerAdapters: [], suppliers: [], paymentProviders: [], mappings: [], members: [], financialCases: [], paymentOps: null, analytics: null, auditLogs: [], auditNextOffset: null, bots: [], botJobs: [], botTemplates: [], botWizardStep: 1, botWizardMode: "create", botWizardOptions: null, saas: null, billing: null, platformToken: null, inquiries: [], salesQuotes: [], currentInquiry: null, salesActiveTab: "inquiries", adminIntegrations: [] };
+const state = { token: null, botId: null, bootstrap: null, categories: [], products: [], orders: [], jobs: [], events: [], providerCapabilities: null, providerAdapters: [], suppliers: [], paymentProviders: [], mappings: [], members: [], financialCases: [], paymentOps: null, analytics: null, auditLogs: [], auditNextOffset: null, bots: [], botJobs: [], botTemplates: [], botWizardStep: 1, botWizardMode: "create", botWizardOptions: null, saas: null, billing: null, platformToken: null, inquiries: [], salesQuotes: [], currentInquiry: null, salesActiveTab: "inquiries", adminIntegrations: [], salesHandoffs: [] };
 const el = (id) => document.getElementById(id);
 const escapeHtml = (v) => String(v ?? "").replace(/[&<>'"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 
@@ -794,6 +794,7 @@ async function loadSales() {
   if (tab === "inquiries") {
     el("salesInquiryList")?.classList.remove("hidden");
     el("salesQuotesList")?.classList.add("hidden");
+    el("salesHandoffsList")?.classList.add("hidden");
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     if (q) params.set("search", q);
@@ -805,9 +806,10 @@ async function loadSales() {
     } catch (err) {
       if (el("salesInquiryList")) el("salesInquiryList").innerHTML = `<div class="status-msg error">${escapeHtml(err.message)}</div>`;
     }
-  } else {
+  } else if (tab === "quotes") {
     el("salesInquiryList")?.classList.add("hidden");
     el("salesQuotesList")?.classList.remove("hidden");
+    el("salesHandoffsList")?.classList.add("hidden");
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     if (q) params.set("search", q);
@@ -819,9 +821,23 @@ async function loadSales() {
     } catch (err) {
       if (el("salesQuotesList")) el("salesQuotesList").innerHTML = `<div class="status-msg error">${escapeHtml(err.message)}</div>`;
     }
+  } else if (tab === "handoffs") {
+    el("salesInquiryList")?.classList.add("hidden");
+    el("salesQuotesList")?.classList.add("hidden");
+    el("salesHandoffsList")?.classList.remove("hidden");
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (q) params.set("search", q);
+
+    try {
+      const data = await platformApi(`/api/v1/platform/sales/handoffs?${params}`);
+      state.salesHandoffs = data || [];
+      renderSalesHandoffs();
+    } catch (err) {
+      if (el("salesHandoffsList")) el("salesHandoffsList").innerHTML = `<div class="status-msg error">${escapeHtml(err.message)}</div>`;
+    }
   }
 }
-
 function renderSalesInquiries() {
   const container = el("salesInquiryList");
   if (!container) return;
@@ -924,6 +940,86 @@ function renderSalesQuotes() {
     .join("");
 }
 
+function renderSalesHandoffs() {
+  const container = el("salesHandoffsList");
+  if (!container) return;
+  if (!state.salesHandoffs.length) {
+    container.innerHTML = `<div class="empty">No deployment handoffs recorded yet.</div>`;
+    return;
+  }
+
+  const statusBadges = {
+    PREPARING: "chip",
+    READY_FOR_EXPORT: "chip-warn",
+    EXPORTED: "chip-accent",
+    HANDED_OFF: "chip-ok",
+    CANCELLED: "chip-danger",
+  };
+
+  container.innerHTML = state.salesHandoffs
+    .map((h) => {
+      const bClass = statusBadges[h.status] || "chip";
+      const isDeactivated = h.runtime_deactivated;
+
+      return `
+        <article class="item">
+          <div class="item-row">
+            <div>
+              <h3>
+                ${escapeHtml(h.license_key)}
+                <span class="chip ${bClass}">${escapeHtml(h.status)}</span>
+                <span class="chip">${escapeHtml(h.license_type)}</span>
+              </h3>
+              <div class="item-meta">
+                <span>Licensee: ${escapeHtml(h.licensed_to)}</span>
+                ${h.licensed_domain ? `<span>Domain: ${escapeHtml(h.licensed_domain)}</span>` : ""}
+                <span>Version: ${escapeHtml(h.version_tag)}</span>
+                <span>Created: ${new Date(h.created_at).toLocaleString()}</span>
+                ${h.export_checksum ? `<span title="${escapeHtml(h.export_checksum)}">SHA-256: ${escapeHtml(h.export_checksum.slice(0, 10))}…</span>` : ""}
+              </div>
+              <div style="margin-top:6px">
+                ${isDeactivated ? `<span class="chip chip-ok">✓ Managed Runtime Deactivated (Safe for self-hosting)</span>` : `<span class="chip chip-warn">⚠️ Active on Managed Cluster (Deactivate before self-hosting)</span>`}
+                ${h.support_plan ? `<span class="chip">${escapeHtml(h.support_plan)}</span>` : ""}
+              </div>
+            </div>
+            <div class="ops-actions">
+              <button type="button" class="ghost" data-generate-bundle="${h.id}">📦 Generate Bundle</button>
+              ${!isDeactivated ? `<button type="button" class="danger" data-deactivate-runtime="${h.id}">🛑 Deactivate Runtime</button>` : `<span class="chip chip-ok">Handed Off</span>`}
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function generateHandoffBundle(id) {
+  try {
+    const res = await platformApi(`/api/v1/platform/sales/handoffs/${id}/generate-bundle`, { method: "POST" });
+    alert(
+      `Single-tenant bundle generated successfully!\n\n` +
+      `• License: ${res.license_key}\n` +
+      `• Checksum (SHA-256): ${res.checksum_sha256}\n` +
+      `• Artifact Directory: ${res.artifact_dir}\n` +
+      `• Bundle File: ${res.bundle_file}\n\n` +
+      `The bundle contains only tenant-scoped data and extracted SecretStorage credentials.`
+    );
+    await loadSales();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function deactivateHandoffRuntime(id) {
+  if (!confirm("Are you sure you want to deactivate the managed bot runtime? Telegram polling will immediately cease on this cluster so the customer can start their standalone VPS.")) return;
+  try {
+    const res = await platformApi(`/api/v1/platform/sales/handoffs/${id}/deactivate-managed`, { method: "POST" });
+    alert(`Managed runtime for license ${res.license_key} deactivated successfully. Safe for standalone cutover.`);
+    await loadSales();
+  } catch (err) {
+    alert(err.message);
+  }
+}
 async function openInquiryDetail(id) {
   try {
     const inq = await platformApi(`/api/v1/platform/sales/inquiries/${id}`);
@@ -933,6 +1029,7 @@ async function openInquiryDetail(id) {
     el("inquiryUpdateStatus").value = inq.status;
 
     const conf = inq.configuration || {};
+
     const est = inq.estimated_quote || {};
     const items = (est.items || [])
       .map((it) => `<li>${escapeHtml(it.name)} (${escapeHtml(it.item_type)}): $${escapeHtml(it.amount)}</li>`)
@@ -1263,6 +1360,12 @@ function bind(){
   el("openIntegrationsMarketplaceBtn")?.addEventListener("click", () => {
     loadAdminIntegrations().catch((err) => alert(err.message));
     el("integrationsMarketplaceDialog").showModal();
+  });
+  el("salesHandoffsList")?.addEventListener("click", (e) => {
+    const bundleId = e.target.closest("[data-generate-bundle]")?.dataset.generateBundle;
+    const deactId = e.target.closest("[data-deactivate-runtime]")?.dataset.deactivateRuntime;
+    if (bundleId) generateHandoffBundle(bundleId);
+    else if (deactId) deactivateHandoffRuntime(deactId);
   });
   document.querySelectorAll("[data-close-integrations-marketplace]").forEach((b) => b.addEventListener("click", () => el("integrationsMarketplaceDialog").close()));
   el("marketplaceIntegrationsList")?.addEventListener("click", (e) => {

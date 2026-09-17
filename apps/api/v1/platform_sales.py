@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from apps.api.platform_deps import PlatformOperator, require_platform_operator
 from packages.core.database import get_db_session
+from packages.marketplace.handoff_service import DeploymentHandoffService, HandoffError
 from packages.marketplace.integrations_service import (
     IntegrationMarketplaceError,
     IntegrationMarketplaceService,
@@ -21,7 +22,10 @@ from packages.marketplace.models import (
     CommercialQuote,
     CommercialQuoteLine,
     CustomerInquiry,
+    DeploymentHandoff,
+    HandoffStatus,
     InquiryStatus,
+    LicenseType,
     QuoteStatus,
 )
 from packages.marketplace.onboarding import CustomerOnboardingService, OnboardingError
@@ -155,6 +159,43 @@ class TenantEntitlementResponse(BaseModel):
     is_enabled: bool
     granted_by: str
     granted_at: datetime
+
+class CreateHandoffRequest(BaseModel):
+    license_type: str = Field(default="DEDICATED_DEPLOYMENT", description="MANAGED, DEDICATED_DEPLOYMENT, SOURCE_LICENSE")
+    licensed_to: str = Field(..., min_length=2, max_length=120)
+    licensed_domain: str | None = Field(default=None, max_length=120)
+    support_plan: str | None = Field(default=None, max_length=60)
+    quote_id: uuid.UUID | None = Field(default=None)
+    handoff_notes: str | None = Field(default=None, max_length=2000)
+
+
+class DeploymentHandoffResponse(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    quote_id: uuid.UUID | None
+    license_type: str
+    license_key: str
+    licensed_to: str
+    licensed_domain: str | None
+    version_tag: str
+    status: str
+    support_plan: str | None
+    runtime_deactivated: bool
+    runtime_deactivated_at: datetime | None
+    export_checksum: str | None
+    export_artifact_path: str | None
+    handoff_notes: str | None
+    handed_off_at: datetime | None
+    created_at: datetime
+
+
+class GenerateBundleResponse(BaseModel):
+    handoff_id: str
+    license_key: str
+    tenant_slug: str
+    checksum_sha256: str
+    artifact_dir: str
+    bundle_file: str
 
 
 @router.get("/inquiries", response_model=InquiryListResponse)
@@ -788,3 +829,172 @@ async def revoke_tenant_integration(
         ip_address=_client_ip(request),
     )
     return {"ok": True}
+
+@router.get("/handoffs", response_model=list[DeploymentHandoffResponse])
+async def list_deployment_handoffs(
+    status_filter: str | None = Query(default=None, alias="status"),
+    tenant_id: uuid.UUID | None = Query(default=None),
+    search: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[DeploymentHandoffResponse]:
+    query = select(DeploymentHandoff)
+    if status_filter:
+        norm = status_filter.strip().upper()
+        if norm in HandoffStatus.__members__:
+            query = query.where(DeploymentHandoff.status == HandoffStatus[norm])
+    if tenant_id:
+        query = query.where(DeploymentHandoff.tenant_id == tenant_id)
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                DeploymentHandoff.license_key.ilike(s),
+                DeploymentHandoff.licensed_to.ilike(s),
+                DeploymentHandoff.licensed_domain.ilike(s),
+            )
+        )
+
+    rows = (
+        (
+            await session.execute(
+                query.order_by(DeploymentHandoff.created_at.desc()).limit(limit).offset(offset)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    return [
+        DeploymentHandoffResponse(
+            id=r.id,
+            tenant_id=r.tenant_id,
+            quote_id=r.quote_id,
+            license_type=r.license_type.value,
+            license_key=r.license_key,
+            licensed_to=r.licensed_to,
+            licensed_domain=r.licensed_domain,
+            version_tag=r.version_tag,
+            status=r.status.value,
+            support_plan=r.support_plan,
+            runtime_deactivated=r.runtime_deactivated,
+            runtime_deactivated_at=r.runtime_deactivated_at,
+            export_checksum=r.export_checksum,
+            export_artifact_path=r.export_artifact_path,
+            handoff_notes=r.handoff_notes,
+            handed_off_at=r.handed_off_at,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/tenants/{tenant_id}/handoffs", response_model=DeploymentHandoffResponse, status_code=status.HTTP_201_CREATED)
+async def create_deployment_handoff(
+    tenant_id: uuid.UUID,
+    payload: CreateHandoffRequest,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> DeploymentHandoffResponse:
+    norm_type = payload.license_type.strip().upper()
+    try:
+        lic_type = LicenseType[norm_type]
+    except KeyError:
+        lic_type = LicenseType.DEDICATED_DEPLOYMENT
+
+    try:
+        handoff = await DeploymentHandoffService.create_handoff(
+            session,
+            tenant_id=tenant_id,
+            license_type=lic_type,
+            licensed_to=payload.licensed_to,
+            licensed_domain=payload.licensed_domain,
+            support_plan=payload.support_plan,
+            quote_id=payload.quote_id,
+            handoff_notes=payload.handoff_notes,
+            actor=operator.actor,
+            ip_address=_client_ip(request),
+        )
+    except HandoffError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return DeploymentHandoffResponse(
+        id=handoff.id,
+        tenant_id=handoff.tenant_id,
+        quote_id=handoff.quote_id,
+        license_type=handoff.license_type.value,
+        license_key=handoff.license_key,
+        licensed_to=handoff.licensed_to,
+        licensed_domain=handoff.licensed_domain,
+        version_tag=handoff.version_tag,
+        status=handoff.status.value,
+        support_plan=handoff.support_plan,
+        runtime_deactivated=handoff.runtime_deactivated,
+        runtime_deactivated_at=handoff.runtime_deactivated_at,
+        export_checksum=handoff.export_checksum,
+        export_artifact_path=handoff.export_artifact_path,
+        handoff_notes=handoff.handoff_notes,
+        handed_off_at=handoff.handed_off_at,
+        created_at=handoff.created_at,
+    )
+
+
+@router.post("/handoffs/{handoff_id}/generate-bundle", response_model=GenerateBundleResponse)
+async def generate_handoff_bundle(
+    handoff_id: uuid.UUID,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> GenerateBundleResponse:
+    try:
+        data = await DeploymentHandoffService.generate_single_tenant_export_bundle(
+            session,
+            handoff_id=handoff_id,
+            actor=operator.actor,
+            ip_address=_client_ip(request),
+        )
+    except HandoffError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return GenerateBundleResponse(**data)
+
+
+@router.post("/handoffs/{handoff_id}/deactivate-managed", response_model=DeploymentHandoffResponse)
+async def deactivate_managed_runtime(
+    handoff_id: uuid.UUID,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> DeploymentHandoffResponse:
+    try:
+        handoff = await DeploymentHandoffService.deactivate_managed_runtime(
+            session,
+            handoff_id=handoff_id,
+            actor=operator.actor,
+            ip_address=_client_ip(request),
+        )
+    except HandoffError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return DeploymentHandoffResponse(
+        id=handoff.id,
+        tenant_id=handoff.tenant_id,
+        quote_id=handoff.quote_id,
+        license_type=handoff.license_type.value,
+        license_key=handoff.license_key,
+        licensed_to=handoff.licensed_to,
+        licensed_domain=handoff.licensed_domain,
+        version_tag=handoff.version_tag,
+        status=handoff.status.value,
+        support_plan=handoff.support_plan,
+        runtime_deactivated=handoff.runtime_deactivated,
+        runtime_deactivated_at=handoff.runtime_deactivated_at,
+        export_checksum=handoff.export_checksum,
+        export_artifact_path=handoff.export_artifact_path,
+        handoff_notes=handoff.handoff_notes,
+        handed_off_at=handoff.handed_off_at,
+        created_at=handoff.created_at,
+    )

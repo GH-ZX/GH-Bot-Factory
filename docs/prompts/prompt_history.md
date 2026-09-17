@@ -1700,3 +1700,33 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
    - Verified live at `http://10.70.5.5:8010/admin/` and via `GET /api/v1/platform/sales/integrations`.
    - Canonical `make verify` green: 414 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `d4e5f6a8b9c1`.
+
+## Phase 14.5 — Dedicated Deployment and Source License Handoff Delivery — 2026-09-18
+
+**User prompt (verbatim):**
+
+> yes , do next
+
+**Delivered scope:**
+
+1. **ADR-044 Dedicated Deployment, Source License Handoff & Safe Runtime Deactivation:**
+   - Established ADR-044 (`docs/decisions/ADR-044-dedicated-deployment-and-source-license-handoff.md`) governing single-tenant isolation, digital license verification, managed runtime deactivation, and zero-backdoor operational boundaries.
+2. **Deployment Handoff Models & Migration (`e5f6a8b9c1d2`):**
+   - Created `DeploymentHandoff` model (`packages/marketplace/models.py`) with fields for `license_key`, `license_type` (`MANAGED`, `DEDICATED_DEPLOYMENT`, `SOURCE_LICENSE`), `licensed_to`, `licensed_domain`, `version_tag`, `status`, `runtime_deactivated`, and artifact metadata.
+   - Added database migration `e5f6a8b9c1d2_add_deployment_handoffs.py` verified with zero drift on PostgreSQL.
+3. **Single-Tenant Sanitized Handoff Service (`packages/marketplace/handoff_service.py`):**
+   - Implemented `DeploymentHandoffService.create_handoff(...)` generating unique cryptographically signed keys (`LIC-GHBF-YYYY-XXXX`).
+   - Implemented `generate_single_tenant_export_bundle(...)` exporting strictly tenant-scoped data (`tenant`, `members`, `bots`, `catalog`, `payments`, `providers`, `credentials` extracted safely from `SecretStorage`) into `bundle.json`, with `manifest.json` (SHA-256 checksum) and `docker-compose.standalone.yml`.
+   - Implemented `deactivate_managed_runtime(...)` terminating factory cluster polling before standalone VPS launch to prevent Telegram HTTP 409 conflicts.
+4. **Platform Sales API Endpoints & CLI Commands:**
+   - Platform endpoints: `GET /api/v1/platform/sales/handoffs`, `POST /tenants/{id}/handoffs`, `POST /handoffs/{id}/generate-bundle`, `POST /handoffs/{id}/deactivate-managed` with `PlatformAuditLog` audit logging.
+   - Updated `scripts/platformctl.py` with `handoffs`, `handoff`, `handoff-create`, `handoff-bundle`, and `handoff-deactivate` subcommands.
+5. **Admin Dashboard UI Integration:**
+   - Added "Deployment Handoffs" tab in the Admin Sales & Leads console.
+   - Displays real-time license cards, runtime status, and 1-click bundle generation / runtime deactivation controls.
+6. **Verification & Live Container Rebuild:**
+   - Added test suite `tests/test_phase14_5_deployment_handoff.py`.
+   - Bumped Admin cache busters to `v=20260918_05`.
+   - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
+   - Verified live at `http://10.70.5.5:8010/admin/` and via `platformctl handoffs`.
+   - Canonical `make verify` green: 415 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `e5f6a8b9c1d2`.

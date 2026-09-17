@@ -163,6 +163,30 @@ def parser() -> argparse.ArgumentParser:
     quote_onboard.add_argument("--name")
     quote_onboard.add_argument("--owner")
     quote_onboard.add_argument("--telegram-id", type=int)
+
+    handoffs = sub.add_parser("handoffs")
+    handoffs.add_argument("--status", choices=["PREPARING", "READY_FOR_EXPORT", "EXPORTED", "HANDED_OFF", "CANCELLED"])
+    handoffs.add_argument("--tenant")
+    handoffs.add_argument("--q")
+    handoffs.add_argument("--limit", type=int, default=50)
+
+    handoff_get = sub.add_parser("handoff")
+    handoff_get.add_argument("--id", required=True)
+
+    handoff_create = sub.add_parser("handoff-create")
+    handoff_create.add_argument("--tenant", required=True)
+    handoff_create.add_argument("--licensed-to", required=True)
+    handoff_create.add_argument("--license-type", choices=["MANAGED", "DEDICATED_DEPLOYMENT", "SOURCE_LICENSE"], default="DEDICATED_DEPLOYMENT")
+    handoff_create.add_argument("--domain")
+    handoff_create.add_argument("--support-plan")
+    handoff_create.add_argument("--quote-id")
+    handoff_create.add_argument("--notes")
+
+    handoff_bundle = sub.add_parser("handoff-bundle")
+    handoff_bundle.add_argument("--id", required=True)
+
+    handoff_deact = sub.add_parser("handoff-deactivate")
+    handoff_deact.add_argument("--id", required=True)
     return root
 
 
@@ -318,6 +342,31 @@ def main() -> None:
         if args.telegram_id:
             payload["owner_telegram_id"] = args.telegram_id
         result = request_json("POST", f"/sales/quotes/{args.id}/onboard", token=token, port=port, payload=payload)
+    elif args.command == "handoffs":
+        params = {"limit": args.limit}
+        if args.status:
+            params["status"] = args.status
+        if args.tenant:
+            params["tenant_id"] = args.tenant
+        if args.q:
+            params["search"] = args.q
+        result = request_json("GET", f"/sales/handoffs?{urllib.parse.urlencode(params)}", token=token, port=port)
+    elif args.command == "handoff":
+        result = request_json("GET", f"/sales/handoffs?search={urllib.parse.quote(args.id)}", token=token, port=port)
+    elif args.command == "handoff-create":
+        payload = {
+            "license_type": args.license_type,
+            "licensed_to": args.licensed_to,
+            "licensed_domain": args.domain,
+            "support_plan": args.support_plan,
+            "quote_id": args.quote_id,
+            "handoff_notes": args.notes,
+        }
+        result = request_json("POST", f"/sales/tenants/{args.tenant}/handoffs", token=token, port=port, payload=payload)
+    elif args.command == "handoff-bundle":
+        result = request_json("POST", f"/sales/handoffs/{args.id}/generate-bundle", token=token, port=port)
+    elif args.command == "handoff-deactivate":
+        result = request_json("POST", f"/sales/handoffs/{args.id}/deactivate-managed", token=token, port=port)
     else:  # pragma: no cover
         raise SystemExit(f"Unsupported command: {args.command}")
 

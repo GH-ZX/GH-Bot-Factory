@@ -3,14 +3,14 @@
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
 - **Last updated:** 2026-09-18
-- **Current phase:** Phase 14.4 — Integration & API Marketplace
-- **Implementation status:** Phase 14.4 is complete. Integration offerings catalog (`IntegrationOfferingModel`) and tenant entitlements (`TenantIntegrationEntitlement`) are live with migration `d4e5f6a8b9c1`. Integration marketplace service (`packages/marketplace/integrations_service.py`) provides catalog querying, tenant entitlement validation, and grant/revoke operations with `PlatformAuditLog` audit logging. Tenant Admin exposes integration discovery API (`GET /api/v1/admin/integrations`) and write-only credential entry into `SecretStorage` (`POST /api/v1/admin/integrations/{key}/configure`), failing closed (403) for unentitled tenants. Admin UI provides an interactive API Marketplace drawer with status indicators (`CONFIGURED`, `ENTITLED`, `LOCKED`) and one-click connection dialog. ADR-043 records integration boundaries. Next is Phase 14.5 (Dedicated Deployment & Source License Handoff).
-- **Current migration head:** `d4e5f6a8b9c1`
+- **Current phase:** Phase 14.5 — Dedicated Deployment & Source License Handoff
+- **Implementation status:** Phase 14.5 is complete. `DeploymentHandoff` model (`packages/marketplace/models.py`) and migration `e5f6a8b9c1d2` manage license tracking (`LIC-GHBF-YYYY-XXXX`), version tagging, and deactivation states. `DeploymentHandoffService` (`packages/marketplace/handoff_service.py`) generates sanitized single-tenant export bundles (tenant data, user ownership, catalog, payment methods, standalone compose spec, and extracted credentials from `SecretStorage`), verified with SHA-256 checksums and isolated from platform records or peer tenants. Managed runtime deactivation stops factory bot polling prior to customer standalone VPS startup, eliminating Telegram HTTP 409 conflicts. Platform sales API and `scripts/platformctl.py` provide full lifecycle management (`handoffs`, `handoff-create`, `handoff-bundle`, `handoff-deactivate`), mirrored in the Admin Sales & Leads console. ADR-044 records handoff boundaries. Next is Phase 14.6 (Release Qualification & Governance).
+- **Current migration head:** `e5f6a8b9c1d2`
 - **Primary branch:** `main`
-- **Latest milestone commit:** `883a277da20188ef7dbb94098939c3645b08ec8d` (`feat(phase14): deliver phase 14.3 customer onboarding and tenant ownership`)
+- **Latest milestone commit:** `76d5c4852c03531b7454805c879dbb568393fa11` (`feat(phase14): deliver phase 14.4 integration and api marketplace`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 414 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `d4e5f6a8b9c1`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
-- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_04`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
+- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 415 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `e5f6a8b9c1d2`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_05`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
 ## Delivered Capabilities
@@ -150,6 +150,14 @@
    - Tenant Admin integration discovery API (`GET /api/v1/admin/integrations`) and write-only credential entry (`POST /api/v1/admin/integrations/{key}/configure`), failing closed (403) for unentitled tenants.
    - Interactive Integrations Marketplace modal in Admin Providers tab with status chips (`Active & Configured`, `Entitled`, `Upgrade Required`) and one-click credential configuration.
    - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+24. Phase 14.5 Dedicated Deployment & Source License Handoff:
+   - ADR-044 defines single-tenant isolation, digital license verification, managed runtime deactivation, and zero-backdoor operational boundaries.
+   - `DeploymentHandoff` model (`packages/marketplace/models.py`) with migration `e5f6a8b9c1d2`.
+   - `DeploymentHandoffService` (`packages/marketplace/handoff_service.py`) producing sanitized single-tenant export bundles (`bundle.json`, `manifest.json`, `docker-compose.standalone.yml`) with SHA-256 checksum verification.
+   - Managed runtime deactivation terminating factory cluster polling before standalone VPS launch, eliminating Telegram HTTP 409 polling conflicts.
+   - Platform API endpoints (`/api/v1/platform/sales/handoffs`, `/generate-bundle`, `/deactivate-managed`) and `scripts/platformctl.py` CLI subcommands (`handoffs`, `handoff-create`, `handoff-bundle`, `handoff-deactivate`).
+   - Admin Sales & Leads dashboard tab displaying active deployment handoffs with 1-click bundle generation and deactivation controls.
+   - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 ## Current Trust Boundaries
 - Tenant/user identity always comes from `AuthenticatedPrincipal`; browser clients cannot choose authoritative tenant/user IDs.
 - Money mutates only through ledger services and PostgreSQL serialization/idempotency controls.
@@ -215,4 +223,4 @@ Read in order:
 4. Provider balance monitoring is advisory/read-only by design; routing automation based on balance evidence is deferred until hysteresis/freshness policy is specified.
 
 ## Next Recommended Work
-Proceed with Phase 14.5 (Dedicated Deployment & Source License Handoff): dedicated single-tenant portable export/install packaging, license verification records, managed-runtime shutdown on handoff, and zero-backdoor operational boundaries. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md).
+Proceed with Phase 14.6 (Release Qualification & Governance): complete canonical release gate across PostgreSQL concurrency, end-to-end marketplace smoke tests, secret leak auditing, and staging failure injection before tagging the production release candidate. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md).

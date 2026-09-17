@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**
-> *Last Updated: 2026-09-18 (Phase 14.4 Integration & API Marketplace)*
+> *Last Updated: 2026-09-18 (Phase 14.5 Dedicated Deployment & Source License Handoff)*
 
 ---
 
@@ -915,3 +915,19 @@ All verbatim user prompts, architectural requirements, and commit records are ca
   8. Bumped Admin asset cache busters to `v=20260918_04`.
   9. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
   10. Canonical gate passed: Ruff clean, 414 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `d4e5f6a8b9c1`.
+
+## Milestone 52: Phase 14.5 Dedicated Deployment & Source License Handoff (2026-09-18)
+
+- **Status:** Delivered & Verified
+- **Key Additions:**
+  1. Added ADR-044 establishing single-tenant data isolation, digital license tracking, managed runtime deactivation safety, and zero-backdoor operational boundaries.
+  2. Implemented `DeploymentHandoff` model (`packages/marketplace/models.py`) with migration `e5f6a8b9c1d2_add_deployment_handoffs.py` managing unique license keys (`LIC-GHBF-YYYY-XXXX`), version tags, and handoff status.
+  3. Implemented `DeploymentHandoffService` (`packages/marketplace/handoff_service.py`) generating sanitized single-tenant export bundles (`bundle.json`, `manifest.json`, `docker-compose.standalone.yml`) with SHA-256 checksums and credentials extracted from `SecretStorage`.
+  4. Implemented managed runtime deactivation terminating factory cluster polling prior to customer standalone launch, eliminating Telegram HTTP 409 polling conflicts.
+  5. Added platform sales API endpoints (`/api/v1/platform/sales/handoffs`, `/generate-bundle`, `/deactivate-managed`) with `PlatformAuditLog` audit logging.
+  6. Updated `scripts/platformctl.py` with `handoffs`, `handoff`, `handoff-create`, `handoff-bundle`, and `handoff-deactivate` subcommands.
+  7. Built interactive Deployment Handoffs tab in Admin Sales Console with bundle generation and runtime deactivation controls.
+  8. Added test suite `tests/test_phase14_5_deployment_handoff.py` covering handoff lifecycle, sanitized single-tenant export isolation, checksum verification, and runtime deactivation.
+  9. Bumped Admin asset cache busters to `v=20260918_05`.
+  10. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+  11. Canonical gate passed: Ruff clean, 415 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `e5f6a8b9c1d2`.

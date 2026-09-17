@@ -192,3 +192,59 @@ class TenantIntegrationEntitlement(Base, UUIDMixin, TimestampMixin):
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
 
     tenant: Mapped[Tenant] = relationship("Tenant")
+
+
+class LicenseType(str, enum.Enum):
+    MANAGED = "MANAGED"
+    DEDICATED_DEPLOYMENT = "DEDICATED_DEPLOYMENT"
+    SOURCE_LICENSE = "SOURCE_LICENSE"
+
+
+class HandoffStatus(str, enum.Enum):
+    PREPARING = "PREPARING"
+    READY_FOR_EXPORT = "READY_FOR_EXPORT"
+    EXPORTED = "EXPORTED"
+    HANDED_OFF = "HANDED_OFF"
+    CANCELLED = "CANCELLED"
+
+
+class DeploymentHandoff(Base, UUIDMixin, TimestampMixin):
+    """Formal commercial delivery and license evidence for self-hosted or dedicated deployments."""
+
+    __tablename__ = "deployment_handoffs"
+    __table_args__ = (
+        Index("ix_deployment_handoffs_license_key", "license_key", unique=True),
+        Index("ix_deployment_handoffs_tenant_status", "tenant_id", "status"),
+        Index("ix_deployment_handoffs_quote", "quote_id"),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    quote_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("commercial_quotes.id", ondelete="SET NULL"), nullable=True
+    )
+    license_type: Mapped[LicenseType] = mapped_column(
+        Enum(LicenseType, native_enum=False, length=30),
+        nullable=False,
+        default=LicenseType.DEDICATED_DEPLOYMENT,
+    )
+    license_key: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    licensed_to: Mapped[str] = mapped_column(String(120), nullable=False)
+    licensed_domain: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    version_tag: Mapped[str] = mapped_column(String(40), nullable=False, default="v0.1.0-phase14.5")
+    status: Mapped[HandoffStatus] = mapped_column(
+        Enum(HandoffStatus, native_enum=False, length=25),
+        nullable=False,
+        default=HandoffStatus.PREPARING,
+    )
+    support_plan: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    runtime_deactivated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    runtime_deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    export_checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    export_artifact_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    handoff_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    handed_off_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    quote: Mapped[CommercialQuote | None] = relationship("CommercialQuote")
