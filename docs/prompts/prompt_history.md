@@ -1504,3 +1504,4 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 - Backed up Nginx Proxy Manager's SQLite database, created proxy host ID 41 through NPM's internal validation/configuration path, and verified Nginx syntax plus readiness/Admin routing.
 - Updated the destination-owned `.env` Admin URL to `http://botfac.gh-store.me/admin/` and recreated the API and bot runtime.
 - Trusted TLS and Mini App activation remain pending because the proxy has no certificate covering `gh-store.me`; existing Cloudflare/Zero Trust configuration was not changed.
+- Network-activation handoff commit: `11f3257cb08315ec2f51c700f4e2b6f78eb00b0c`.

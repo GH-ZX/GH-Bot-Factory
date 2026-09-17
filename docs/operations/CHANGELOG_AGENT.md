@@ -371,6 +371,7 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 
 ## 2026-09-17 — Local `botfac.gh-store.me` Activation
 
+- Network-activation handoff commit: `11f3257cb08315ec2f51c700f4e2b6f78eb00b0c`.
 - With explicit operator authorization, added an idempotent UDM static A record for `botfac.gh-store.me -> 10.70.5.5`; preserved a pre-change static-DNS backup under `/data/ghbf-backups/` and left the existing `bot.gh-store.me` route untouched.
 - Created Nginx Proxy Manager proxy host ID 41 through its internal validated creation path after taking a consistent root-only SQLite backup. The host forwards HTTP/WebSockets to `10.70.5.5:8010`, blocks common exploits, and has a valid generated Nginx configuration.
 - Activated `ADMIN_PUBLIC_URL=http://botfac.gh-store.me/admin/` for the local development environment and recreated API/bot-runtime services.
