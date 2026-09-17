@@ -824,3 +824,11 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 - Added `docs/runbooks/local-domain-reverse-proxy.md` for temporary split-horizon HTTPS at `botfac.gh-store.me` through the existing Nginx Proxy Manager and UDM local DNS; the pre-existing `bot.gh-store.me` Zero Trust route remains untouched.
 - The existing proxy container, Cloudflare tunnel, apex-domain React application, and UDM configuration were not mutated. Staging-mode URL cutover waits for the operator-owned DNS/TLS entries.
 - Canonical gate remained green: 401 fast tests and 13 PostgreSQL tests passed; Alembic drift check remained clean at `f2a3b4c5d6e7`.
+
+## Milestone 45: Local `botfac.gh-store.me` Activation (2026-09-17)
+
+- Explicit operator authorization superseded the earlier hold on external network configuration for this exact UDM DNS and Nginx Proxy Manager change.
+- UDM static DNS now resolves `botfac.gh-store.me` to `10.70.5.5`; pre-change static-DNS and generated-config backups are stored under `/data/ghbf-backups/` on the gateway.
+- Nginx Proxy Manager host ID 41 forwards HTTP/WebSockets to `10.70.5.5:8010`; a consistent pre-change database backup is stored beside the NPM database.
+- GH-Bot-Factory uses `http://botfac.gh-store.me/admin/` for local Admin links. DNS, Nginx syntax, readiness, Admin HTTP, and all project service health checks passed.
+- TLS/Mini App staging cutover remains pending because Nginx Proxy Manager has no trusted certificate covering `gh-store.me`; no Cloudflare tunnel or existing `bot.gh-store.me` route was modified.

@@ -2,6 +2,13 @@
 
 This temporary deployment keeps GH-Bot-Factory reachable only on the local network while the public tunnel is unavailable. It uses a dedicated subdomain so the existing React application at `gh-store.me` remains unchanged.
 
+## Current installation state
+
+- UDM local DNS resolves `botfac.gh-store.me` to `10.70.5.5`.
+- Nginx Proxy Manager proxy host ID 41 forwards HTTP to `10.70.5.5:8010` with WebSocket support and exploit blocking.
+- The active Admin URL is `http://botfac.gh-store.me/admin/` while `APP_ENV=development`.
+- Trusted TLS, `APP_ENV=staging`, and `MINIAPP_PUBLIC_URL` remain pending. Do not enable the Telegram Mini App on this hostname until a publicly trusted certificate is attached.
+
 ## Target topology
 
 ```text
@@ -33,6 +40,8 @@ Create one Proxy Host with:
 - Force SSL: enabled
 - HTTP/2: enabled when available
 
+The HTTP host is already active. Attach the trusted certificate and enable Force SSL/HTTP2 to finish this step.
+
 Do not change or replace the existing Nginx Proxy Manager container. It already owns host ports 80, 81, and 443.
 
 ## 3. UDM Pro Max local DNS
@@ -41,6 +50,8 @@ Create a Host (A) record:
 
 - Domain name: `botfac.gh-store.me`
 - IPv4 address: `10.70.5.5`
+
+This record is already active and verified from the application host.
 
 On UniFi Network 9.4 this is under **Settings -> Policy Table -> Create New Policy -> DNS**. On 9.3 it is under **Settings -> Policy Engine -> DNS -> Create DNS Record**.
 

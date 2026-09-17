@@ -1490,3 +1490,17 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 - Preserved the existing `bot.gh-store.me` Zero Trust route and the `gh-store.me` React application without modification.
 - Active `.env` URLs remain on the working LAN configuration until `botfac.gh-store.me` DNS, certificate, and proxy routing are verified.
 - Hostname-correction commit: `c1a1d207181cc6aef99c01fed306dd78c6e4acdb`.
+
+## Authorized UDM and Nginx Configuration — 2026-09-17
+
+**User prompt (verbatim, credential redacted):**
+
+> btw u can add that to nginx, and to my udm pro max using ssh (SSH connection and password supplied; secret omitted from project history)
+
+**Outcome:**
+
+- Connected to the UDM using existing SSH key authentication; the supplied password was not needed, printed, or stored.
+- Backed up the existing UDM static-DNS state, added `botfac.gh-store.me -> 10.70.5.5`, activated the generated DNS configuration, and verified resolution from both the gateway and application host.
+- Backed up Nginx Proxy Manager's SQLite database, created proxy host ID 41 through NPM's internal validation/configuration path, and verified Nginx syntax plus readiness/Admin routing.
+- Updated the destination-owned `.env` Admin URL to `http://botfac.gh-store.me/admin/` and recreated the API and bot runtime.
+- Trusted TLS and Mini App activation remain pending because the proxy has no certificate covering `gh-store.me`; existing Cloudflare/Zero Trust configuration was not changed.

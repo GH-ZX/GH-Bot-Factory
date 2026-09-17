@@ -368,3 +368,11 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 - Added a split-horizon local HTTPS runbook for `botfac.gh-store.me` using the existing Nginx Proxy Manager plus UDM local DNS. This dedicated name avoids the existing `bot.gh-store.me` Zero Trust route. The application remains in development mode with the existing LAN Admin URL until the operator creates the DNS/TLS proxy entries; no Cloudflare tunnel or unrelated host container was changed.
 - Canonical verification: Ruff/static/secret/handoff/JavaScript/dependency checks passed, 401 fast tests passed, 13 PostgreSQL tests passed, and Alembic reported no drift at `f2a3b4c5d6e7`.
 - Follow-up hostname correction: commit `c1a1d207181cc6aef99c01fed306dd78c6e4acdb` changed the planned endpoint to `botfac.gh-store.me` because `bot.gh-store.me` already belongs to the existing Zero Trust route.
+
+## 2026-09-17 — Local `botfac.gh-store.me` Activation
+
+- With explicit operator authorization, added an idempotent UDM static A record for `botfac.gh-store.me -> 10.70.5.5`; preserved a pre-change static-DNS backup under `/data/ghbf-backups/` and left the existing `bot.gh-store.me` route untouched.
+- Created Nginx Proxy Manager proxy host ID 41 through its internal validated creation path after taking a consistent root-only SQLite backup. The host forwards HTTP/WebSockets to `10.70.5.5:8010`, blocks common exploits, and has a valid generated Nginx configuration.
+- Activated `ADMIN_PUBLIC_URL=http://botfac.gh-store.me/admin/` for the local development environment and recreated API/bot-runtime services.
+- Verified UDM DNS, Nginx syntax, proxied readiness with PostgreSQL/Redis healthy, Admin HTTP 200, and all five GH-Bot-Factory services healthy.
+- Trusted TLS is not yet available for `gh-store.me` in Nginx Proxy Manager. `APP_ENV=staging` and `MINIAPP_PUBLIC_URL` remain intentionally unset until a trusted certificate is attached; no Cloudflare tunnel was changed.
