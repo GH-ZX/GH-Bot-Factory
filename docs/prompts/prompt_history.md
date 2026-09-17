@@ -1332,4 +1332,13 @@ Inspected the complete repository, running services, database schema and rows, t
 2. Added `API_BIND_ADDRESS=0.0.0.0` to `.env.example`.
 3. Recreated `api` container; verified `0.0.0.0:8010` is listening and `http://10.70.5.5:8010/admin/` returns HTTP 200 with the browser sign-in form.
 
+## Admin Access Confirmation — 2026-09-17
+
+**User prompt (verbatim):**
+
+> it worked now
+
+User successfully signed into the Admin web app (`http://10.70.5.5:8010/admin/`) using the Telegram one-time code grant.
+
+
 
