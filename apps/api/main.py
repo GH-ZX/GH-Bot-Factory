@@ -6,8 +6,8 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from apps.api.v1.admin import router as admin_router
@@ -101,6 +101,10 @@ async def request_observability(request: Request, call_next):
     response.headers["X-Request-ID"] = effective_request_id
     return response
 
+
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+async def root_redirect() -> RedirectResponse:
+    return RedirectResponse(url="/build/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 @app.get("/health", include_in_schema=False)
 @app.get("/health/live", include_in_schema=False)
