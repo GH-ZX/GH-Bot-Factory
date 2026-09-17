@@ -8,9 +8,8 @@
 - **Current migration head:** `f2a3b4c5d6e7`
 - **Primary branch:** `main`
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Repair notes:** [Changes, verification, deployment, and remaining recommendations](REPAIR_PATCH_NOTES_2026-09-16.md).
-- **Verification:** Canonical gate green on 2026-09-17: Ruff clean; 399 fast tests passed; 13 PostgreSQL tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `f2a3b4c5d6e7`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
-- **Deployment:** The Compose application serves port 8010 on LAN (`0.0.0.0:8010`), keeping port 8000 reserved for Portainer (Law 4). Image rebuild and container restart are verified.
+- **Verification:** Canonical gate green on 2026-09-17: Ruff clean; 401 fast tests passed; 13 PostgreSQL tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `f2a3b4c5d6e7`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Deployment:** The Compose application serves port 8010 on LAN (`0.0.0.0:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets, image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 
 ## Delivered Capabilities
 

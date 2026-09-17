@@ -500,10 +500,14 @@ function bind(){
   el("supplierProviderList").addEventListener("click",async e=>{const health=e.target.closest("[data-health-provider]")?.dataset.healthProvider;const toggle=e.target.closest("[data-toggle-provider]")?.dataset.toggleProvider;try{if(health)await healthSupplier(health);else if(toggle)await toggleSupplier(toggle);}catch(err){alert(err.message||"Provider operation failed.");}});el("paymentProviderList").addEventListener("click",e=>{const name=e.target.closest("[data-edit-payment-provider]")?.dataset.editPaymentProvider;if(name)openPaymentProvider(name);});el("memberList").addEventListener("click",e=>{const id=e.target.closest("[data-edit-member]")?.dataset.editMember;if(id){const member=state.members.find(m=>m.id===id);if(member)openMember(member);}});el("memberForm").addEventListener("submit",e=>saveMember(e).catch(err=>alert(err.message)));
 }
 
-function handleSignOut() {
+function handleSignOut(event) {
+  if (event) {
+    try { event.preventDefault(); event.stopPropagation(); } catch (_) {}
+  }
   clearSessionToken();
-  location.replace("/admin/");
+  showLogin("You have signed out.");
 }
+window.handleSignOut = handleSignOut;
 
 el("loginForm").addEventListener("submit", signIn);
 el("signOut")?.addEventListener("click", handleSignOut);

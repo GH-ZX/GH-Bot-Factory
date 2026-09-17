@@ -29,12 +29,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; "
                 "img-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
             )
+            response.headers.setdefault("Cache-Control", "no-cache, no-store, must-revalidate")
+            response.headers.setdefault("Pragma", "no-cache")
         elif request.url.path.startswith("/admin"):
             response.headers.setdefault(
                 "Content-Security-Policy",
                 "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; "
                 "img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
             )
+            response.headers.setdefault("Cache-Control", "no-cache, no-store, must-revalidate")
+            response.headers.setdefault("Pragma", "no-cache")
+        elif request.url.path.startswith("/setup"):
+            response.headers.setdefault("Cache-Control", "no-cache, no-store, must-revalidate")
+            response.headers.setdefault("Pragma", "no-cache")
         return response
 
 

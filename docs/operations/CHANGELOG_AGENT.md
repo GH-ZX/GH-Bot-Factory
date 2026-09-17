@@ -328,3 +328,12 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 - Added explicit Exit buttons in both header (`#headerSignOut`) and sidebar (`#signOut`) that clear stored session credentials.
 - Configured default `ADMIN_PUBLIC_URL` LAN binding (`http://10.70.5.5:8010/admin/`).
 - Added test coverage in `tests/test_admin_browser_login.py` (private chat direct URL generation and public URL handling).
+
+## 2026-09-17 — Admin Browser Cache Elimination & Container Rebuild
+
+- Eliminated browser script caching for static admin web app: added `Cache-Control: no-cache, no-store, must-revalidate` and `Pragma: no-cache` in `SecurityHeadersMiddleware` for `/admin`, `/miniapp`, and `/setup`.
+- Added query string cache-busting `v=20260917_03` to script and stylesheet tags in `apps/admin/static/index.html`.
+- Bound inline `onclick="handleSignOut(event)"` to Exit buttons in header and sidebar as a fail-safe trigger.
+- Exposed `window.handleSignOut` globally in `apps/admin/static/app.js` with instant UI transition to `showLogin()`.
+- Rebuilt Docker image `gh-bot-factory:local` and recreated API, Worker, and Bot Runtime containers to serve the live assets on port 8010.
+- Verification: 401 fast tests passed; 13 PostgreSQL concurrency tests passed; 12 admin browser login tests passed; ruff clean; git diff check clean.

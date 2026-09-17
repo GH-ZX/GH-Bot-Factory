@@ -1393,3 +1393,23 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Bot `/admin` command now issues a ready clickable direct link with `?code=...` (e.g. `http://10.70.5.5:8010/admin/?code=...`).
    - Admin frontend automatically captures `?code=` from URL or hash, exchanges it for an authenticated session, strips the code from the address bar history via `history.replaceState`, and opens the dashboard seamlessly.
    - Added HTTPS inline keyboard button in Telegram when `admin_public_url` is HTTPS.
+
+## Admin Browser Cache Elimination & Container Rebuild — 2026-09-17
+
+**User prompt (verbatim):**
+
+> i opened the url and didnt auto signed in, so i pasted the code , it logged in, i pressed exit didnt work, i refreshed it logged out, i guess nothing changed for real except for ui new two things (url+exit), but not working
+
+**Root Cause & Delivered Scope:**
+1. **Root Cause Analysis:**
+   - The user's browser was aggressively running a cached version of `/admin/app.js` because Starlette/FastAPI `StaticFiles` lacked cache-control directives and `index.html` lacked query cache-busting. The cached script lacked the `?code=` URL handler, token persistence, and the Exit event listener. In addition, the running container had not yet been rebuilt with the new static assets.
+2. **HTTP Cache Invalidation (`packages/core/security.py`):**
+   - Added `Cache-Control: no-cache, no-store, must-revalidate` and `Pragma: no-cache` in `SecurityHeadersMiddleware` for `/admin`, `/miniapp`, and `/setup` paths.
+3. **Asset Versioning & Click Handlers (`apps/admin/static/index.html`):**
+   - Bumped stylesheet and script to `/admin/app.js?v=20260917_03` and `/admin/styles.css?v=20260917_03`.
+   - Added inline `onclick="handleSignOut(event)"` to both the sidebar and header Exit buttons as an instant, foolproof trigger.
+4. **Immediate Exit Transition & Global Exposure (`apps/admin/static/app.js`):**
+   - Exposed `window.handleSignOut` globally.
+   - Clears `localStorage.removeItem("ghbf_admin_token")` and directly transitions UI to `showLogin("You have signed out.")` without requiring full navigation.
+5. **Container Rebuild & Recreate:**
+   - Rebuilt local Docker image `gh-bot-factory:local` and recreated `api`, `worker`, and `bot-runtime` services to immediately serve the live cache-busted assets.

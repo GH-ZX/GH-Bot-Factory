@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260917_03">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -17,7 +17,7 @@
     <form id="loginForm">
       <label for="loginCode">One-time sign-in code</label>
       <input id="loginCode" name="code" type="password" autocomplete="one-time-code" required minlength="32" maxlength="32" spellcheck="false" autocapitalize="none" aria-describedby="loginHint loginError">
-      <p id="loginHint" class="muted">The code expires after 5 minutes. Refreshing this page signs you out.</p>
+      <p id="loginHint" class="muted">The code is valid for 5 minutes. Once signed in, your session remains saved until you click Exit.</p>
       <p id="loginError" class="danger-text" role="alert"></p>
       <button id="loginSubmit" class="primary" type="submit">Sign in</button>
     </form>
@@ -42,10 +42,10 @@
         <button class="nav" data-view="audit">Audit</button>
         <button class="nav" data-view="reconciliation">Evidence</button>
       </nav>
-      <div class="sidebar-foot"><span id="actorName">Telegram staff</span><small>Tenant-scoped access</small><button id="signOut" class="ghost" type="button">Sign out / Exit</button></div>
+      <div class="sidebar-foot"><span id="actorName">Telegram staff</span><small>Tenant-scoped access</small><button id="signOut" class="ghost" type="button" onclick="handleSignOut(event)">Sign out / Exit</button></div>
     </aside>
     <main>
-      <header><div><small class="eyebrow">OPERATIONS</small><h1 id="viewTitle">Overview</h1></div><div class="header-actions"><button id="refreshButton" class="ghost">Refresh</button><button id="headerSignOut" class="ghost" type="button" title="Sign out / Exit">Exit</button></div></header>
+      <header><div><small class="eyebrow">OPERATIONS</small><h1 id="viewTitle">Overview</h1></div><div class="header-actions"><button id="refreshButton" class="ghost">Refresh</button><button id="headerSignOut" class="ghost" type="button" title="Sign out / Exit" onclick="handleSignOut(event)">Exit</button></div></header>
 
       <section id="view-dashboard" class="view active">
         <div id="metricGrid" class="metric-grid"></div>
@@ -284,6 +284,6 @@ orders:read"></textarea></label>
     </form>
   </dialog>
 
-  <script src="/admin/app.js" defer></script>
+  <script src="/admin/app.js?v=20260917_03" defer></script>
 </body>
 </html>
