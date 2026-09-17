@@ -359,6 +359,7 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 
 ## 2026-09-17 — Local Installation Security Hardening
 
+- Milestone implementation commit: `76ce536394f7b4b2088870d53f5bb153551ab390`.
 - Created a restricted PostgreSQL dump and proved it by restoring into an isolated temporary database at migration head `f2a3b4c5d6e7` with tenant data readable.
 - Rotated the Compose PostgreSQL role and matching ignored `.env` credentials atomically without printing or committing the secret; recreated this project's PostgreSQL/API/worker/bot-runtime services and confirmed them healthy.
 - Enabled Redis-backed request rate limiting and narrowed the host API bind from all interfaces to `10.70.5.5:8010`.

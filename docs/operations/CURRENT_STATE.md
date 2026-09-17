@@ -7,6 +7,7 @@
 - **Implementation status:** Phase 13 Advanced Bot Factory and Storefront Vertical Delivery complete. Telegram Mini App dynamic vertical adaptation, module navigation visibility bounds, delivered fulfillment artifact exposure with copy-to-clipboard, and Admin Console fleet business profile badges implemented and verified.
 - **Current migration head:** `f2a3b4c5d6e7`
 - **Primary branch:** `main`
+- **Latest milestone commit:** `76ce536394f7b4b2088870d53f5bb153551ab390` (`chore(ops): harden local deployment and backup recovery`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
 - **Verification:** Canonical gate green on 2026-09-17: Ruff clean; 401 fast tests passed; 13 PostgreSQL tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `f2a3b4c5d6e7`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
 - **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets, image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.

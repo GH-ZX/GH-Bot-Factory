@@ -1476,3 +1476,4 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 - Rotated the PostgreSQL role and ignored `.env` credential atomically, enabled Redis-backed rate limiting, narrowed port 8010 to the LAN address, and confirmed all project services healthy.
 - Repaired unsafe shell sourcing and non-portable checksum behavior in the backup/restore scripts.
 - Documented the remaining operator-owned UDM local DNS and Nginx Proxy Manager TLS host steps. The Cloudflare tunnel and unrelated host containers were not changed.
+- Implementation commit: `76ce536394f7b4b2088870d53f5bb153551ab390`.
