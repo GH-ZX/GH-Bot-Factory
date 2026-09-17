@@ -42,6 +42,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         elif request.url.path.startswith("/setup"):
             response.headers.setdefault("Cache-Control", "no-cache, no-store, must-revalidate")
             response.headers.setdefault("Pragma", "no-cache")
+        elif request.url.path.startswith("/build"):
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'self'",
+            )
+            response.headers.setdefault("Cache-Control", "no-cache, no-store, must-revalidate")
+            response.headers.setdefault("Pragma", "no-cache")
         return response
 
 

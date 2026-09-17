@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**
-> *Last Updated: 2026-09-18 (Phase 14.0 Template Guidance & Marketplace Boundaries)*
+> *Last Updated: 2026-09-18 (Phase 14.1 Public Configurator & Messaging)*
 
 ---
 
@@ -854,3 +854,19 @@ All verbatim user prompts, architectural requirements, and commit records are ca
   6. Bumped static cache buster to `v=20260918_01` in `apps/admin/static/index.html`.
   7. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
   8. Canonical gate passed: Ruff clean, 403 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `f2a3b4c5d6e7`.
+
+## Milestone 48: Phase 14.1 Public Configurator & Messaging (2026-09-18)
+
+- **Status:** Delivered & Verified
+- **Key Additions:**
+  1. Added ADR-040 establishing the public discovery boundary, server-authoritative quote calculation, rate-limited inquiry capture, and domain isolation (preserving apex `gh-store.me` untouched and mounting on `botfac.gh-store.me/build/`).
+  2. Created `packages/marketplace/`:
+     - `integrations.py`: defines 6 standard integration offerings with setup and recurring fees.
+     - `quotes.py`: server-authoritative `QuoteEngine` computing itemized line items, one-time setup, and recurring monthly fees across formats, product sources, delivery models, and integrations.
+     - `models.py`: `CustomerInquiry` model with contact details, project notes, configuration snapshot, quote snapshot, status, and IP hash.
+  3. Added database migration `a1b2c3d4e5f7_add_customer_inquiries.py` creating table `customer_inquiries` with JSONB types and status/contact indexes.
+  4. Implemented public API router `apps/api/v1/public_marketplace.py` exposing `/templates`, `/integrations`, `/estimate`, and `/inquiries`.
+  5. Built modern, mobile-first Web App in `apps/build/static/` (`index.html`, `styles.css`, `app.js`) mounted at `/build/` with real-time live price receipt, template search/filtering, add-on selection, and 1-click Telegram deep-link prefill.
+  6. Added test suite `tests/test_phase14_1_public_configurator.py` covering all public endpoints, quote calculations, lead persistence, and static page loading.
+  7. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+  8. Canonical gate passed: Ruff clean, 408 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `a1b2c3d4e5f7`.

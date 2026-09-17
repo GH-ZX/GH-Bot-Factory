@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080c18">
+  <title>Build Your Bot — GH Bot Factory</title>
+  <link rel="stylesheet" href="/build/styles.css?v=20260918_01">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">GH</span>
+        <div>
+          <h1 class="brand-title">GH Bot Factory</h1>
+          <p class="brand-sub">Build &amp; Launch Telegram Bots &amp; Mini Apps</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <a href="/admin/" class="btn-ghost">Client Portal</a>
+      </div>
+    </header>
+
+    <main class="container">
+      <div class="hero">
+        <span class="eyebrow">CUSTOM TELEGRAM BOT CONFIGURATOR</span>
+        <h2>Build Your Custom Telegram Bot or Mini App</h2>
+        <p class="hero-desc">Choose your business template, product sources, provider integrations, and hosting model. Get a live, transparent quote and start your project today.</p>
+      </div>
+
+      <div class="configurator-layout">
+        <!-- Main Guided Form -->
+        <div class="wizard-column">
+          <!-- Step 1: Format -->
+          <section class="config-section" id="step-format">
+            <div class="section-head">
+              <span class="step-num">1</span>
+              <div>
+                <h3>Select Platform Format</h3>
+                <p class="muted">Native Telegram chat bot, web Mini App, or a synchronized combo bundle.</p>
+              </div>
+            </div>
+            <div class="choice-grid" id="formatChoices">
+              <label class="choice-card active" data-format="combo">
+                <input type="radio" name="format" value="combo" checked>
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>Bot + Mini App Combo</strong>
+                    <span class="price-tag">$89 setup · $49/mo</span>
+                  </div>
+                  <p class="muted">Native Telegram bot plus embedded interactive Mini App storefront. Recommended.</p>
+                </div>
+              </label>
+
+              <label class="choice-card" data-format="miniapp">
+                <input type="radio" name="format" value="miniapp">
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>Telegram Mini App</strong>
+                    <span class="price-tag">$69 setup · $39/mo</span>
+                  </div>
+                  <p class="muted">High-conversion visual storefront opened seamlessly inside Telegram.</p>
+                </div>
+              </label>
+
+              <label class="choice-card" data-format="bot">
+                <input type="radio" name="format" value="bot">
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>Telegram Bot Only</strong>
+                    <span class="price-tag">$49 setup · $29/mo</span>
+                  </div>
+                  <p class="muted">Text, inline keyboard, and command-driven bot for streamlined interactions.</p>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <!-- Step 2: Template Selection -->
+          <section class="config-section" id="step-template">
+            <div class="section-head">
+              <span class="step-num">2</span>
+              <div>
+                <h3>Choose Business Vertical / Template</h3>
+                <p class="muted">Select from 11 specialized templates pre-configured for your exact business model.</p>
+              </div>
+            </div>
+            
+            <div class="template-filter-bar">
+              <input type="search" id="templateSearch" placeholder="Search templates, goods (e.g. SMS, keys, cards, accounts)...">
+              <div class="filter-chips">
+                <button type="button" class="chip active" data-filter="all">All (11)</button>
+                <button type="button" class="chip" data-filter="stored">📦 Stored</button>
+                <button type="button" class="chip" data-filter="provider_api">⚡ Live APIs</button>
+                <button type="button" class="chip" data-filter="hybrid">🔀 Hybrid</button>
+              </div>
+            </div>
+
+            <div class="templates-grid" id="templatesGrid">
+              <div class="loading">Loading available templates...</div>
+            </div>
+          </section>
+
+          <!-- Step 3: Product Source -->
+          <section class="config-section" id="step-source">
+            <div class="section-head">
+              <span class="step-num">3</span>
+              <div>
+                <h3>Product Fulfillment Source</h3>
+                <p class="muted">Where do your products originate from?</p>
+              </div>
+            </div>
+            <div class="choice-grid" id="sourceChoices">
+              <label class="choice-card active" data-source="stored">
+                <input type="radio" name="product_source" value="stored" checked>
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>📦 Stored Manual Inventory</strong>
+                    <span class="price-tag">Included ($0)</span>
+                  </div>
+                  <p class="muted">You upload your own product codes, accounts, or services directly in your admin panel.</p>
+                </div>
+              </label>
+
+              <label class="choice-card" data-source="provider_api">
+                <input type="radio" name="product_source" value="provider_api">
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>⚡ Live Supplier APIs</strong>
+                    <span class="price-tag">+$15 setup · +$10/mo</span>
+                  </div>
+                  <p class="muted">Automated supplier ordering, upstream balance tracking, and auto-failover routing.</p>
+                </div>
+              </label>
+
+              <label class="choice-card" data-source="hybrid">
+                <input type="radio" name="product_source" value="hybrid">
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>🔀 Hybrid (Stored + Wholesale APIs)</strong>
+                    <span class="price-tag">+$25 setup · +$15/mo</span>
+                  </div>
+                  <p class="muted">Mix manually uploaded digital inventory with automated wholesale provider APIs.</p>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <!-- Step 4: Add-On Integrations -->
+          <section class="config-section" id="step-integrations">
+            <div class="section-head">
+              <span class="step-num">4</span>
+              <div>
+                <h3>Add-On API Integrations</h3>
+                <p class="muted">Select any third-party supplier or payment adapters you want pre-configured.</p>
+              </div>
+            </div>
+            <div class="integrations-grid" id="integrationsGrid">
+              <div class="loading">Loading integrations...</div>
+            </div>
+          </section>
+
+          <!-- Step 5: Hosting & Delivery Model -->
+          <section class="config-section" id="step-hosting">
+            <div class="section-head">
+              <span class="step-num">5</span>
+              <div>
+                <h3>Hosting &amp; Delivery Model</h3>
+                <p class="muted">Choose between our managed cloud or self-hosted source code delivery.</p>
+              </div>
+            </div>
+            <div class="choice-grid" id="hostingChoices">
+              <label class="choice-card active" data-hosting="managed">
+                <input type="radio" name="delivery_model" value="managed" checked>
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>☁️ Managed Cloud Hosting</strong>
+                    <span class="price-tag">Included in plan</span>
+                  </div>
+                  <p class="muted">We host and maintain your bot on high-availability clusters with automated SSL and daily backups.</p>
+                </div>
+              </label>
+
+              <label class="choice-card" data-hosting="dedicated">
+                <input type="radio" name="delivery_model" value="dedicated">
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>🖥️ Dedicated Single-Tenant VPS</strong>
+                    <span class="price-tag">+$450 setup · +$50/mo</span>
+                  </div>
+                  <p class="muted">Standalone instance deployed directly to your private VPS with dedicated database.</p>
+                </div>
+              </label>
+
+              <label class="choice-card" data-hosting="source_license">
+                <input type="radio" name="delivery_model" value="source_license">
+                <div class="choice-body">
+                  <div class="choice-title-row">
+                    <strong>💻 Source Code License Buyout</strong>
+                    <span class="price-tag">+$2,000 one-time · $0/mo</span>
+                  </div>
+                  <p class="muted">Perpetual single-business source license. Full ownership and freedom to host independently.</p>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <!-- Step 6: Submit Request -->
+          <section class="config-section" id="step-submit">
+            <div class="section-head">
+              <span class="step-num">6</span>
+              <div>
+                <h3>Submit Project Inquiry</h3>
+                <p class="muted">Send your configuration to the Factory Owner for review, confirmation, and onboarding.</p>
+              </div>
+            </div>
+
+            <form id="inquiryForm" class="inquiry-form">
+              <div class="grid2">
+                <label>
+                  Preferred Contact Method
+                  <select id="contactMethod" required>
+                    <option value="TELEGRAM">Telegram</option>
+                    <option value="WHATSAPP">WhatsApp</option>
+                    <option value="EMAIL">Email</option>
+                  </select>
+                </label>
+
+                <label>
+                  Your Handle / Phone / Email
+                  <input type="text" id="contactHandle" placeholder="@your_telegram or phone" required minlength="2" maxlength="120">
+                </label>
+              </div>
+
+              <label>
+                Project Notes or Special Requirements
+                <textarea id="projectNotes" rows="3" placeholder="Describe your store goods, specific APIs, or target launch timeline..."></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button type="submit" id="submitInquiryBtn" class="btn-primary">
+                  🚀 Send Project Inquiry
+                </button>
+                <a id="telegramChatBtn" href="#" target="_blank" rel="noopener noreferrer" class="btn-telegram">
+                  💬 Chat on Telegram
+                </a>
+              </div>
+              <p id="inquiryStatusMsg" class="status-msg hidden"></p>
+            </form>
+          </section>
+        </div>
+
+        <!-- Sticky Live Estimate Column -->
+        <aside class="estimate-column">
+          <div class="estimate-card">
+            <div class="estimate-head">
+              <small class="eyebrow">ESTIMATED PRICE</small>
+              <h3>Live Quote Breakdown</h3>
+            </div>
+
+            <div class="estimate-totals">
+              <div class="total-box">
+                <span class="total-label">One-Time Setup</span>
+                <strong class="total-value" id="estOneTime">$89.00</strong>
+              </div>
+              <div class="total-box">
+                <span class="total-label">Monthly Hosting</span>
+                <strong class="total-value" id="estMonthly">$49.00</strong>
+              </div>
+            </div>
+
+            <div class="selected-summary">
+              <div class="summary-item">
+                <span class="muted">Format:</span>
+                <strong id="sumFormat">Combo (Bot + Mini App)</strong>
+              </div>
+              <div class="summary-item">
+                <span class="muted">Template:</span>
+                <strong id="sumTemplate">General Commerce</strong>
+              </div>
+              <div class="summary-item">
+                <span class="muted">Source:</span>
+                <strong id="sumSource">Stored Inventory</strong>
+              </div>
+              <div class="summary-item">
+                <span class="muted">Hosting:</span>
+                <strong id="sumHosting">Managed Cloud</strong>
+              </div>
+              <div class="summary-item">
+                <span class="muted">Integrations:</span>
+                <strong id="sumIntegrations">None</strong>
+              </div>
+            </div>
+
+            <div class="itemized-receipt" id="itemizedReceipt">
+              <div class="muted">Calculating line items...</div>
+            </div>
+
+            <div class="estimate-footer">
+              <p class="estimate-note" id="estimateNote">First payment includes one-time setup plus first month's hosting.</p>
+              <button type="button" class="btn-accent-full" id="jumpToSubmit">
+                Proceed to Inquiry ↓
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>GH Bot Factory &copy; 2026. Built on multi-tenant resilient commerce architecture.</p>
+    </footer>
+  </div>
+
+  <script src="/build/app.js?v=20260918_01" defer></script>
+</body>
+</html>

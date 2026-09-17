@@ -536,9 +536,10 @@ Delivered on 2026-09-17 upon user authorization:
 
 ### Phase 14 — Customer Marketplace, Tenant Handoff & Integration Catalog 🚧 In Progress
 
-The product and architecture plan is documented in [the Phase 14 plan](plans/phase-14-customer-marketplace.md). Phase 14.0 (Template Guidance & Marketplace Boundaries) is complete; Phase 14.1 (Public Configurator & Quotes) is next.
+The product and architecture plan is documented in [the Phase 14 plan](plans/phase-14-customer-marketplace.md). Phase 14.0 (Template Guidance & Marketplace Boundaries) and Phase 14.1 (Public Configurator & Messaging) are complete; Phase 14.2 (Platform Sales Console & Quotes) is next.
 
 - **Phase 14.0 (Delivered):** ADR-039 boundary model, server-authoritative `TemplateGuidance` across all 11 bot templates, `BotTemplateResponse.guidance` API, and interactive Admin `? Help & Guidance` drawer with live search/filters.
+- **Phase 14.1 (Delivered):** ADR-040 public sales boundary, public marketplace router (`/templates`, `/integrations`, `/estimate`, `/inquiries`), server-authoritative `QuoteEngine`, `CustomerInquiry` durable model with migration `a1b2c3d4e5f7`, and modern mobile-first web app at `botfac.gh-store.me/build/` with instant Telegram deep-link CTA.
 - Separate Factory Owner platform authority, Customer/Tenant Owner authority, customer staff, shoppers, and externally hosted customers.
 - Explain all eleven current templates through one server-owned guide reused by an Admin **? Help** drawer and the public customer configurator.
 - Add a modern public Build Your Bot journey for template, Bot/Mini App, product source, integrations, hosting, support, and contact choices.

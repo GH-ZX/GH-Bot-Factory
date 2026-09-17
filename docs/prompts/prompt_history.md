@@ -1561,3 +1561,38 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
    - Verified live API readiness and admin asset serving.
    - Canonical `make verify` green: 403 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic clean.
+
+## Phase 14.1 — Public Configurator, Catalog, and Messaging Delivery — 2026-09-18
+
+**User prompt (verbatim):**
+
+> ok go ahead, tho (gh-store.me) is a store for real, we always should use subdomains, now go for the rest, done break things
+
+**Delivered scope:**
+
+1. **Domain Isolation & ADR-040:**
+   - Preserved `gh-store.me` apex domain completely untouched.
+   - Hosted the public configurator exclusively on the Bot Factory subdomain at `botfac.gh-store.me/build/`.
+   - Recorded ADR-040 (`docs/decisions/ADR-040-public-configurator-and-quote-engine.md`) defining the public discovery boundary, server-authoritative quote calculation, rate-limited inquiry capture, and domain isolation.
+2. **Server-Authoritative Quote Engine & Integrations Catalog (`packages/marketplace/`):**
+   - Implemented `QuoteEngine` computing itemized line items, one-time setup fees, and recurring monthly costs based on format (`bot`, `miniapp`, `combo`), product source (`stored`, `provider_api`, `hybrid`), hosting model (`managed`, `dedicated`, `source_license`), and add-on integrations.
+   - Defined 6 active integration offerings with explicit setup and recurring fees.
+3. **Customer Inquiry Model & Migration:**
+   - Created `CustomerInquiry` model (`packages/marketplace/models.py`) capturing contact method (`TELEGRAM`, `WHATSAPP`, `EMAIL`), contact handle, project notes, configuration snapshot, quote snapshot, status, and client IP hash.
+   - Added database migration `a1b2c3d4e5f7_add_customer_inquiries.py` creating `customer_inquiries` table with JSONB and status/contact indexes.
+4. **Public Marketplace API Router (`apps/api/v1/public_marketplace.py`):**
+   - `GET /api/v1/public/templates`: Returns public template catalog with guidance metadata.
+   - `GET /api/v1/public/integrations`: Returns available add-on integrations.
+   - `POST /api/v1/public/estimate`: Validates options and calculates authoritative quote.
+   - `POST /api/v1/public/inquiries`: Creates durable inquiry, generates quote snapshot, and returns a pre-filled Telegram deep-link.
+5. **Modern Public Configurator Web App (`apps/build/static/`):**
+   - Built a 6-step guided wizard (Format, Template, Source, Integrations, Hosting, Inquiry).
+   - Real-time debounced estimate updates fetching server-calculated receipt.
+   - Instant "Chat on Telegram" CTA pre-filling project details into message text.
+   - Full mobile-first responsive layout with dark slate theme and touch-friendly controls.
+6. **Verification & Live Container Rebuild:**
+   - Added test suite `tests/test_phase14_1_public_configurator.py` (5 integration tests).
+   - Added `node --check apps/build/static/app.js` to verification gate.
+   - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
+   - Verified live at `http://10.70.5.5:8010/build/` and verified `/api/v1/public/estimate` and `/api/v1/public/inquiries`.
+   - Canonical `make verify` green: 408 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `a1b2c3d4e5f7`.

@@ -15,6 +15,7 @@ from packages.core.database import Base
 from packages.core.system_models import SystemInstallState
 from packages.factory.models import BotProvisioningJob, BotProvisioningStatus
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
+from packages.marketplace.models import ContactMethod, CustomerInquiry, InquiryStatus
 from packages.payments.economics_models import (
     AssetLedgerTransaction,
     AssetLedgerTransactionType,
@@ -87,6 +88,8 @@ __all__ = [
     "BotProvisioningStatus",
     "Category",
     "CommercePriceQuote",
+    "ContactMethod",
+    "CustomerInquiry",
     "FinancialResolutionCase",
     "FinancialResolutionCaseStatus",
     "FlexibleDepositSession",
@@ -95,6 +98,7 @@ __all__ = [
     "FulfillmentStatus",
     "FxPolicy",
     "FxPolicyMode",
+    "InquiryStatus",
     "LedgerTransaction",
     "MarkupMode",
     "Membership",

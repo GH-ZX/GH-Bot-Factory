@@ -29,6 +29,7 @@ run_fast() {
 
   node --check apps/admin/static/app.js
   node --check apps/miniapp/static/app.js
+  node --check apps/configurator/static/app.js
   git diff --check
   python -m pip check
 }

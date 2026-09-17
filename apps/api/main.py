@@ -22,6 +22,7 @@ from apps.api.v1.admin_saas import router as admin_saas_router
 from apps.api.v1.auth import router as auth_router
 from apps.api.v1.payments import router as payments_router
 from apps.api.v1.platform import router as platform_router
+from apps.api.v1.public_marketplace import router as public_marketplace_router
 from apps.api.v1.saas_billing import router as saas_billing_router
 from apps.api.v1.setup import router as setup_router
 from apps.api.v1.storefront import router as storefront_router
@@ -131,6 +132,7 @@ app.include_router(admin_saas_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(storefront_router, prefix="/api/v1")
 app.include_router(setup_router, prefix="/api/v1")
+app.include_router(public_marketplace_router, prefix="/api/v1")
 
 MINIAPP_STATIC_DIR = Path(__file__).resolve().parents[1] / "miniapp" / "static"
 app.mount(
@@ -151,4 +153,12 @@ app.mount(
     "/setup",
     StaticFiles(directory=SETUP_STATIC_DIR, html=True),
     name="first-run-setup",
+)
+
+CONFIGURATOR_STATIC_DIR = Path(__file__).resolve().parents[1] / "configurator" / "static"
+CONFIGURATOR_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/build",
+    StaticFiles(directory=CONFIGURATOR_STATIC_DIR, html=True),
+    name="public-configurator",
 )
