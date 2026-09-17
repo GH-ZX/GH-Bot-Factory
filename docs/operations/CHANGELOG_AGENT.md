@@ -346,5 +346,13 @@ Current phase checkpoint: **Phase 12.3 — Commerce Economics Operations (Phase 
 - Added 2-column auto-scaling layout for metrics with text wrap protection.
 - Bounded modals/dialogs to `calc(100vw - 20px)` with touch-friendly wizard step indicator scrolling.
 - Bumped cache-busting query strings to `v=20260917_04` in `apps/admin/static/index.html`.
+- Verification: 401 fast tests passed; 13 PostgreSQL concurrency tests passed; 12 admin browser login tests passed; ruff clean; git diff check clean.
+
+## 2026-09-17 — Mobile Navigation Grid & Header Unsticking
+
+- Replaced single-row horizontal pill navigation with a structured 3-column responsive grid on mobile (`max-width: 820px`), ensuring all 12 page buttons (Overview, Plan, Bots, Analytics, Products, Orders, Fulfillment, Providers, Members, Financial Center, Audit, Evidence) are immediately visible and pressable.
+- Switched mobile `.sidebar` from `position: sticky` to `position: static` so the header is never stuck blocking page content and scrolls naturally.
+- Converted `.shell` to flex-column container so content is never pushed off to the right.
+- Bumped cache-busting query strings to `v=20260917_05` in `apps/admin/static/index.html`.
 - Rebuilt Docker image `gh-bot-factory:local` and recreated API, Worker, and Bot Runtime services.
 - Verification: 401 fast tests passed; 13 PostgreSQL concurrency tests passed; 12 admin browser login tests passed; ruff clean; git diff check clean.

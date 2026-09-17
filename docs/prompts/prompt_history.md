@@ -1435,3 +1435,24 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 4. **Cache Busting & Container Deployment:**
    - Updated static cache bust query strings to `v=20260917_04` in `apps/admin/static/index.html`.
    - Rebuilt Docker image `gh-bot-factory:local` and restarted `api`, `worker`, and `bot-runtime` containers.
+
+## Mobile Navigation Grid & Header Unsticking — 2026-09-17
+
+**User prompt (verbatim):**
+
+> its broken now, cant see the pages (its on the right and nothing shows ) and header stuck, just pressebale there like 4 buttons then the rest hidden cant see them
+
+**Root Cause & Delivered Scope:**
+1. **Root Cause Analysis:**
+   - Single-row non-wrapping pill navigation forced buttons 5 through 12 off-screen to the right, showing only the first 4 buttons (Overview, Plan, Bots, Analytics). The rest of the page links were hidden on phone screens.
+   - The sticky header was pinned to the top of the viewport (`position: sticky`), staying permanently stuck in view and taking up vertical screen space.
+2. **All 12 Page Buttons Visible in Clean Responsive Grid:**
+   - Replaced horizontal scrolling strip with a structured 3-column responsive grid (`grid-template-columns: repeat(3, 1fr)`) on mobile (`max-width: 820px`).
+   - All 12 buttons (Overview, Plan, Bots, Analytics, Products, Orders, Fulfillment, Providers, Members, Financial Center, Audit, Evidence) are immediately visible, labeled, and pressable.
+   - Adapts to 2 columns on very narrow screens (`max-width: 360px`).
+3. **Unstuck Header & Natural Scrolling:**
+   - Changed `.sidebar` to `position: static !important;` on mobile so it scrolls naturally with page content instead of remaining pinned to the viewport.
+   - Changed `.shell` to flex-column container (`display: flex; flex-direction: column;`) so content is never pushed off to the right.
+4. **Cache Invalidation & Deployment:**
+   - Bumped cache bust query strings to `v=20260917_05` in `apps/admin/static/index.html`.
+   - Rebuilt Docker image `gh-bot-factory:local` and recreated `api`, `worker`, and `bot-runtime` services.
