@@ -472,3 +472,15 @@ Current phase checkpoint: **Phase 14 — Customer Marketplace product definition
 - Bumped Admin asset cache busters to `v=20260918_05`.
 - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 - Canonical verification: Ruff clean, 415 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `e5f6a8b9c1d2`.
+
+## 2026-09-18 — Phase 14 — Customer Marketplace & Commercial Platform Closure
+
+- Milestone implementation: Phase 14 complete across all sub-phases (14.0 through 14.6).
+- Added ADR-045 (`docs/decisions/ADR-045-commercial-governance-and-release-qualification.md`) defining commercial governance boundaries, platform revenue tracking, and canonical qualification gates.
+- Implemented `CommercialGovernanceService` (`packages/marketplace/governance.py`) computing inquiry conversion rates, proposal pipeline values, accepted commercial revenue, standalone deployments, and top integrations without contaminating tenant shopper analytics.
+- Added platform control plane API endpoint `GET /api/v1/platform/sales/governance/metrics` and CLI subcommand `scripts/platformctl.py sales-metrics`.
+- Built real-time KPI header grid in Admin Sales Console displaying commercial indicators.
+- Added release qualification test suite `tests/test_phase14_6_release_qualification.py` verifying metrics accuracy, multi-tenant isolation, and zero secret leakage.
+- Bumped Admin asset cache busters to `v=20260918_06`.
+- Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+- Canonical verification: Ruff clean, 417 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `e5f6a8b9c1d2`.

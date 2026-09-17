@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**
-> *Last Updated: 2026-09-18 (Phase 14.5 Dedicated Deployment & Source License Handoff)*
+> *Last Updated: 2026-09-18 (Phase 14 Customer Marketplace Closure)*
 
 ---
 
@@ -931,3 +931,16 @@ All verbatim user prompts, architectural requirements, and commit records are ca
   9. Bumped Admin asset cache busters to `v=20260918_05`.
   10. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
   11. Canonical gate passed: Ruff clean, 415 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `e5f6a8b9c1d2`.
+
+## Milestone 53: Phase 14.6 Commercial Governance & Phase 14 Closure (2026-09-18)
+
+- **Status:** Delivered & Verified
+- **Key Additions:**
+  1. Added ADR-045 establishing commercial governance boundaries, platform revenue tracking, and canonical release qualification gates.
+  2. Implemented `CommercialGovernanceService` (`packages/marketplace/governance.py`) computing inquiry conversion rates, proposal pipeline values, accepted commercial revenue, standalone deployments, and top integrations without contaminating tenant shopper analytics.
+  3. Added platform control plane API endpoint `GET /api/v1/platform/sales/governance/metrics` and CLI subcommand `scripts/platformctl.py sales-metrics`.
+  4. Built real-time KPI header grid in Admin Sales Console displaying commercial indicators.
+  5. Added release qualification test suite `tests/test_phase14_6_release_qualification.py` verifying metrics accuracy, multi-tenant isolation, and zero secret leakage.
+  6. Bumped Admin asset cache busters to `v=20260918_06`.
+  7. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+  8. Canonical gate passed: Ruff clean, 417 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `e5f6a8b9c1d2`.

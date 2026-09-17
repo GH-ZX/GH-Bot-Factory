@@ -534,9 +534,9 @@ Delivered on 2026-09-17 upon user authorization:
 - Added and verified the UDM local DNS record plus Nginx Proxy Manager HTTP host; the local Admin URL is active at `http://botfac.gh-store.me/admin/`.
 - Remaining operator step: attach a publicly trusted certificate to the active proxy host, validate local HTTPS, then switch `APP_ENV`, `ADMIN_PUBLIC_URL`, and `MINIAPP_PUBLIC_URL` to staging values.
 
-### Phase 14 — Customer Marketplace, Tenant Handoff & Integration Catalog 🚧 In Progress
+### Phase 14 — Customer Marketplace, Tenant Handoff & Integration Catalog ✅ Delivered
 
-The product and architecture plan is documented in [the Phase 14 plan](plans/phase-14-customer-marketplace.md). Phase 14.0 (Template Guidance & Marketplace Boundaries), Phase 14.1 (Public Configurator & Messaging), Phase 14.2 (Platform Sales Console & Quotes), Phase 14.3 (Customer Onboarding & Tenant Ownership), Phase 14.4 (Integration & API Marketplace), and Phase 14.5 (Dedicated Deployment & Source License Handoff) are complete; Phase 14.6 (Release Qualification & Governance) is next.
+The product and architecture plan is fully delivered and verified across Phase 14.0 through 14.6.
 
 - **Phase 14.0 (Delivered):** ADR-039 boundary model, server-authoritative `TemplateGuidance` across all 11 bot templates, `BotTemplateResponse.guidance` API, and interactive Admin `? Help & Guidance` drawer with live search/filters.
 - **Phase 14.1 (Delivered):** ADR-040 public sales boundary, public marketplace router (`/templates`, `/integrations`, `/estimate`, `/inquiries`), server-authoritative `QuoteEngine`, `CustomerInquiry` durable model with migration `a1b2c3d4e5f7`, and modern mobile-first web app at `botfac.gh-store.me/build/` with instant Telegram deep-link CTA.
@@ -544,6 +544,7 @@ The product and architecture plan is documented in [the Phase 14 plan](plans/pha
 - **Phase 14.3 (Delivered):** ADR-042 automated tenant handoff, `CustomerOnboardingService`, `CommercialQuote.tenant_id` foreign key via migration `c3d4e5f6a8b9`, tenant admin onboarding checklist API (`GET /api/v1/admin/onboarding/checklist`), and interactive Admin Overview progress widget.
 - **Phase 14.4 (Delivered):** ADR-043 integration marketplace boundary, `IntegrationOfferingModel` and `TenantIntegrationEntitlement` models with migration `d4e5f6a8b9c1`, `IntegrationMarketplaceService`, platform grant/revoke endpoints, tenant admin discovery and write-only configuration API (`POST /admin/integrations/{key}/configure`), and interactive Admin API Marketplace modal.
 - **Phase 14.5 (Delivered):** ADR-044 single-tenant isolation boundary, `DeploymentHandoff` model with migration `e5f6a8b9c1d2`, `DeploymentHandoffService` generating sanitized single-tenant export bundles (`bundle.json`, `manifest.json`, `docker-compose.standalone.yml`) with SHA-256 checksums, and managed runtime deactivation safety.
+- **Phase 14.6 (Delivered):** ADR-045 commercial governance boundary, `CommercialGovernanceService` aggregating pipeline value, accepted revenue, and conversion metrics, platform sales KPI header grid, and release qualification test suite.
 - Separate Factory Owner platform authority, Customer/Tenant Owner authority, customer staff, shoppers, and externally hosted customers.
 - Explain all eleven current templates through one server-owned guide reused by an Admin **? Help** drawer and the public customer configurator.
 - Add a modern public Build Your Bot journey for template, Bot/Mini App, product source, integrations, hosting, support, and contact choices.

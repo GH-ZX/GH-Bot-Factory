@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from apps.api.platform_deps import PlatformOperator, require_platform_operator
 from packages.core.database import get_db_session
+from packages.marketplace.governance import CommercialGovernanceService
 from packages.marketplace.handoff_service import DeploymentHandoffService, HandoffError
 from packages.marketplace.integrations_service import (
     IntegrationMarketplaceError,
@@ -998,3 +999,10 @@ async def deactivate_managed_runtime(
         handed_off_at=handoff.handed_off_at,
         created_at=handoff.created_at,
     )
+
+@router.get("/governance/metrics")
+async def get_commercial_governance_metrics(
+    _: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    return await CommercialGovernanceService.collect_metrics(session)

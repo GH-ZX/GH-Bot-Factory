@@ -3,14 +3,14 @@
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
 - **Last updated:** 2026-09-18
-- **Current phase:** Phase 14.5 — Dedicated Deployment & Source License Handoff
-- **Implementation status:** Phase 14.5 is complete. `DeploymentHandoff` model (`packages/marketplace/models.py`) and migration `e5f6a8b9c1d2` manage license tracking (`LIC-GHBF-YYYY-XXXX`), version tagging, and deactivation states. `DeploymentHandoffService` (`packages/marketplace/handoff_service.py`) generates sanitized single-tenant export bundles (tenant data, user ownership, catalog, payment methods, standalone compose spec, and extracted credentials from `SecretStorage`), verified with SHA-256 checksums and isolated from platform records or peer tenants. Managed runtime deactivation stops factory bot polling prior to customer standalone VPS startup, eliminating Telegram HTTP 409 conflicts. Platform sales API and `scripts/platformctl.py` provide full lifecycle management (`handoffs`, `handoff-create`, `handoff-bundle`, `handoff-deactivate`), mirrored in the Admin Sales & Leads console. ADR-044 records handoff boundaries. Next is Phase 14.6 (Release Qualification & Governance).
+- **Current phase:** Phase 14 — Customer Marketplace & Commercial Platform Closure
+- **Implementation status:** Phase 14 is complete across all sub-phases: Phase 14.0 Template Guidance & 4-tier actor model (ADR-039), Phase 14.1 Public Configurator on `botfac.gh-store.me/build/` with Server-Authoritative Quote Engine (ADR-040, apex `gh-store.me` untouched), Phase 14.2 Platform Sales Console & Immutable Quotes (ADR-041), Phase 14.3 Customer Onboarding & Setup Checklist (ADR-042), Phase 14.4 Integration & API Marketplace (ADR-043), Phase 14.5 Dedicated Deployment & Source License Handoff (ADR-044), and Phase 14.6 Commercial Governance & Release Qualification (ADR-045).
 - **Current migration head:** `e5f6a8b9c1d2`
 - **Primary branch:** `main`
-- **Latest milestone commit:** `76d5c4852c03531b7454805c879dbb568393fa11` (`feat(phase14): deliver phase 14.4 integration and api marketplace`)
+- **Latest milestone commit:** `c8380506ebce65675f96aa19e34a6ef927a7c5c0` (`feat(phase14): deliver phase 14.5 dedicated deployment and source license handoff`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 415 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `e5f6a8b9c1d2`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
-- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_05`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
+- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 417 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `e5f6a8b9c1d2`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_06`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
 ## Delivered Capabilities
@@ -158,6 +158,13 @@
    - Platform API endpoints (`/api/v1/platform/sales/handoffs`, `/generate-bundle`, `/deactivate-managed`) and `scripts/platformctl.py` CLI subcommands (`handoffs`, `handoff-create`, `handoff-bundle`, `handoff-deactivate`).
    - Admin Sales & Leads dashboard tab displaying active deployment handoffs with 1-click bundle generation and deactivation controls.
    - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+25. Phase 14.6 Commercial Governance & Release Qualification:
+   - ADR-045 defines commercial governance boundaries, platform revenue tracking, and canonical qualification gates.
+   - `CommercialGovernanceService` (`packages/marketplace/governance.py`) aggregating inquiry conversion rates, proposal pipeline values, accepted commercial revenue, standalone deployments, and top integrations without contaminating tenant shopper analytics.
+   - Platform control plane API endpoint `GET /api/v1/platform/sales/governance/metrics` and CLI subcommand `scripts/platformctl.py sales-metrics`.
+   - Admin Sales Console KPI header grid displaying real-time commercial indicators.
+   - Release qualification test suite `tests/test_phase14_6_release_qualification.py` verifying metrics accuracy, tenant isolation, and zero secret leakage.
+   - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 ## Current Trust Boundaries
 - Tenant/user identity always comes from `AuthenticatedPrincipal`; browser clients cannot choose authoritative tenant/user IDs.
 - Money mutates only through ledger services and PostgreSQL serialization/idempotency controls.
@@ -223,4 +230,4 @@ Read in order:
 4. Provider balance monitoring is advisory/read-only by design; routing automation based on balance evidence is deferred until hysteresis/freshness policy is specified.
 
 ## Next Recommended Work
-Proceed with Phase 14.6 (Release Qualification & Governance): complete canonical release gate across PostgreSQL concurrency, end-to-end marketplace smoke tests, secret leak auditing, and staging failure injection before tagging the production release candidate. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md).
+Complete the operator-owned trusted HTTPS proxy certificate cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md) to activate `APP_ENV=staging` and secure Mini App URLs. Run complete staging failure injection and restore drills before public launch.

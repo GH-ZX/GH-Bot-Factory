@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from packages.marketplace.governance import CommercialGovernanceService
 from packages.marketplace.integrations import IntegrationOffering, list_integration_offerings
 from packages.marketplace.models import (
     CommercialQuote,
@@ -18,6 +19,7 @@ from packages.marketplace.models import (
 from packages.marketplace.quotes import ConfiguratorEstimate, QuoteEngine
 
 __all__ = [
+    "CommercialGovernanceService",
     "CommercialQuote",
     "CommercialQuoteLine",
     "ConfiguratorEstimate",

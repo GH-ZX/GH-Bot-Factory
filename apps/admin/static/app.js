@@ -786,6 +786,10 @@ async function loadSales() {
     return;
   }
   el("salesOperatorGate")?.classList.add("hidden");
+  try {
+    const kpis = await platformApi("/api/v1/platform/sales/governance/metrics");
+    renderSalesMetrics(kpis);
+  } catch (_) {}
 
   const tab = state.salesActiveTab || "inquiries";
   const status = el("salesStatusFilter")?.value || "";
@@ -837,6 +841,25 @@ async function loadSales() {
       if (el("salesHandoffsList")) el("salesHandoffsList").innerHTML = `<div class="status-msg error">${escapeHtml(err.message)}</div>`;
     }
   }
+}
+
+function renderSalesMetrics(m) {
+  const grid = el("salesMetricGrid");
+  if (!grid || !m) return;
+  grid.classList.remove("hidden");
+  grid.innerHTML = [
+    ["Total Inquiries", m.total_inquiries, `${m.inquiry_conversion_rate_percent}% converted`],
+    ["Total Quotes", m.total_quotes, `${m.quotes_by_status?.ACCEPTED || 0} accepted`],
+    ["Active Pipeline", `$${m.pipeline_one_time}`, `$${m.pipeline_monthly}/mo`],
+    ["Accepted Revenue", `$${m.accepted_one_time}`, `$${m.accepted_monthly}/mo`],
+    ["Standalone Deployments", m.total_handoffs, `${m.active_handoffs} active`],
+  ].map(([label, value, hint]) => `
+    <article class="metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small class="muted">${escapeHtml(hint)}</small>
+    </article>
+  `).join("");
 }
 function renderSalesInquiries() {
   const container = el("salesInquiryList");

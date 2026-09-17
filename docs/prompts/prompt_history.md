@@ -1730,3 +1730,33 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
    - Verified live at `http://10.70.5.5:8010/admin/` and via `platformctl handoffs`.
    - Canonical `make verify` green: 415 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `e5f6a8b9c1d2`.
+
+## Phase 14.6 — Commercial Governance and Release Qualification — 2026-09-18
+
+**User prompt (verbatim):**
+
+> ok do ir
+
+**Delivered scope:**
+
+1. **ADR-045 Commercial Governance & Phase 14 Release Qualification:**
+   - Established ADR-045 (`docs/decisions/ADR-045-commercial-governance-and-release-qualification.md`) defining commercial governance boundaries, platform revenue tracking, and canonical qualification gates.
+2. **Commercial Governance Service (`packages/marketplace/governance.py`):**
+   - Implemented `CommercialGovernanceService.collect_metrics(...)` computing:
+     - `total_inquiries`, `inquiries_by_status`, `inquiry_conversion_rate_percent`.
+     - `total_quotes`, `quotes_by_status`, `pipeline_one_time`, `pipeline_monthly`, `accepted_one_time`, `accepted_monthly`.
+     - `total_handoffs`, `active_handoffs`, `top_integrations`.
+     - Strictly platform-level metrics isolated from tenant shopper analytics.
+3. **Platform Endpoint & CLI Subcommand:**
+   - Added `GET /api/v1/platform/sales/governance/metrics` protected by `require_platform_operator`.
+   - Added `scripts/platformctl.py sales-metrics` CLI command.
+4. **Admin Sales Console KPI Grid:**
+   - Built live KPI metrics header in Admin Sales Console (`apps/admin/static/`).
+   - Automatically populates conversion rate, quotes, pipeline value, accepted revenue, and active handoffs upon authentication.
+5. **Comprehensive Release Qualification Test Suite:**
+   - Added `tests/test_phase14_6_release_qualification.py` verifying metrics calculation, multi-tenant data isolation, and secret leakage prevention.
+6. **Phase 14 Final Verification & Live Deployment:**
+   - Bumped Admin cache busters to `v=20260918_06`.
+   - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
+   - Verified live with `platformctl.py sales-metrics`.
+   - Canonical `make verify` green: 417 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `e5f6a8b9c1d2`.

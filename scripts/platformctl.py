@@ -187,6 +187,7 @@ def parser() -> argparse.ArgumentParser:
 
     handoff_deact = sub.add_parser("handoff-deactivate")
     handoff_deact.add_argument("--id", required=True)
+    sub.add_parser("sales-metrics")
     return root
 
 
@@ -367,6 +368,8 @@ def main() -> None:
         result = request_json("POST", f"/sales/handoffs/{args.id}/generate-bundle", token=token, port=port)
     elif args.command == "handoff-deactivate":
         result = request_json("POST", f"/sales/handoffs/{args.id}/deactivate-managed", token=token, port=port)
+    elif args.command == "sales-metrics":
+        result = request_json("GET", "/sales/governance/metrics", token=token, port=port)
     else:  # pragma: no cover
         raise SystemExit(f"Unsupported command: {args.command}")
 
