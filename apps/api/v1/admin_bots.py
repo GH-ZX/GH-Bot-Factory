@@ -140,6 +140,17 @@ class BotLaunchReadinessResponse(BaseModel):
     checks: list[LaunchReadinessCheck]
 
 
+class TemplateGuidanceResponse(BaseModel):
+    product_source: str
+    what_you_can_sell: str
+    delivery_experience: str
+    operational_complexity: str
+    setup_requirements: list[str] = Field(default_factory=list)
+    example_business: str
+    limitations: str
+    supported_hosting: list[str] = Field(default_factory=list)
+
+
 class BotTemplateResponse(BaseModel):
     key: str
     version: int
@@ -150,7 +161,7 @@ class BotTemplateResponse(BaseModel):
     business_type: str = "GENERAL"
     provider_categories: list[str] = Field(default_factory=list)
     default_routing_strategy: str = "PRIORITY"
-
+    guidance: TemplateGuidanceResponse | None = None
 
 class BotTemplateListResponse(BaseModel):
     templates: list[BotTemplateResponse]

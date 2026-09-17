@@ -36,6 +36,30 @@ class TemplateValidationError(ValueError):
 
 
 @dataclass(frozen=True)
+class TemplateGuidance:
+    product_source: str
+    what_you_can_sell: str
+    delivery_experience: str
+    operational_complexity: str
+    setup_requirements: tuple[str, ...]
+    example_business: str
+    limitations: str
+    supported_hosting: tuple[str, ...] = ("managed", "dedicated", "source_license")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "product_source": self.product_source,
+            "what_you_can_sell": self.what_you_can_sell,
+            "delivery_experience": self.delivery_experience,
+            "operational_complexity": self.operational_complexity,
+            "setup_requirements": list(self.setup_requirements),
+            "example_business": self.example_business,
+            "limitations": self.limitations,
+            "supported_hosting": list(self.supported_hosting),
+        }
+
+
+@dataclass(frozen=True)
 class BotTemplate:
     key: str
     version: int
@@ -46,6 +70,7 @@ class BotTemplate:
     business_type: BotBusinessType = BotBusinessType.GENERAL
     provider_categories: tuple[ProviderCategory, ...] = ()
     default_routing_strategy: ProviderRoutingStrategy = ProviderRoutingStrategy.PRIORITY
+    guidance: TemplateGuidance | None = None
 
     def public_payload(self) -> dict[str, Any]:
         return {
@@ -58,6 +83,7 @@ class BotTemplate:
             "business_type": self.business_type.value,
             "provider_categories": [item.value for item in self.provider_categories],
             "default_routing_strategy": self.default_routing_strategy.value,
+            "guidance": self.guidance.to_dict() if self.guidance else None,
         }
 
 
@@ -74,6 +100,7 @@ def _template(
     business_type: BotBusinessType = BotBusinessType.GENERAL,
     provider_categories: tuple[ProviderCategory, ...] = (),
     routing_strategy: ProviderRoutingStrategy = ProviderRoutingStrategy.PRIORITY,
+    guidance: TemplateGuidance | None = None,
 ) -> BotTemplate:
     return BotTemplate(
         key=key,
@@ -84,6 +111,7 @@ def _template(
         business_type=business_type,
         provider_categories=provider_categories,
         default_routing_strategy=routing_strategy,
+        guidance=guidance,
         default_config={
             "currency": "USD",
             "locale": "en",
@@ -111,7 +139,6 @@ def _template(
         },
     )
 
-
 _TEMPLATES: dict[str, BotTemplate] = {
     item.key: item
     for item in [
@@ -123,6 +150,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             accent="#7C6CFF",
             welcome="Welcome to our store!",
             tagline="Fast checkout. Secure delivery. Built for Telegram.",
+            guidance=TemplateGuidance(
+                product_source="stored",
+                what_you_can_sell="Physical or digital items, manual orders, mixed catalogs, and standard merchandise.",
+                delivery_experience="Standard cart checkout, order confirmation, and customer status tracking.",
+                operational_complexity="Low",
+                setup_requirements=(
+                    "Upload product catalog and product images",
+                    "Configure stock inventory and retail pricing",
+                    "Enable at least one payment method",
+                ),
+                example_business="A boutique merchandise store or general goods merchant selling directly via Telegram.",
+                limitations="Does not automate live 3rd-party supplier API fulfillment out of the box.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "digital-goods",
@@ -132,6 +173,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             accent="#2D8CFF",
             welcome="Welcome! Your digital products are only a few taps away.",
             tagline="Instant digital delivery with a clear order trail.",
+            guidance=TemplateGuidance(
+                product_source="stored",
+                what_you_can_sell="License keys, software downloads, digital files, pre-generated vouchers, and subscriptions.",
+                delivery_experience="Immediate digital artifact delivery in bot chat and order history screen with one-tap clipboard copy.",
+                operational_complexity="Low",
+                setup_requirements=(
+                    "Add digital product variants",
+                    "Load digital stock or keys inventory",
+                    "Enable payment gateway",
+                ),
+                example_business="A software license seller or digital asset merchant fulfilling downloadable items instantly.",
+                limitations="Keys and digital artifacts must be stocked in advance unless connected to a supplier API.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "gift-cards",
@@ -141,6 +196,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             accent="#F59E0B",
             welcome="Choose a gift card and we will deliver it securely.",
             tagline="Digital gift cards and vouchers with tracked delivery.",
+            guidance=TemplateGuidance(
+                product_source="stored",
+                what_you_can_sell="Fixed-denomination gift cards, store credit vouchers, and digital coupons.",
+                delivery_experience="Fast digital code delivery with redemption instructions and one-tap copy button.",
+                operational_complexity="Low",
+                setup_requirements=(
+                    "Create card denominations (e.g. $10, $25, $50)",
+                    "Pre-stock voucher codes in inventory",
+                    "Configure customer payment method",
+                ),
+                example_business="A store credit or brand voucher distributor with managed manual stock.",
+                limitations="Fixed denominations only; no live balance polling against third-party gift networks.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "gaming-store",
@@ -150,6 +219,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             accent="#9B5CFF",
             welcome="Game on. Choose what you need and we will handle the delivery.",
             tagline="Credits, codes, and gaming essentials delivered securely.",
+            guidance=TemplateGuidance(
+                product_source="hybrid",
+                what_you_can_sell="Game keys, points top-ups, in-game currency, game accounts, and subscription passes.",
+                delivery_experience="High-energy storefront with instant key delivery or player ID top-up confirmation.",
+                operational_complexity="Medium",
+                setup_requirements=(
+                    "Categorize game titles and products",
+                    "Stock game keys or connect gaming provider APIs",
+                    "Configure crypto or wallet payments",
+                ),
+                example_business="A gaming community shop selling Steam/PlayStation codes, Riot Points, and gamer passes.",
+                limitations="Player ID collection is required for assisted direct top-ups.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "services",
@@ -159,6 +242,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             accent="#00A884",
             welcome="Welcome. Choose the service that fits what you need.",
             tagline="Simple service ordering with transparent status tracking.",
+            guidance=TemplateGuidance(
+                product_source="stored",
+                what_you_can_sell="Fixed-price consulting, technical setup, graphic design, translation, or assisted services.",
+                delivery_experience="Consultation booking, milestone tracking, and manual order status completion.",
+                operational_complexity="Low",
+                setup_requirements=(
+                    "Define service offerings and deliverables",
+                    "Set turnaround timelines",
+                    "Specify customer contact and intake channel",
+                ),
+                example_business="A freelance design or IT setup agency selling scoped service packages.",
+                limitations="Fulfillment requires human operator action; not fully automated.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "reseller-hub",
@@ -171,6 +268,21 @@ _TEMPLATES: dict[str, BotTemplate] = {
             business_type=BotBusinessType.RESELLER,
             provider_categories=tuple(ProviderCategory),
             routing_strategy=ProviderRoutingStrategy.AVAILABILITY,
+            guidance=TemplateGuidance(
+                product_source="provider_api",
+                what_you_can_sell="Multi-category digital catalog aggregating multiple suppliers with automated routing.",
+                delivery_experience="Real-time upstream supplier execution with automatic fallback and live fulfillment status.",
+                operational_complexity="High",
+                setup_requirements=(
+                    "Connect 2+ provider adapters",
+                    "Fund upstream supplier deposits",
+                    "Map supplier products to catalog",
+                    "Set pricing markup and profit margin rules",
+                ),
+                example_business="A digital goods reseller aggregating wholesale APIs across several countries and suppliers.",
+                limitations="Requires active monitoring of upstream supplier balances and API health.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "numbers-sms",
@@ -183,6 +295,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             business_type=BotBusinessType.NUMBER_SMS,
             provider_categories=(ProviderCategory.NUMBER,),
             routing_strategy=ProviderRoutingStrategy.AVAILABILITY,
+            guidance=TemplateGuidance(
+                product_source="provider_api",
+                what_you_can_sell="Virtual phone numbers, SMS verification codes, and temporary activation lines.",
+                delivery_experience="Interactive number reservation timer, real-time incoming SMS polling, and one-tap cancellation/refund.",
+                operational_complexity="Medium",
+                setup_requirements=(
+                    "Connect number provider adapter (e.g. 5sim/SMS-Activate)",
+                    "Fund supplier account balance",
+                    "Configure country and service pricing tiers",
+                ),
+                example_business="A virtual number service allowing customers to activate WhatsApp, Telegram, or OpenAI accounts.",
+                limitations="Depends on supplier carrier stock and carrier SMS reception rates.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "accounts-store",
@@ -195,6 +321,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             business_type=BotBusinessType.ACCOUNT,
             provider_categories=(ProviderCategory.ACCOUNT,),
             routing_strategy=ProviderRoutingStrategy.PRIORITY,
+            guidance=TemplateGuidance(
+                product_source="hybrid",
+                what_you_can_sell="Verified digital accounts, social media profiles, gaming handles, and pre-configured accounts.",
+                delivery_experience="Instant credentials delivery (username:password:token) with security instructions and copy buttons.",
+                operational_complexity="Medium",
+                setup_requirements=(
+                    "Upload pre-made accounts or link account supplier API",
+                    "Set replacement warranty and check rules",
+                    "Configure customer onboarding instructions",
+                ),
+                example_business="An agency selling aged social accounts, verified developer profiles, or gaming accounts.",
+                limitations="Requires clear warranty policy for account replacements if credentials expire.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "gift-reseller",
@@ -207,6 +347,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             business_type=BotBusinessType.GIFT_CARD,
             provider_categories=(ProviderCategory.GIFT, ProviderCategory.DIGITAL_PRODUCT),
             routing_strategy=ProviderRoutingStrategy.LOWEST_COST,
+            guidance=TemplateGuidance(
+                product_source="provider_api",
+                what_you_can_sell="Automated wholesale gift card codes, prepaid cards, and game cards via supplier APIs.",
+                delivery_experience="Instant code retrieval from lowest-cost active supplier with zero manual inventory holding.",
+                operational_complexity="Medium",
+                setup_requirements=(
+                    "Connect gift provider APIs",
+                    "Configure lowest-cost routing strategy",
+                    "Set profit margins and tier discounts",
+                ),
+                example_business="An automated gift card reseller offering Apple, Google Play, and Amazon cards.",
+                limitations="Wholesale suppliers may run out of stock during peak seasonal periods.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "digital-reseller",
@@ -219,6 +373,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             business_type=BotBusinessType.DIGITAL_PRODUCT,
             provider_categories=(ProviderCategory.DIGITAL_PRODUCT, ProviderCategory.GIFT, ProviderCategory.SERVICE),
             routing_strategy=ProviderRoutingStrategy.PRIORITY,
+            guidance=TemplateGuidance(
+                product_source="provider_api",
+                what_you_can_sell="Subscriptions, cloud accounts, software licenses, and digital services via OpenAPI/HTTP suppliers.",
+                delivery_experience="Automated order forwarding to supplier with tracked webhook or polling delivery.",
+                operational_complexity="Medium",
+                setup_requirements=(
+                    "Configure generic HTTP or built-in provider adapters",
+                    "Map endpoints and response fields",
+                    "Set pricing markup tier",
+                ),
+                example_business="A reseller connecting to custom supplier REST APIs to deliver VPN or SaaS subscriptions.",
+                limitations="Custom HTTP providers must comply with SSRF and schema allowlists.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
         _template(
             "hybrid-store",
@@ -231,6 +399,20 @@ _TEMPLATES: dict[str, BotTemplate] = {
             business_type=BotBusinessType.HYBRID,
             provider_categories=tuple(ProviderCategory),
             routing_strategy=ProviderRoutingStrategy.AVAILABILITY,
+            guidance=TemplateGuidance(
+                product_source="hybrid",
+                what_you_can_sell="Full-spectrum digital catalog: numbers, accounts, gift cards, digital files, and services.",
+                delivery_experience="Unified store with category-specific fulfillment (SMS timer, key reveal, account credentials).",
+                operational_complexity="High",
+                setup_requirements=(
+                    "Configure multiple provider categories",
+                    "Load manual inventory for stored items",
+                    "Establish routing policies per category",
+                ),
+                example_business="A full-scale digital mega-store catering to gaming, virtual numbers, and software in one bot.",
+                limitations="Higher operational complexity to monitor multiple supplier balances simultaneously.",
+                supported_hosting=("managed", "dedicated", "source_license"),
+            ),
         ),
     ]
 }

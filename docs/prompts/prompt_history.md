@@ -1523,3 +1523,41 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 - Proposed managed subscription, dedicated portable deployment, and premium source-license products. A completed self-hosted handoff ends implicit Factory Owner control and must exclude all other tenant/platform data and secrets.
 - Split proposed delivery into Phase 14.0 through 14.6. Implementation awaits product decisions and explicit authorization.
 - Planning commit: `9d2e8585312159363390f9df6433e18600ecf2c8`.
+
+## Session Continuation from Codex — 2026-09-18
+
+**User prompt (verbatim):**
+
+> resume the session of codex, i was talking there and usage ended
+
+**Context & Outcome:**
+
+- Resumed seamlessly from the Codex session checkpoint (`~/.codex/sessions/`).
+- Re-grounded on the user's strategic discussion prompt for Phase 14: Factory Owner role, customer tenant ownership, template explanations (`?` help button in Admin), API marketplace & pricing, self-hosting vs managed hosting, and public "Build Your Bot" configurator.
+- Kept to the user's directive ("we are just talking now, dont code, u can record this prompt and ur suggest for this matters").
+- Formulated strategic architecture and business model suggestions covering pricing balance, customer code delivery safeguards, and phased rollout.
+
+## Phase 14.0 — Template Guidance and Marketplace Boundaries Delivery — 2026-09-18
+
+**User prompt (verbatim):**
+
+> ok start with phase 14, we will do it in steps, like 14.1 14.2 etc
+
+**Delivered scope:**
+
+1. **ADR-039 Marketplace Boundaries & Template Guidance:**
+   - Established the 4-tier actor boundary: Factory Owner, Customer/Tenant Owner, Customer Staff, Shoppers, and Self-Hosted/Source Licensees.
+   - Enforced strict three-layer pricing: Platform fees (customer pays Factory Owner), Upstream supplier costs (customer funds their own provider balances), and Retail prices (shoppers pay customer's bot with customer-managed markup).
+2. **Server-Authoritative `TemplateGuidance` across All 11 Templates (`packages/factory/templates.py`):**
+   - Each template now defines `product_source` (`stored`, `provider_api`, `hybrid`), `what_you_can_sell`, `delivery_experience`, `operational_complexity` (`Low`, `Medium`, `High`), `setup_requirements`, `example_business`, `limitations`, and `supported_hosting`.
+   - Exposed `guidance` in `BotTemplateResponse` on `GET /api/v1/admin/bots/templates`.
+3. **Interactive Admin Bot Wizard `? Help & Guidance` Drawer:**
+   - Added an accessible `? Help & Guidance` drawer in `apps/admin/static/index.html` and `app.js`.
+   - Includes real-time keyword search, source category filtering (`All`, `Stored`, `Live APIs`, `Hybrid`), operational complexity badges, and a 1-click `Select this template` button.
+   - Enriched inline wizard preview to immediately display source and complexity badges upon template selection.
+4. **Verification & Deployment:**
+   - Added `tests/test_phase14_template_guidance.py`.
+   - Bumped cache busters to `v=20260918_01`.
+   - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
+   - Verified live API readiness and admin asset serving.
+   - Canonical `make verify` green: 403 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic clean.

@@ -387,3 +387,16 @@ Current phase checkpoint: **Phase 14 — Customer Marketplace product definition
 - Recommended a strict split between platform authority, tenant ownership, and shopper identity, with no owner impersonation and no implicit control after an external handoff.
 - Defined six proposed implementation slices from template guidance through release qualification. This is documentation and discussion only; no Phase 14 application code, schema, route, or deployment change was made.
 - Planning commit: `9d2e8585312159363390f9df6433e18600ecf2c8`.
+
+## 2026-09-18 — Phase 14.0 — Template Guidance & Marketplace Boundaries
+
+- Milestone implementation: Phase 14.0 delivered.
+- Added ADR-039 (`docs/decisions/ADR-039-phase14-marketplace-boundaries-and-template-guidance.md`) defining the 4-tier authority boundaries (Factory Owner, Customer/Tenant Owner, Customer Staff, Shopper, Self-Hosted/Source Licensee) and commercial pricing layers.
+- Implemented server-authoritative `TemplateGuidance` in `packages/factory/templates.py` covering all eleven templates with `product_source` (`stored`, `provider_api`, `hybrid`), `what_you_can_sell`, `delivery_experience`, `operational_complexity` (`Low`, `Medium`, `High`), `setup_requirements`, `example_business`, `limitations`, and `supported_hosting`.
+- Exposed `guidance` in `BotTemplateResponse` on `GET /api/v1/admin/bots/templates` for internal Admin and public configurator consumption.
+- Added interactive `? Help & Guidance` drawer in Admin Bot Creation Wizard with live keyword search, categorization filter chips (`All`, `Stored`, `Live APIs`, `Hybrid`), complexity badges, and 1-click template selection.
+- Enriched the inline template preview in the wizard to show product source, complexity badges, and sellable goods highlights.
+- Added `tests/test_phase14_template_guidance.py` covering all eleven template schemas and API integration.
+- Bumped Admin asset cache busters to `v=20260918_01` in `apps/admin/static/index.html`.
+- Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+- Canonical verification: Ruff clean, 403 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `f2a3b4c5d6e7`.

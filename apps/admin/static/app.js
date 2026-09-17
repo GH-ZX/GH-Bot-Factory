@@ -222,7 +222,147 @@ function applyBotTemplateDefaults(template,{preserveIdentity=false}={}){
   if(!preserveIdentity&&!el("botDisplayName").value)el("botDisplayName").value=template.name;
   renderBotTemplatePreview();renderBotBrandPreview();
 }
-function renderBotTemplatePreview(){const t=selectedBotTemplate();el("botTemplatePreview").innerHTML=t?`<strong>${escapeHtml(t.name)} · v${escapeHtml(t.version)}</strong><span>${escapeHtml(t.description)}</span><span>${escapeHtml(t.recommended_for)}</span>`:"<span>No template available.</span>";}
+let currentGuidanceFilter = "all";
+let currentGuidanceQuery = "";
+
+function renderBotTemplatePreview() {
+  const t = selectedBotTemplate();
+  if (!t) {
+    el("botTemplatePreview").innerHTML = "<span>No template available.</span>";
+    return;
+  }
+  const g = t.guidance;
+  const sourceBadges = {
+    stored: "📦 Stored Inventory",
+    provider_api: "⚡ Live Supplier APIs",
+    hybrid: "🔀 Hybrid (Stored + APIs)",
+  };
+  const complexityClasses = {
+    Low: "low",
+    Medium: "medium",
+    High: "high",
+  };
+  const sourceText = g ? (sourceBadges[g.product_source] || g.product_source) : null;
+  const complexityText = g ? `${g.operational_complexity} Complexity` : null;
+  const complexityClass = g ? (complexityClasses[g.operational_complexity] || "medium") : "";
+
+  el("botTemplatePreview").innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+      <strong>${escapeHtml(t.name)} · v${escapeHtml(t.version)}</strong>
+      <div class="guidance-badges" style="margin:0">
+        ${sourceText ? `<span class="badge-source">${escapeHtml(sourceText)}</span>` : ""}
+        ${complexityText ? `<span class="badge-complexity ${complexityClass}">${escapeHtml(complexityText)}</span>` : ""}
+      </div>
+    </div>
+    <span>${escapeHtml(t.description)}</span>
+    <span><strong>Recommended for:</strong> ${escapeHtml(t.recommended_for)}</span>
+    ${g ? `
+      <div class="guidance-detail" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
+        <div><strong>What you can sell:</strong> <span>${escapeHtml(g.what_you_can_sell)}</span></div>
+        <div><strong>Fulfillment:</strong> <span>${escapeHtml(g.delivery_experience)}</span></div>
+      </div>
+    ` : ""}
+  `;
+}
+
+function renderTemplateGuidanceList() {
+  const listEl = el("templateGuidanceList");
+  if (!listEl) return;
+  const selectedKey = selectedBotTemplate()?.key;
+  const q = currentGuidanceQuery.trim().toLowerCase();
+
+  const filtered = (state.botTemplates || []).filter((t) => {
+    const g = t.guidance || {};
+    if (currentGuidanceFilter !== "all" && g.product_source !== currentGuidanceFilter) {
+      return false;
+    }
+    if (!q) return true;
+    const searchTarget = [
+      t.name,
+      t.key,
+      t.description,
+      t.recommended_for,
+      g.what_you_can_sell,
+      g.delivery_experience,
+      g.example_business,
+      g.limitations,
+      ...(g.setup_requirements || []),
+    ].filter(Boolean).join(" ").toLowerCase();
+    return searchTarget.includes(q);
+  });
+
+  if (!filtered.length) {
+    listEl.innerHTML = `<div class="empty" style="grid-column: 1 / -1">No templates match your search or filter criteria.</div>`;
+    return;
+  }
+
+  const sourceLabels = {
+    stored: "📦 Stored Inventory",
+    provider_api: "⚡ Live Supplier APIs",
+    hybrid: "🔀 Hybrid Store",
+  };
+  const complexityClasses = {
+    Low: "low",
+    Medium: "medium",
+    High: "high",
+  };
+
+  listEl.innerHTML = filtered.map((t) => {
+    const g = t.guidance || {};
+    const isCurrent = t.key === selectedKey;
+    const sourceLabel = sourceLabels[g.product_source] || g.product_source || "Standard";
+    const compClass = complexityClasses[g.operational_complexity] || "medium";
+    const reqs = (g.setup_requirements || []).map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+
+    return `
+      <article class="guidance-card ${isCurrent ? "current" : ""}">
+        <div>
+          <div class="guidance-card-head">
+            <h3>${escapeHtml(t.name)}</h3>
+            <span class="chip">${escapeHtml(t.business_type || "GENERAL")}</span>
+          </div>
+          <div class="guidance-badges">
+            <span class="badge-source">${escapeHtml(sourceLabel)}</span>
+            ${g.operational_complexity ? `<span class="badge-complexity ${compClass}">${escapeHtml(g.operational_complexity)} Complexity</span>` : ""}
+            <span class="chip">${escapeHtml(t.default_routing_strategy || "PRIORITY")}</span>
+          </div>
+          <p class="muted" style="margin:0 0 8px;font-size:13px">${escapeHtml(t.description)}</p>
+
+          <div class="guidance-detail">
+            <strong>What you can sell</strong>
+            <span>${escapeHtml(g.what_you_can_sell || "General store catalog.")}</span>
+
+            <strong>Delivery experience</strong>
+            <span>${escapeHtml(g.delivery_experience || "Standard order delivery.")}</span>
+
+            ${reqs ? `<strong>Key setup requirements</strong><ul>${reqs}</ul>` : ""}
+
+            ${g.example_business ? `<strong>Real-world example</strong><span>${escapeHtml(g.example_business)}</span>` : ""}
+
+            ${g.limitations ? `<strong>Considerations &amp; limits</strong><span class="muted">${escapeHtml(g.limitations)}</span>` : ""}
+          </div>
+        </div>
+
+        <div class="guidance-card-actions">
+          <button type="button" class="${isCurrent ? "ghost" : "primary"}" data-select-template="${escapeHtml(t.key)}">
+            ${isCurrent ? "✓ Currently Selected" : "Select this template"}
+          </button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function openTemplateGuidance() {
+  currentGuidanceFilter = "all";
+  currentGuidanceQuery = "";
+  if (el("templateGuidanceSearch")) el("templateGuidanceSearch").value = "";
+  document.querySelectorAll("[data-guidance-filter]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.guidanceFilter === "all");
+  });
+  renderTemplateGuidanceList();
+  el("templateGuidanceDialog").showModal();
+}
 function renderBotBrandPreview(){const name=el("botDisplayName").value.trim()||selectedBotTemplate()?.name||"My Store";const tagline=el("botStoreTagline").value.trim()||"Your storefront preview";const accent=el("botBrandAccent").value||"#7c6cff";const logo=el("botLogoUrl").value.trim();const mark=el("botBrandPreviewMark");mark.style.backgroundColor=accent;mark.style.backgroundImage=logo?`url("${logo.replaceAll('"','%22')}")`:"";mark.textContent=logo?"":(name.charAt(0).toUpperCase()||"G");el("botBrandPreviewName").textContent=name;el("botBrandPreviewTagline").textContent=tagline;}
 function templateKeyForBot(bot){return bot?.template_key||bot?.config?._factory?.template_key||"general-commerce";}
 async function openBotProvision(bot=null){
@@ -486,6 +626,29 @@ function bind(){
   el("refreshButton").addEventListener("click",refreshCurrent); el("newProduct").addEventListener("click",()=>openProduct()); el("productForm").addEventListener("submit",saveProduct);
   el("billingPortal").addEventListener("click",()=>openBillingPortal().catch(err=>alert(err.message)));el("billingCatalog").addEventListener("click",e=>{const price=e.target.closest("[data-billing-checkout]")?.dataset.billingCheckout;if(price)startBillingCheckout(price).catch(err=>alert(err.message));});
   el("newBot").addEventListener("click",()=>openBotProvision().catch(err=>alert(err.message)));el("botProvisionForm").addEventListener("submit",e=>saveBotProvision(e).catch(err=>alert(err.message)));document.querySelectorAll("[data-close-bot]").forEach(b=>b.addEventListener("click",()=>el("botProvisionDialog").close()));el("botWizardNext").addEventListener("click",()=>{if(state.botWizardStep===2&&state.botWizardMode!=="edit"&&!el("botToken").value.trim()){alert("Paste the BotFather token.");return;}if(state.botWizardStep===4&&el("botRoutingStrategy").value==="MANUAL"&&!el("botPreferredProvider").value){alert("Manual routing requires a preferred provider.");return;}setWizardStep(state.botWizardStep+1);});el("botWizardBack").addEventListener("click",()=>setWizardStep(state.botWizardStep-1));el("botTemplate").addEventListener("change",()=>{applyBotTemplateDefaults(selectedBotTemplate(),{preserveIdentity:true});loadBotWizardOptions().catch(err=>alert(err.message));});el("botRoutingStrategy").addEventListener("change",()=>refreshPreferredProvider());el("botProviderChoices").addEventListener("change",()=>refreshPreferredProvider(el("botPreferredProvider").value));["botDisplayName","botStoreTagline","botBrandAccent","botLogoUrl"].forEach(id=>el(id).addEventListener("input",renderBotBrandPreview));
+  el("openTemplateGuidance")?.addEventListener("click", openTemplateGuidance);
+  document.querySelectorAll("[data-close-template-guidance]").forEach((b) => b.addEventListener("click", () => el("templateGuidanceDialog").close()));
+  el("templateGuidanceSearch")?.addEventListener("input", (e) => {
+    currentGuidanceQuery = e.target.value;
+    renderTemplateGuidanceList();
+  });
+  document.querySelectorAll("[data-guidance-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("[data-guidance-filter]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentGuidanceFilter = btn.dataset.guidanceFilter;
+      renderTemplateGuidanceList();
+    });
+  });
+  el("templateGuidanceList")?.addEventListener("click", (e) => {
+    const key = e.target.closest("[data-select-template]")?.dataset.selectTemplate;
+    if (key) {
+      el("botTemplate").value = key;
+      applyBotTemplateDefaults(selectedBotTemplate(), { preserveIdentity: true });
+      loadBotWizardOptions().catch((err) => alert(err.message));
+      el("templateGuidanceDialog").close();
+    }
+  });
   el("botList").addEventListener("click",e=>{const configure=e.target.closest("[data-configure-bot]")?.dataset.configureBot;const verify=e.target.closest("[data-verify-bot-credential]")?.dataset.verifyBotCredential;const rotate=e.target.closest("[data-rotate-bot-credential]")?.dataset.rotateBotCredential;const launchCheck=e.target.closest("[data-launch-check-bot]")?.dataset.launchCheckBot;const restart=e.target.closest("[data-restart-bot]")?.dataset.restartBot;const releaseNode=e.target.closest("[data-release-channel-bot]");const node=e.target.closest("[data-toggle-bot]");if(configure){const bot=state.bots.find(b=>b.id===configure);if(bot)openBotProvision(bot).catch(err=>alert(err.message));}else if(verify)verifyBotCredential(verify).catch(err=>alert(err.message));else if(rotate)openBotCredentialRotation(rotate);else if(launchCheck)openBotLaunchCheck(launchCheck).catch(err=>alert(err.message));else if(restart)restartBotRuntime(restart).catch(err=>alert(err.message));else if(releaseNode)toggleBotReleaseChannel(releaseNode.dataset.releaseChannelBot,releaseNode.dataset.releaseChannel).catch(err=>alert(err.message));else if(node)toggleBot(node.dataset.toggleBot,node.dataset.enabled==="true").catch(err=>alert(err.message));});
   el("botCredentialForm").addEventListener("submit",e=>saveBotCredentialRotation(e).catch(err=>alert(err.message)));document.querySelectorAll("[data-close-bot-credential]").forEach(b=>b.addEventListener("click",()=>el("botCredentialDialog").close()));
   document.querySelectorAll("[data-close-bot-launch]").forEach(b=>b.addEventListener("click",()=>el("botLaunchDialog").close()));

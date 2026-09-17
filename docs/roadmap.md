@@ -534,10 +534,11 @@ Delivered on 2026-09-17 upon user authorization:
 - Added and verified the UDM local DNS record plus Nginx Proxy Manager HTTP host; the local Admin URL is active at `http://botfac.gh-store.me/admin/`.
 - Remaining operator step: attach a publicly trusted certificate to the active proxy host, validate local HTTPS, then switch `APP_ENV`, `ADMIN_PUBLIC_URL`, and `MINIAPP_PUBLIC_URL` to staging values.
 
-### Phase 14 — Customer Marketplace, Tenant Handoff & Integration Catalog 📝 Planned
+### Phase 14 — Customer Marketplace, Tenant Handoff & Integration Catalog 🚧 In Progress
 
-The product and architecture proposal is recorded in [the Phase 14 plan](plans/phase-14-customer-marketplace.md). No Phase 14 application code or schema has been authorized or implemented yet.
+The product and architecture plan is documented in [the Phase 14 plan](plans/phase-14-customer-marketplace.md). Phase 14.0 (Template Guidance & Marketplace Boundaries) is complete; Phase 14.1 (Public Configurator & Quotes) is next.
 
+- **Phase 14.0 (Delivered):** ADR-039 boundary model, server-authoritative `TemplateGuidance` across all 11 bot templates, `BotTemplateResponse.guidance` API, and interactive Admin `? Help & Guidance` drawer with live search/filters.
 - Separate Factory Owner platform authority, Customer/Tenant Owner authority, customer staff, shoppers, and externally hosted customers.
 - Explain all eleven current templates through one server-owned guide reused by an Admin **? Help** drawer and the public customer configurator.
 - Add a modern public Build Your Bot journey for template, Bot/Mini App, product source, integrations, hosting, support, and contact choices.

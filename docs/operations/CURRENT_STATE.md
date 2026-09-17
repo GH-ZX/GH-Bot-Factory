@@ -2,15 +2,15 @@
 
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
-- **Last updated:** 2026-09-17
-- **Current phase:** Phase 14 — Customer Marketplace product definition
-- **Implementation status:** Phase 13 Advanced Bot Factory and Storefront Vertical Delivery are complete. The Phase 14 customer marketplace, tenant handoff, integration catalog, commercial quote, and source-license scope is documented as a proposal only; no Phase 14 application code, schema, route, or deployment change has started.
+- **Last updated:** 2026-09-18
+- **Current phase:** Phase 14.0 — Template Guidance & Marketplace Boundaries
+- **Implementation status:** Phase 14.0 is complete. All eleven versioned bot templates in `packages/factory/templates.py` possess server-authoritative structured `TemplateGuidance`, exposed via `BotTemplateResponse.guidance` on `GET /api/v1/admin/bots/templates`. The Admin Bot Creation Wizard provides an interactive `? Help & Guidance` drawer with live search, categorization filters (`stored`, `provider_api`, `hybrid`), complexity indicators, and 1-click template selection. ADR-039 defines the 4-tier actor boundaries (Factory Owner, Customer/Tenant Owner, Shopper, Self-Hosted) and licensing constraints. Next is Phase 14.1 (Public Configurator & Quotes).
 - **Current migration head:** `f2a3b4c5d6e7`
 - **Primary branch:** `main`
-- **Latest milestone commit:** `9d2e8585312159363390f9df6433e18600ecf2c8` (`docs: define phase 14 customer marketplace`)
+- **Latest milestone commit:** `0ed1caf140a19b4e048484ab3a72b9efc6146aff` (`docs: record phase 14 planning checkpoint`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Canonical gate green on 2026-09-17: Ruff clean; 401 fast tests passed; 13 PostgreSQL tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `f2a3b4c5d6e7`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
-- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets, image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
+- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 403 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `f2a3b4c5d6e7`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_01`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
 ## Delivered Capabilities
@@ -110,8 +110,13 @@
    - interactive clipboard copy with haptic and toast feedback for codes, numbers, and credentials
    - Admin fleet overview cards displaying vertical business profile tags, provider counts, and routing strategies
 17. Agent-maintainability layer: current-state checkpoint, handoff protocol, changelog, ADRs, roadmap, prompt history, and machine consistency check.
-18. Phase 14 product definition: public discovery/configuration, template guidance, manual sales/quotes, customer tenant ownership, priced integration entitlements, and managed versus self-hosted/source-delivery boundaries. This is a proposal only.
-
+18. Phase 14 product definition: public discovery/configuration, template guidance, manual sales/quotes, customer tenant ownership, priced integration entitlements, and managed versus self-hosted/source-delivery boundaries.
+19. Phase 14.0 Template Guidance & Marketplace Boundaries:
+   - ADR-039 defines the 4-tier actor boundaries (Factory Owner, Customer/Tenant Owner, Customer Staff, Shopper, Self-Hosted) and licensing terms.
+   - All 11 versioned bot templates in `packages/factory/templates.py` possess server-authoritative structured `TemplateGuidance` (`product_source`, `what_you_can_sell`, `delivery_experience`, `operational_complexity`, `setup_requirements`, `example_business`, `limitations`, `supported_hosting`).
+   - `BotTemplateResponse.guidance` exposed on `GET /api/v1/admin/bots/templates` for both internal Admin and future public configurators.
+   - Admin Bot Wizard provides an interactive `? Help & Guidance` drawer with live search, categorization filters (`stored`, `provider_api`, `hybrid`), complexity indicators, and 1-click template selection.
+   - Rebuilt Docker image `gh-bot-factory:local` and verified live.
 ## Current Trust Boundaries
 
 - Tenant/user identity always comes from `AuthenticatedPrincipal`; browser clients cannot choose authoritative tenant/user IDs.
@@ -178,5 +183,4 @@ Read in order:
 4. Provider balance monitoring is advisory/read-only by design; routing automation based on balance evidence is deferred until hysteresis/freshness policy is specified.
 
 ## Next Recommended Work
-
-Review and approve the commercial decisions in [the Phase 14 customer marketplace plan](../plans/phase-14-customer-marketplace.md), especially launch packages, public templates, integration pricing, and source-license terms. The recommended first implementation slice is Phase 14.0 template guidance followed by the public request-and-quote configurator. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md), then run the release gate, staging failure injection, and encrypted backup/restore plus portability drills. Per-item upstream correlation for multi-item asynchronous fulfillment remains the principal existing runtime hardening gap.
+Proceed with Phase 14.1 (Public Configurator & Quotes): build the modern public "Build Your Bot" discovery page on `gh-store.me`, server-authoritative itemized estimate, inquiry lead capture, and direct Telegram contact flow. Before public launch, finish the temporary HTTPS cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md), then run the release gate, staging failure injection, and encrypted backup/restore plus portability drills. Per-item upstream correlation for multi-item asynchronous fulfillment remains the principal existing runtime hardening gap.

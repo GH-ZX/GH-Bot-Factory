@@ -1,7 +1,7 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
 > **Single Source of Truth for Autonomous Coding Agents**
-> *Last Updated: 2026-09-17 (Phase 13 Storefront Vertical Delivery & Polish)*
+> *Last Updated: 2026-09-18 (Phase 14.0 Template Guidance & Marketplace Boundaries)*
 
 ---
 
@@ -841,3 +841,16 @@ All verbatim user prompts, architectural requirements, and commit records are ca
 - Proposed platform-owned offering/integration prices and entitlements while keeping tenant provider connections, credentials, catalog, supplier costs, retail prices, and orders tenant-owned.
 - Defined managed subscription, dedicated portable deployment, and source-code license products with no implicit Factory Owner control after handoff.
 - Full proposal: `docs/plans/phase-14-customer-marketplace.md`. No Phase 14 runtime, schema, route, or deployment implementation has started.
+
+## Milestone 47: Phase 14.0 Template Guidance & Marketplace Boundaries (2026-09-18)
+
+- **Status:** Delivered & Verified
+- **Key Additions:**
+  1. Added ADR-039 defining 4-tier actor boundaries (Factory Owner, Customer/Tenant Owner, Customer Staff, Shoppers, Self-Hosted/Source Licensees) and strict separation of platform fees, supplier costs, and retail prices.
+  2. Extended `BotTemplate` in `packages/factory/templates.py` with server-authoritative structured `TemplateGuidance` across all eleven templates (`product_source`, `what_you_can_sell`, `delivery_experience`, `operational_complexity`, `setup_requirements`, `example_business`, `limitations`, `supported_hosting`).
+  3. Exposed `guidance` in `BotTemplateResponse` on `GET /api/v1/admin/bots/templates` for Admin and future public configurator endpoints.
+  4. Integrated interactive `? Help & Guidance` drawer in Admin Bot Creation Wizard (`apps/admin/static/app.js` and `styles.css`) with keyword search, category filter chips (`All`, `Stored`, `Live APIs`, `Hybrid`), operational complexity badges, and 1-click template selection.
+  5. Enriched wizard inline template preview with source and complexity badges.
+  6. Bumped static cache buster to `v=20260918_01` in `apps/admin/static/index.html`.
+  7. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+  8. Canonical gate passed: Ruff clean, 403 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `f2a3b4c5d6e7`.
