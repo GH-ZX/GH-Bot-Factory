@@ -1778,3 +1778,12 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 > dont hardcode the username  or bot for the admin, should be configuarable
 
 **Implementation:** Removed browser hardcoding and the default sales handle; estimate and inquiry responses share the configured destination. Normalize username/profile URLs, encode draft messages, and hide contact action when unconfigured while retaining inquiry submission. Configure `OWNER_TELEGRAM_HANDLE` in destination-owned environment; no Admin identity or bot token is hardcoded. Updated API regression tests and handoff documents. Canonical `make verify` passed (426 fast + 13 PostgreSQL tests, Ruff and Alembic clean); Node contact rendering smoke check passed. Application has not been redeployed. Broader onboarding repairs from the advisory remain outstanding.
+
+
+## Reliable Owner Onboarding Repair — 2026-09-19
+
+**User prompt (verbatim):**
+
+> what were u gonna do, do
+
+**Scope:** Resume the previously proposed onboarding-first repair milestone after the configurable Telegram contact fix. Implement tenant/owner identity safety, real single-use owner setup grants without a synthetic bot, rollback on grant failure, template continuity, Admin/CLI updates, regression and PostgreSQL concurrency coverage. See ADR-046 and CURRENT_STATE. Canonical `make verify` passed: 435 fast tests, 14 PostgreSQL tests including concurrent onboarding, Ruff clean, Alembic no drift, and handoff/secret/JS/compile/dependency checks clean. Admin browser regression passed (direct entry, failed login recovery, reload, logout, mobile layout). Broader export/staging work remains outstanding.

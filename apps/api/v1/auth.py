@@ -58,7 +58,7 @@ async def authenticate_admin_code(
     return AdminCodeResponse(access_token=token_service.issue_access_token(
         user_id=user.id, tenant_id=membership.tenant_id, roles=[membership.role],
         source=AuthSource.SESSION, token_version=user.token_version,
-        expires_in_seconds=3600, extra_claims={"bot_id": str(bot.id)},
+        expires_in_seconds=3600, extra_claims={"bot_id": str(bot.id)} if bot else {},
     ))
 
 

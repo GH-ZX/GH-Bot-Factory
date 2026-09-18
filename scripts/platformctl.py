@@ -162,7 +162,7 @@ def parser() -> argparse.ArgumentParser:
     quote_onboard.add_argument("--slug")
     quote_onboard.add_argument("--name")
     quote_onboard.add_argument("--owner")
-    quote_onboard.add_argument("--telegram-id", type=int)
+    quote_onboard.add_argument("--telegram-id", type=int, required=True)
 
     handoffs = sub.add_parser("handoffs")
     handoffs.add_argument("--status", choices=["PREPARING", "READY_FOR_EXPORT", "EXPORTED", "HANDED_OFF", "CANCELLED"])

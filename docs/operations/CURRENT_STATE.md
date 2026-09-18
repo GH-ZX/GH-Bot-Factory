@@ -2,14 +2,14 @@
 
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
-- **Last updated:** 2026-09-18
-- **Current phase:** Phase 14 — Customer Marketplace & Commercial Platform Closure
+- **Last updated:** 2026-09-19
+- **Current phase:** Phase 14 — Reliable Owner Onboarding Repair
 - **Implementation status:** Phase 14 is complete across all sub-phases: Phase 14.0 Template Guidance & 4-tier actor model (ADR-039), Phase 14.1 Public Configurator on `botfac.gh-store.me/build/` with Server-Authoritative Quote Engine (ADR-040, apex `gh-store.me` untouched), Phase 14.2 Platform Sales Console & Immutable Quotes (ADR-041), Phase 14.3 Customer Onboarding & Setup Checklist (ADR-042), Phase 14.4 Integration & API Marketplace (ADR-043), Phase 14.5 Dedicated Deployment & Source License Handoff (ADR-044), and Phase 14.6 Commercial Governance & Release Qualification (ADR-045).
 - **Current migration head:** `e5f6a8b9c1d2`
 - **Primary branch:** `main`
 - **Latest milestone commit:** `c8380506ebce65675f96aa19e34a6ef927a7c5c0` (`feat(phase14): deliver phase 14.5 dedicated deployment and source license handoff`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Canonical gate green on 2026-09-18: Ruff clean; 417 fast tests passed; 13 PostgreSQL concurrency tests passed on disposable `ghbf_repair_test` (127.0.0.1:55439); alembic upgrade/check clean at `e5f6a8b9c1d2`; handoff/secret/JS/compile/`pip check`/`git diff --check` gates passed.
+- **Verification:** Canonical `make verify` passed: 435 fast tests, 14 PostgreSQL tests including concurrent onboarding, Ruff clean, Alembic no drift, and handoff/secret/JS/compile/dependency checks clean. Admin browser regression passed (direct entry, failed login recovery, reload, logout, mobile layout). Application deployment remains on the prior image.
 - **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_06`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
@@ -236,3 +236,8 @@ Complete the operator-owned trusted HTTPS proxy certificate cutover in [the loca
 ### Configurable configurator Telegram contact — 2026-09-19
 
 Removed the hard-coded sales username from the configurator and the default settings. Both estimate and inquiry links use `OWNER_TELEGRAM_HANDLE` (username, @username, or Telegram profile URL). Empty configuration hides the chat action while preserving inquiry submission. This public sales setting is separate from Admin authentication and bot credentials. No schema or deployment change. Regression coverage includes non-default destinations, special characters, invalid profile URLs, and unconfigured inquiry submission. Canonical `make verify` passed: Ruff clean, 426 fast tests, 13 PostgreSQL tests, Alembic no drift, handoff/secret/JS/compile/dependency checks clean. A Node rendering smoke check passed for configured and unconfigured contact states. Verification ran outside the sandbox after sandboxed runs stalled. Live deployment and Telegram account reachability were not exercised.
+
+
+### Phase 14 — Reliable Owner Onboarding Repair
+
+Accepted quotes now create tenants only for unused slugs, require operator-confirmed numeric owner Telegram IDs, and serialize same-quote onboarding with PostgreSQL row locks. Retries cannot add/promote owners or reactivate disabled identities. Removed synthetic users/bots and fake login-code fallback. Purpose-bound, five-minute single-use owner setup grants permit tenant Admin access without a bot and recheck quote linkage, OWNER membership, active identity, and token version. Redis failures roll back with HTTP 503. Real bots use the existing verified provisioning wizard; template intent carries into the wizard/checklist. Admin/CLI require the owner ID and support renewed setup links. ADR-046 documents the boundary; migration head unchanged. Canonical `make verify` passed: 435 fast tests, 14 PostgreSQL tests including concurrent onboarding, Ruff clean, Alembic no drift, and handoff/secret/JS/compile/dependency checks clean. Admin browser regression passed (direct entry, failed login recovery, reload, logout, mobile layout). No deployment or automatic legacy-row repair; export hardening and first-live-sale/release qualification remain outstanding.

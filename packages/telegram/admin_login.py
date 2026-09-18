@@ -74,6 +74,39 @@ class AdminLoginService:
         await self._redis_call("set", self._key(code), payload, ex=LOGIN_TTL_SECONDS)
         return code
 
+    @staticmethod
+    async def _owner_setup_identity(session, tenant_id, user_id, quote_id):
+        from packages.marketplace.models import CommercialQuote, QuoteStatus
+
+        row = (await session.execute(
+            select(User, Membership)
+            .join(Membership, Membership.user_id == User.id)
+            .join(Tenant, Tenant.id == Membership.tenant_id)
+            .join(CommercialQuote, CommercialQuote.tenant_id == Tenant.id)
+            .where(
+                Tenant.id == tenant_id, Tenant.is_active.is_(True), Tenant.deleted_at.is_(None),
+                User.id == user_id, User.is_active.is_(True), User.deleted_at.is_(None),
+                Membership.tenant_id == tenant_id, Membership.is_active.is_(True),
+                Membership.role == Role.OWNER,
+                CommercialQuote.id == quote_id, CommercialQuote.status == QuoteStatus.ACCEPTED,
+            )
+        )).one_or_none()
+        if row is None:
+            raise AdminLoginError("Owner setup link is invalid or expired. Request a new link from the operator.")
+        return row[0], row[1], None
+
+    async def issue_owner_setup(self, session, *, tenant_id, user_id, quote_id):
+        """Issue only from authenticated platform onboarding, never Telegram/customer routes."""
+        await session.flush()
+        user, _, _ = await self._owner_setup_identity(session, tenant_id, user_id, quote_id)
+        code = secrets.token_urlsafe(24)
+        payload = json.dumps({
+            "purpose": "owner_setup", "tenant_id": str(tenant_id), "user_id": str(user_id),
+            "quote_id": str(quote_id), "token_version": user.token_version,
+        })
+        await self._redis_call("set", self._key(code), payload, ex=LOGIN_TTL_SECONDS)
+        return code
+
     async def consume(self, session: AsyncSession, code: str):
         error = "Code is invalid or expired. Send /admin privately to your bot for a new code."
         if not re.fullmatch(r"[A-Za-z0-9_-]{32}", code):
@@ -83,11 +116,16 @@ class AdminLoginService:
             raise AdminLoginError(error)
         try:
             data = json.loads(payload)
-            tenant_id, user_id, bot_id = (uuid.UUID(data[key]) for key in ("tenant_id", "user_id", "bot_id"))
+            tenant_id, user_id = (uuid.UUID(data[key]) for key in ("tenant_id", "user_id"))
+            setup = data.get("purpose") == "owner_setup"
+            identity_id = uuid.UUID(data["quote_id" if setup else "bot_id"])
             version = data["token_version"]
         except (ValueError, KeyError, TypeError) as exc:
             raise AdminLoginError(error) from exc
-        user, membership, bot = await self._identity(session, tenant_id, user_id, bot_id)
+        if setup:
+            user, membership, bot = await self._owner_setup_identity(session, tenant_id, user_id, identity_id)
+        else:
+            user, membership, bot = await self._identity(session, tenant_id, user_id, identity_id)
         if user.token_version != version:
             raise AdminLoginError(error)
         return user, membership, bot

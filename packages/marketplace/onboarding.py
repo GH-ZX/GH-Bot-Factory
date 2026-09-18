@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import secrets
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -25,6 +24,10 @@ class OnboardingError(ValueError):
     """Raised when customer onboarding fails validation or safety invariants."""
 
 
+class OnboardingUnavailableError(OnboardingError):
+    """Temporary grant storage failure; onboarding was rolled back."""
+
+
 @dataclass(frozen=True)
 class OnboardingResult:
     tenant_id: uuid.UUID
@@ -32,7 +35,7 @@ class OnboardingResult:
     tenant_name: str
     owner_id: uuid.UUID
     owner_username: str | None
-    bot_id: uuid.UUID
+    bot_id: uuid.UUID | None
     quote_id: uuid.UUID
     quote_number: str
     admin_launch_url: str
@@ -46,7 +49,7 @@ class OnboardingResult:
             "tenant_name": self.tenant_name,
             "owner_id": str(self.owner_id),
             "owner_username": self.owner_username,
-            "bot_id": str(self.bot_id),
+            "bot_id": str(self.bot_id) if self.bot_id else None,
             "quote_id": str(self.quote_id),
             "quote_number": self.quote_number,
             "admin_launch_url": self.admin_launch_url,
@@ -74,7 +77,11 @@ class CustomerOnboardingService:
         actor: str = "LOCAL_PLATFORM_TOKEN",
         ip_address: str | None = None,
     ) -> OnboardingResult:
-        quote = await session.get(CommercialQuote, quote_id)
+        if not owner_telegram_id or owner_telegram_id <= 0:
+            raise OnboardingError("A confirmed owner Telegram user ID is required; usernames are display-only.")
+        quote = (await session.execute(
+            select(CommercialQuote).where(CommercialQuote.id == quote_id).with_for_update()
+        )).scalar_one_or_none()
         if not quote:
             raise OnboardingError("Commercial quote not found.")
         if quote.status != QuoteStatus.ACCEPTED:
@@ -84,11 +91,11 @@ class CustomerOnboardingService:
         already_existed = False
         if quote.tenant_id:
             existing_tenant = await session.get(Tenant, quote.tenant_id)
-            if existing_tenant and existing_tenant.is_active:
+            if existing_tenant and existing_tenant.is_active and existing_tenant.deleted_at is None:
                 already_existed = True
                 tenant = existing_tenant
             else:
-                tenant = None
+                raise OnboardingError("The linked tenant is inactive or deleted; restore it explicitly before onboarding.")
         else:
             tenant = None
 
@@ -103,34 +110,22 @@ class CustomerOnboardingService:
                 session.add(tenant)
                 await session.flush()
             else:
-                if not tenant.is_active or tenant.deleted_at is not None:
-                    raise OnboardingError(f"Tenant slug '{raw_slug}' belongs to an inactive or deleted tenant.")
-                already_existed = True
+                raise OnboardingError("This tenant slug is already in use. Choose a different slug.")
 
-        # 2. Provision or bind Owner User
-        clean_handle = (owner_username or quote.customer_contact).strip().lstrip("@")
-        if owner_telegram_id:
-            user = (await session.execute(select(User).where(User.telegram_id == owner_telegram_id))).scalar_one_or_none()
-        else:
-            # Deterministic pseudo-telegram-id based on handle or random high offset
-            pseudo_id = 3_000_000_000 + (uuid.uuid4().int % 900_000_000)
-            user = (await session.execute(select(User).where(User.username == clean_handle))).scalar_one_or_none()
-            if not user:
-                owner_telegram_id = pseudo_id
-
+        # Telegram user IDs are supplied by the authenticated platform operator.
+        # Usernames never select an identity or authorize an existing tenant.
+        clean_handle = (owner_username or "").strip().lstrip("@") or None
+        user = (await session.execute(
+            select(User).where(User.telegram_id == owner_telegram_id)
+        )).scalar_one_or_none()
         if user is None:
-            user = User(
-                telegram_id=owner_telegram_id or 3_000_000_000 + (uuid.uuid4().int % 900_000_000),
-                username=clean_handle if clean_handle else f"user_{uuid.uuid4().hex[:8]}",
-                first_name=raw_name,
-                is_active=True,
-            )
+            if already_existed:
+                raise OnboardingError("The supplied user is not the existing tenant owner.")
+            user = User(telegram_id=owner_telegram_id, username=clean_handle, first_name=raw_name, is_active=True)
             session.add(user)
             await session.flush()
-        else:
-            user.is_active = True
-            if clean_handle and not user.username:
-                user.username = clean_handle
+        elif not user.is_active or user.deleted_at is not None:
+            raise OnboardingError("The owner account is inactive or deleted.")
 
         # 3. Provision Membership(Role.OWNER)
         membership = (
@@ -142,6 +137,8 @@ class CustomerOnboardingService:
             )
         ).scalar_one_or_none()
 
+        if already_existed and (membership is None or membership.role != Role.OWNER or not membership.is_active):
+            raise OnboardingError("Onboarding retries require an existing active owner; ownership changes use member management.")
         if membership is None:
             membership = Membership(
                 tenant_id=tenant.id,
@@ -152,38 +149,21 @@ class CustomerOnboardingService:
             )
             session.add(membership)
             await session.flush()
-        else:
-            membership.role = Role.OWNER
-            membership.is_active = True
-
-        # 4. Provision initial Bot record if none exists
-        bot = (await session.execute(select(Bot).where(Bot.tenant_id == tenant.id))).scalars().first()
-        if bot is None:
+        # Keep template intent without inventing a Telegram bot identity.
+        # The owner connects a real bot through the verified provisioning workflow.
+        if not already_existed:
             inquiry = await session.get(CustomerInquiry, quote.inquiry_id) if quote.inquiry_id else None
             conf = (inquiry.configuration if inquiry else {}) or {}
-            template_key = conf.get("template_key", "general-commerce")
-
             config = build_template_config(
-                template_key=template_key,
-                currency=quote.currency,
-                locale="en",
-                branding={
-                    "store_tagline": f"{raw_name} Official Store",
-                    "welcome_text": f"Welcome to {raw_name}! Browse our catalog below.",
-                },
+                template_key=conf.get("template_key", "general-commerce"),
+                currency=quote.currency, locale="en",
+                branding={"store_tagline": f"{raw_name} Official Store"},
             )
-
-            bot = Bot(
-                tenant_id=tenant.id,
-                telegram_bot_id=10_000_000 + (uuid.uuid4().int % 90_000_000),
-                username=f"{tenant.slug}_bot",
-                display_name=raw_name,
-                token_secret_ref=f"TENANT_{tenant.slug.upper().replace('-', '_')}_BOT_TOKEN",
-                config=config,
-                is_enabled=True,
-            )
-            session.add(bot)
-            await session.flush()
+            tenant.settings = {**(tenant.settings or {}), "onboarding_template": config}
+        bot = (await session.execute(select(Bot).where(
+            Bot.tenant_id == tenant.id, Bot.deleted_at.is_(None),
+            Bot.credential_status == "VERIFIED",
+        ).order_by(Bot.created_at))).scalars().first()
 
         # 5. Link quote to tenant
         quote.tenant_id = tenant.id
@@ -195,14 +175,15 @@ class CustomerOnboardingService:
         # 6. Generate single-use Admin sign-in grant code
         login_svc = AdminLoginService()
         try:
-            login_code = await login_svc.issue(
+            login_code = await login_svc.issue_owner_setup(
                 session,
                 tenant_id=tenant.id,
                 user_id=user.id,
-                bot_id=bot.id,
+                quote_id=quote.id,
             )
-        except (AdminLoginError, RedisError, ConnectionError, TimeoutError, OSError):
-            login_code = secrets.token_hex(16)
+        except (AdminLoginError, RedisError, ConnectionError, TimeoutError, OSError) as exc:
+            await session.rollback()
+            raise OnboardingUnavailableError("Owner sign-in is temporarily unavailable. Retry onboarding shortly.") from exc
 
         admin_base = (settings.admin_public_url or "/admin/").rstrip("/")
         admin_launch_url = f"{admin_base}/?code={login_code}"
@@ -220,7 +201,7 @@ class CustomerOnboardingService:
                 "tenant_slug": tenant.slug,
                 "owner_id": str(user.id),
                 "owner_handle": user.username,
-                "bot_id": str(bot.id),
+                "bot_id": str(bot.id) if bot else None,
             },
             ip_address=ip_address,
             actor=actor,
@@ -234,7 +215,7 @@ class CustomerOnboardingService:
             tenant_name=tenant.name,
             owner_id=user.id,
             owner_username=user.username,
-            bot_id=bot.id,
+            bot_id=bot.id if bot else None,
             quote_id=quote.id,
             quote_number=quote.quote_number,
             admin_launch_url=admin_launch_url,

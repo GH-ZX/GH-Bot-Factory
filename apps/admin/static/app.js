@@ -34,7 +34,7 @@ async function api(path, options = {}) {
     try { const parsed=(await response.json()).detail; detail=typeof parsed==="string"?parsed:(parsed?.message||JSON.stringify(parsed)||detail); } catch (_) {}
     if (response.status === 401 && !path.includes("/auth/")) {
       clearSessionToken();
-      showLogin("Session expired. Send /admin to your bot for a new sign-in link.");
+      showLogin("Session expired. Send /admin to your connected bot or request a new owner setup link.");
     }
     throw new Error(detail);
   }
@@ -404,7 +404,8 @@ function templateKeyForBot(bot){return bot?.template_key||bot?.config?._factory?
 async function openBotProvision(bot=null){
   state.botWizardMode=bot?"edit":"create";el("botWizardBotId").value=bot?.id||"";el("botWizardTitle").textContent=bot?"Configure bot":"Create a bot";
   el("botTemplate").innerHTML=state.botTemplates.map(t=>`<option value="${escapeHtml(t.key)}">${escapeHtml(t.name)} · v${escapeHtml(t.version)}</option>`).join("");
-  const key=templateKeyForBot(bot);if(key&&state.botTemplates.some(t=>t.key===key))el("botTemplate").value=key;
+  const onboarding = bot ? null : await api("/api/v1/admin/onboarding/checklist");
+  const key=bot ? templateKeyForBot(bot) : onboarding.recommended_template_key;if(key&&state.botTemplates.some(t=>t.key===key))el("botTemplate").value=key;
   el("botToken").value="";el("botExpectedUsername").value=bot?.username||"";el("botDisplayName").value=bot?.display_name||"";el("botEnabled").checked=bot?.is_enabled??true;
   el("botCredentialFields").classList.toggle("hidden",Boolean(bot));el("botCredentialPreserved").classList.toggle("hidden",!bot);el("botToken").required=!bot;
   applyBotTemplateDefaults(selectedBotTemplate(),{preserveIdentity:Boolean(bot)});
@@ -953,7 +954,7 @@ function renderSalesQuotes() {
             </div>
             <div class="ops-actions">
               ${!isAccepted && q.status !== "SUPERSEDED" ? `<button type="button" class="primary" data-accept-quote="${q.id}">Accept &amp; Lock Quote</button>` : ""}
-              ${isAccepted && !q.tenant_id ? `<button type="button" class="primary" data-onboard-quote="${q.id}">🚀 Onboard Tenant</button>` : ""}
+              ${isAccepted ? `<button type="button" class="primary" data-onboard-quote="${q.id}">${q.tenant_id ? "New Owner Setup Link" : "Onboard Tenant"}</button>` : ""}
               ${q.tenant_id ? `<span class="chip chip-ok">✓ Onboarded</span>` : (isAccepted ? `<span class="chip ${bClass}">Locked</span>` : "")}
             </div>
           </div>
@@ -1215,6 +1216,7 @@ function openOnboardTenantDialog(quoteId) {
   el("onboardTenantName").value = quote.customer_name;
   el("onboardTenantSlug").value = quote.customer_name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   el("onboardOwnerUsername").value = quote.customer_contact.replace(/^@/, "");
+  el("onboardOwnerTelegramId").value = "";
   el("onboardTenantDialog").showModal();
 }
 
@@ -1225,6 +1227,7 @@ async function saveOnboardTenant(event) {
     tenant_name: el("onboardTenantName").value.trim(),
     tenant_slug: el("onboardTenantSlug").value.trim(),
     owner_username: el("onboardOwnerUsername").value.trim(),
+    owner_telegram_id: Number(el("onboardOwnerTelegramId").value),
   };
 
   try {
@@ -1237,7 +1240,7 @@ async function saveOnboardTenant(event) {
       `• Slug: ${res.tenant_slug}\n` +
       `• Owner: @${res.owner_username}\n` +
       `• Admin Launch URL: ${res.admin_launch_url}\n\n` +
-      `The owner can use this launch URL or send /admin in Telegram to sign in.`
+      `This single-use link expires in 5 minutes. The owner can sign in and connect their real bot in the Bots tab.`
     );
     el("onboardTenantDialog").close();
     await loadSales();

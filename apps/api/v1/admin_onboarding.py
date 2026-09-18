@@ -15,6 +15,7 @@ from packages.factory.templates import TemplateValidationError, get_bot_template
 from packages.payments.models import PaymentMethodConfig
 from packages.providers.models import Provider
 from packages.telegram.models import Bot
+from packages.tenants.models import Tenant
 
 router = APIRouter(prefix="/admin/onboarding", tags=["admin-onboarding"])
 
@@ -33,6 +34,7 @@ class OnboardingChecklistResponse(BaseModel):
     launch_ready: bool
     next_step: str
     items: list[ChecklistItem]
+    recommended_template_key: str
 
 
 @router.get("/checklist", response_model=OnboardingChecklistResponse)
@@ -45,11 +47,13 @@ async def get_onboarding_checklist(
     # 1. Inspect Bot & Branding
     bot = (
         await session.execute(
-            select(Bot).where(Bot.tenant_id == tenant_id).order_by(Bot.created_at.asc())
+            select(Bot).where(Bot.tenant_id == tenant_id, Bot.deleted_at.is_(None)).order_by(Bot.created_at.asc())
         )
     ).scalars().first()
 
-    template_key = "general-commerce"
+    tenant = await session.get(Tenant, tenant_id)
+    initial_config = (tenant.settings or {}).get("onboarding_template", {}) if tenant else {}
+    template_key = initial_config.get("_factory", {}).get("template_key", "general-commerce")
     if bot and bot.config and isinstance(bot.config, dict):
         template_key = bot.config.get("_factory", {}).get("template_key", "general-commerce")
 
@@ -67,7 +71,7 @@ async def get_onboarding_checklist(
     bot_ready = False
     if bot:
         brand_ready = bool(bot.display_name and bot.display_name.strip() != "My Store")
-        bot_ready = bool(bot.is_enabled and bot.token_secret_ref and bot.credential_status in {"CONFIGURED", "VERIFIED"})
+        bot_ready = bool(bot.is_enabled and bot.token_secret_ref and bot.credential_status == "VERIFIED")
 
     # 2. Inspect Products
     product_count = (
@@ -159,4 +163,5 @@ async def get_onboarding_checklist(
         launch_ready=launch_ready,
         next_step=next_step,
         items=items,
+        recommended_template_key=template_key,
     )

@@ -5,9 +5,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,7 +30,11 @@ from packages.marketplace.models import (
     LicenseType,
     QuoteStatus,
 )
-from packages.marketplace.onboarding import CustomerOnboardingService, OnboardingError
+from packages.marketplace.onboarding import (
+    CustomerOnboardingService,
+    OnboardingError,
+    OnboardingUnavailableError,
+)
 from packages.saas.control_plane import append_platform_audit
 
 router = APIRouter(prefix="/platform/sales", tags=["platform-sales"])
@@ -132,7 +137,7 @@ class OnboardCustomerRequest(BaseModel):
     tenant_slug: str | None = Field(default=None, max_length=50)
     tenant_name: str | None = Field(default=None, max_length=120)
     owner_username: str | None = Field(default=None, max_length=120)
-    owner_telegram_id: int | None = Field(default=None)
+    owner_telegram_id: int = Field(gt=0)
 
 
 class OnboardCustomerResponse(BaseModel):
@@ -141,7 +146,7 @@ class OnboardCustomerResponse(BaseModel):
     tenant_name: str
     owner_id: uuid.UUID
     owner_username: str | None
-    bot_id: uuid.UUID
+    bot_id: uuid.UUID | None
     quote_id: uuid.UUID
     quote_number: str
     admin_launch_url: str
@@ -743,9 +748,11 @@ async def onboard_customer_tenant(
     quote_id: uuid.UUID,
     payload: OnboardCustomerRequest,
     request: Request,
+    response: Response,
     operator: PlatformOperator = Depends(require_platform_operator),
     session: AsyncSession = Depends(get_db_session),
 ) -> OnboardCustomerResponse:
+    response.headers["Cache-Control"] = "no-store"
     try:
         result = await CustomerOnboardingService.onboard_from_quote(
             session,
@@ -757,7 +764,14 @@ async def onboard_customer_tenant(
             actor=operator.actor,
             ip_address=_client_ip(request),
         )
+    except OnboardingUnavailableError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Onboarding conflicts with an existing record. Retry with the confirmed owner and a unique slug.") from exc
     except OnboardingError as exc:
+        await session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     return OnboardCustomerResponse(
