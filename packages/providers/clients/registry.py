@@ -4,12 +4,14 @@ from typing import Any
 from packages.providers.catalog import (
     CORE_PROVIDER_CAPABILITIES,
     ProviderCapability,
+    ProviderConfigFieldSpec,
     ProviderCredentialSpec,
     ProviderDefinition,
 )
 from packages.providers.clients.base import BaseProviderClient
 from packages.providers.clients.example_digital import ExampleDigitalCodesProvider
 from packages.providers.clients.mock import MockProvider
+from packages.providers.clients.ventebot import VenteBotClient
 from packages.providers.exceptions import ProviderConfigurationError, ProviderError
 from packages.providers.http_generic import (
     GenericHttpProvider,
@@ -129,6 +131,51 @@ class ProviderClientRegistry:
             config_validator=validate_generic_http_metadata,
             capability_resolver=generic_http_capabilities,
             credential_resolver=generic_http_required_credentials,
+        )
+        self.register_type(
+            "VENTEBOT",
+            lambda name, cfg: VenteBotClient(provider_name=name, config=cfg),
+            definition=ProviderDefinition(
+                key="VENTEBOT",
+                display_name="VenteBot Reseller API",
+                description=(
+                    "Wholesale automated supplier for digital accounts, AI subscriptions (Grok, ChatGPT Plus), "
+                    "and service activations via the VenteBot Reseller network."
+                ),
+                categories=(
+                    ProviderCategory.ACCOUNT,
+                    ProviderCategory.DIGITAL_PRODUCT,
+                    ProviderCategory.SERVICE,
+                ),
+                capabilities=(
+                    ProviderCapability.HEALTH,
+                    ProviderCapability.BALANCE,
+                    ProviderCapability.CATALOG,
+                    ProviderCapability.PRODUCT_DETAIL,
+                    ProviderCapability.CREATE_ORDER,
+                    ProviderCapability.ORDER_STATUS,
+                    ProviderCapability.POLLING,
+                ),
+                credentials=(
+                    ProviderCredentialSpec(
+                        key="API_KEY",
+                        label="Reseller API Key (X-Reseller-Key)",
+                        required=True,
+                        description="API key generated from VenteBot or created by admin in Resellers tab.",
+                    ),
+                ),
+                config_fields=(
+                    ProviderConfigFieldSpec(
+                        key="base_url",
+                        label="VenteBot API Base URL",
+                        default="https://ventetelegrambotrailway-production.up.railway.app",
+                        required=False,
+                        description="Base URL for the VenteBot reseller API.",
+                    ),
+                ),
+                driver_family="ventebot",
+                docs_url="https://ventetelegrambotrailway-production.up.railway.app/api/swagger/",
+            ),
         )
 
     def register_type(

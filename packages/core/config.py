@@ -57,7 +57,10 @@ class Settings(BaseSettings):
     provider_http_allow_private_networks: bool = Field(
         default=False, alias="PROVIDER_HTTP_ALLOW_PRIVATE_NETWORKS"
     )
-    provider_http_allowed_hosts: str = Field(default="", alias="PROVIDER_HTTP_ALLOWED_HOSTS")
+    provider_http_allowed_hosts: str = Field(
+        default="*.up.railway.app,ventetelegrambotrailway-production.up.railway.app",
+        alias="PROVIDER_HTTP_ALLOWED_HOSTS",
+    )
     provider_offer_freshness_seconds: int = Field(
         default=300, alias="PROVIDER_OFFER_FRESHNESS_SECONDS", ge=30, le=86400
     )

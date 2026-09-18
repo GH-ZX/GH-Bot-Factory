@@ -149,6 +149,24 @@ _INTEGRATIONS: dict[str, IntegrationOffering] = {
             ),
         ),
         IntegrationOffering(
+            key="ventebot",
+            name="VenteBot Reseller Network",
+            category="supplier_api",
+            description="Direct connection to VenteBot wholesale API for automated account delivery, Grok/ChatGPT subscriptions, and activations.",
+            setup_fee=Decimal("30.00"),
+            monthly_fee=Decimal("15.00"),
+            supported_templates=("accounts-store", "digital-reseller", "reseller-hub", "hybrid-store"),
+            features=(
+                "Instant wholesale catalog sync and stock checking",
+                "Automated account credentials and activation fulfillment",
+                "Idempotent order placement and live wallet balance tracking",
+            ),
+            requirements=(
+                "VenteBot reseller API key (X-Reseller-Key)",
+                "Funded VenteBot wallet balance",
+            ),
+        ),
+        IntegrationOffering(
             key="custom-http-api",
             name="Custom OpenAPI / Generic HTTP Adapter",
             category="supplier_api",
