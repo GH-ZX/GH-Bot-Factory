@@ -8,22 +8,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from packages.commerce.models import Category, Product, ProductVariant
+from packages.core.config import settings
 from packages.marketplace.models import (
     CommercialQuote,
     DeploymentHandoff,
     HandoffStatus,
     LicenseType,
+    QuoteStatus,
 )
-from packages.payments.models import PaymentMethodConfig
-from packages.providers.models import Provider, ProviderCredential, ProviderProductMapping
+from packages.marketplace.tenant_bundle import FORMAT, BundleError, encrypt, snapshot, write_private
 from packages.saas.control_plane import append_platform_audit
 from packages.telegram.models import Bot
-from packages.telegram.secrets import SecretNotFoundError, get_default_secret_storage
-from packages.tenants.models import Membership, Tenant, User
+from packages.telegram.secrets import get_default_secret_storage
+from packages.tenants.models import Tenant
 
 
 class HandoffError(ValueError):
@@ -59,8 +59,8 @@ class DeploymentHandoffService:
 
         if quote_id:
             quote = await session.get(CommercialQuote, quote_id)
-            if not quote:
-                raise HandoffError(f"Commercial quote {quote_id} not found.")
+            if not quote or quote.tenant_id != tenant_id or quote.status != QuoteStatus.ACCEPTED:
+                raise HandoffError("Handoff requires an accepted quote belonging to this tenant.")
 
         license_key = cls.generate_license_key()
 
@@ -103,249 +103,51 @@ class DeploymentHandoffService:
         session: AsyncSession,
         *,
         handoff_id: uuid.UUID,
+        passphrase: str,
+        confirm_quiesced: bool = False,
         output_dir: Path | None = None,
         actor: str = "LOCAL_PLATFORM_TOKEN",
         ip_address: str | None = None,
     ) -> dict[str, Any]:
+        if not confirm_quiesced:
+            raise HandoffError("Pause source writes and workers before export, then confirm the source is quiesced.")
         handoff = await session.get(DeploymentHandoff, handoff_id)
-        if not handoff:
-            raise HandoffError(f"Deployment handoff {handoff_id} not found.")
-
-        tenant = await session.get(Tenant, handoff.tenant_id)
-        if not tenant:
-            raise HandoffError("Tenant record missing.")
-
-        # 1. Gather isolated tenant-scoped data
-        users = (
-            await session.execute(
-                select(User, Membership)
-                .join(Membership, Membership.user_id == User.id)
-                .where(Membership.tenant_id == tenant.id)
-            )
-        ).all()
-
-        bots = (
-            await session.execute(select(Bot).where(Bot.tenant_id == tenant.id))
-        ).scalars().all()
-
-        categories = (
-            await session.execute(select(Category).where(Category.tenant_id == tenant.id))
-        ).scalars().all()
-
-        products = (
-            await session.execute(select(Product).where(Product.tenant_id == tenant.id))
-        ).scalars().all()
-
-        variants = (
-            await session.execute(
-                select(ProductVariant)
-                .join(Product, Product.id == ProductVariant.product_id)
-                .where(Product.tenant_id == tenant.id)
-            )
-        ).scalars().all()
-
-        payments = (
-            await session.execute(
-                select(PaymentMethodConfig).where(PaymentMethodConfig.tenant_id == tenant.id)
-            )
-        ).scalars().all()
-
-        providers = (
-            await session.execute(select(Provider).where(Provider.tenant_id == tenant.id))
-        ).scalars().all()
-
-        mappings = (
-            await session.execute(
-                select(ProviderProductMapping).where(ProviderProductMapping.tenant_id == tenant.id)
-            )
-        ).scalars().all()
-
-        # Extract tenant credentials safely from SecretStorage
-        credentials = (
-            await session.execute(
-                select(ProviderCredential).where(ProviderCredential.tenant_id == tenant.id)
-            )
-        ).scalars().all()
-
-        secret_storage = get_default_secret_storage()
-        extracted_secrets: dict[str, str] = {}
-        for cred in credentials:
-            try:
-                secret_val = await secret_storage.get_secret(cred.secret_ref)
-                extracted_secrets[cred.credential_type] = secret_val
-            except (SecretNotFoundError, KeyError, OSError):
-                extracted_secrets[cred.credential_type] = "<UNCONFIGURED_IN_VAULT>"
-
-        # 2. Build sanitized bundle
-        bundle_data = {
-            "version": "ghbf-standalone-v1",
-            "license": {
-                "key": handoff.license_key,
-                "type": handoff.license_type.value,
-                "licensed_to": handoff.licensed_to,
-                "licensed_domain": handoff.licensed_domain,
-                "version_tag": handoff.version_tag,
-                "exported_at": datetime.now(UTC).isoformat(),
-            },
-            "tenant": {
-                "id": str(tenant.id),
-                "name": tenant.name,
-                "slug": tenant.slug,
-                "settings": tenant.settings,
-            },
-            "members": [
-                {
-                    "username": u.username,
-                    "first_name": u.first_name,
-                    "role": m.role.value,
-                    "permissions": m.permissions,
-                }
-                for u, m in users
-            ],
-            "bots": [
-                {
-                    "username": b.username,
-                    "display_name": b.display_name,
-                    "config": b.config,
-                    "token_secret_ref": b.token_secret_ref,
-                }
-                for b in bots
-            ],
-            "catalog": {
-                "categories": [
-                    {"id": str(c.id), "name": c.name, "slug": c.slug}
-                    for c in categories
-                ],
-                "products": [
-                    {"id": str(p.id), "title": p.title, "description": p.description, "category_id": str(p.category_id) if p.category_id else None}
-                    for p in products
-                ],
-                "variants": [
-                    {"id": str(v.id), "product_id": str(v.product_id), "sku": v.sku, "price": str(v.price), "currency": v.currency, "stock_quantity": v.stock_quantity}
-                    for v in variants
-                ],
-            },
-            "payments": [
-                {
-                    "code": m.code,
-                    "display_name": m.display_name,
-                    "method_type": m.method_type.value,
-                    "verification_mode": m.verification_mode.value,
-                    "is_enabled": m.is_enabled,
-                }
-                for m in payments
-            ],
-            "providers": [
-                {
-                    "name": pr.name,
-                    "category": pr.category.value,
-                    "provider_type": pr.provider_type,
-                    "priority": pr.priority,
-                    "is_enabled": pr.is_enabled,
-                }
-                for pr in providers
-            ],
-            "provider_credentials": extracted_secrets,
-            "product_mappings": [
-                {
-                    "product_id": str(pm.product_id),
-                    "external_product_id": pm.external_product_id,
-                    "cost_price": str(pm.cost_price),
-                    "cost_currency": pm.cost_currency,
-                }
-                for pm in mappings
-            ],
-        }
-
-        # 3. Serialize and compute checksum
-        raw_json = json.dumps(bundle_data, indent=2, sort_keys=True).encode("utf-8")
-        checksum = hashlib.sha256(raw_json).hexdigest()
-
-        # 4. Write artifact
-        root = output_dir or (Path(__file__).resolve().parents[2] / "artifacts" / "handoffs")
-        target_dir = root / f"{tenant.slug}-{str(handoff.id)[:8]}"
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        bundle_path = target_dir / "bundle.json"
-        bundle_path.write_bytes(raw_json)
-
-        manifest_path = target_dir / "manifest.json"
-        manifest_data = {
-            "format": "ghbf-single-tenant-handoff-v1",
-            "license_key": handoff.license_key,
-            "license_type": handoff.license_type.value,
-            "licensed_to": handoff.licensed_to,
-            "tenant_id": str(tenant.id),
-            "tenant_slug": tenant.slug,
-            "version_tag": handoff.version_tag,
-            "checksum_sha256": checksum,
-            "created_at": datetime.now(UTC).isoformat(),
-        }
-        manifest_path.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
-
-        # Write standalone compose template
-        compose_path = target_dir / "docker-compose.standalone.yml"
-        compose_path.write_text(
-            f"""# GH-Bot-Factory Standalone Single-Tenant Deployment
-# Licensed to: {handoff.licensed_to} ({handoff.license_key})
-services:
-  api:
-    image: gh-bot-factory:standalone-{handoff.version_tag}
-    ports:
-      - "8010:8010"
-    env_file: .env
-    depends_on:
-      - postgres
-      - redis
-  bot-runtime:
-    image: gh-bot-factory:standalone-{handoff.version_tag}
-    command: ["python", "-m", "apps.bot_runtime.main"]
-    env_file: .env
-    depends_on:
-      - postgres
-      - redis
-  postgres:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: bot_standalone
-      POSTGRES_USER: bot_user
-      POSTGRES_PASSWORD: ${{DB_PASSWORD:-change_me_securely}}
-  redis:
-    image: redis:7-alpine
-""",
-            encoding="utf-8",
-        )
-
-        # 5. Update handoff record
+        if not handoff or handoff.status == HandoffStatus.CANCELLED:
+            raise HandoffError("Deployment handoff is missing or cancelled.")
+        try:
+            async with AsyncSession(bind=session.bind) as snapshot_session:
+                if snapshot_session.bind.dialect.name == "postgresql":
+                    await snapshot_session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+                payload = await snapshot(snapshot_session, handoff.tenant_id, get_default_secret_storage())
+            payload["license"] = {"key": handoff.license_key, "type": handoff.license_type.value}
+            ciphertext = encrypt(payload, passphrase)
+        except BundleError as exc:
+            raise HandoffError(str(exc)) from exc
+        checksum = hashlib.sha256(ciphertext).hexdigest()
+        root = output_dir or Path(settings.handoff_export_dir)
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        target_dir = root / f"{handoff.id}-{uuid.uuid4().hex}"
+        target_dir.mkdir(mode=0o700)
+        bundle_path = target_dir / "tenant.ghbf.enc"
+        write_private(bundle_path, ciphertext)
+        write_private(target_dir / "manifest.json", json.dumps({
+            "format": FORMAT, "checksum_sha256": checksum,
+            "schema": payload["schema"], "tenant_id": payload["tenant_id"],
+            "row_counts": {name: len(rows) for name, rows in payload["tables"].items()},
+        }, indent=2).encode())
         handoff.status = HandoffStatus.EXPORTED
         handoff.export_checksum = checksum
         handoff.export_artifact_path = str(bundle_path)
-
         await append_platform_audit(
-            session,
-            action="handoff.bundle_generated",
-            resource_type="deployment_handoff",
-            resource_id=handoff.license_key,
-            tenant_id=tenant.id,
-            details={
-                "checksum_sha256": checksum,
-                "artifact_path": str(bundle_path),
-            },
-            ip_address=ip_address,
-            actor=actor,
+            session, action="handoff.bundle_generated", resource_type="deployment_handoff",
+            resource_id=handoff.license_key, tenant_id=handoff.tenant_id,
+            details={"checksum_sha256": checksum, "format": FORMAT},
+            ip_address=ip_address, actor=actor,
         )
-
         await session.commit()
-        await session.refresh(handoff)
-
-        return {
-            "handoff_id": str(handoff.id),
-            "license_key": handoff.license_key,
-            "tenant_slug": tenant.slug,
-            "checksum_sha256": checksum,
-            "artifact_dir": str(target_dir),
-            "bundle_file": str(bundle_path),
-        }
+        return {"handoff_id": str(handoff.id), "license_key": handoff.license_key,
+                "tenant_slug": payload["tables"]["tenants"][0]["slug"],
+                "checksum_sha256": checksum, "artifact_dir": str(target_dir), "bundle_file": str(bundle_path)}
 
     @classmethod
     async def deactivate_managed_runtime(
@@ -366,14 +168,17 @@ services:
         ).scalars().all()
 
         for bot in bots:
-            bot.is_enabled = False
-            bot.runtime_revision += 1
+            if bot.is_enabled:
+                bot.is_enabled = False
+                bot.runtime_revision += 1
 
         now = datetime.now(UTC)
         handoff.runtime_deactivated = True
         handoff.runtime_deactivated_at = now
-        handoff.status = HandoffStatus.HANDED_OFF
-        handoff.handed_off_at = now
+        # Desired-state disable is not proof of observed runtime stop or successful destination restore.
+        # Keep EXPORTED if an artifact exists; never claim completed handoff here.
+        if not handoff.export_artifact_path:
+            handoff.status = HandoffStatus.READY_FOR_EXPORT
 
         await append_platform_audit(
             session,

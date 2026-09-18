@@ -1002,13 +1002,13 @@ function renderSalesHandoffs() {
                 ${h.export_checksum ? `<span title="${escapeHtml(h.export_checksum)}">SHA-256: ${escapeHtml(h.export_checksum.slice(0, 10))}…</span>` : ""}
               </div>
               <div style="margin-top:6px">
-                ${isDeactivated ? `<span class="chip chip-ok">✓ Managed Runtime Deactivated (Safe for self-hosting)</span>` : `<span class="chip chip-warn">⚠️ Active on Managed Cluster (Deactivate before self-hosting)</span>`}
+                ${isDeactivated ? `<span class="chip chip-ok">Polling disable requested — verify runtime has stopped</span>` : `<span class="chip chip-warn">⚠️ Active on Managed Cluster (Deactivate before self-hosting)</span>`}
                 ${h.support_plan ? `<span class="chip">${escapeHtml(h.support_plan)}</span>` : ""}
               </div>
             </div>
             <div class="ops-actions">
               <button type="button" class="ghost" data-generate-bundle="${h.id}">📦 Generate Bundle</button>
-              ${!isDeactivated ? `<button type="button" class="danger" data-deactivate-runtime="${h.id}">🛑 Deactivate Runtime</button>` : `<span class="chip chip-ok">Handed Off</span>`}
+              ${!isDeactivated ? `<button type="button" class="danger" data-deactivate-runtime="${h.id}">🛑 Deactivate Runtime</button>` : `<span class="chip">Cutover verification pending</span>`}
             </div>
           </div>
         </article>
@@ -1017,28 +1017,49 @@ function renderSalesHandoffs() {
     .join("");
 }
 
-async function generateHandoffBundle(id) {
+function generateHandoffBundle(id) {
+  el("handoffExportForm").reset();
+  el("handoffExportId").value = id;
+  el("handoffExportStatus").textContent = "";
+  el("handoffExportDialog").showModal();
+}
+
+async function submitHandoffExport(event) {
+  event.preventDefault();
+  const id = el("handoffExportId").value;
+  const button = el("handoffExportSubmit");
+  button.disabled = true;
+  el("handoffExportStatus").textContent = "Encrypting customer snapshot…";
   try {
-    const res = await platformApi(`/api/v1/platform/sales/handoffs/${id}/generate-bundle`, { method: "POST" });
-    alert(
-      `Single-tenant bundle generated successfully!\n\n` +
-      `• License: ${res.license_key}\n` +
-      `• Checksum (SHA-256): ${res.checksum_sha256}\n` +
-      `• Artifact Directory: ${res.artifact_dir}\n` +
-      `• Bundle File: ${res.bundle_file}\n\n` +
-      `The bundle contains only tenant-scoped data and extracted SecretStorage credentials.`
-    );
+    await platformApi(`/api/v1/platform/sales/handoffs/${id}/generate-bundle`, {
+      method: "POST", body: JSON.stringify({
+        passphrase: el("handoffExportPassphrase").value,
+        confirm_quiesced: el("handoffQuiesced").checked,
+      }),
+    });
+    const response = await fetch(`/api/v1/platform/sales/handoffs/${id}/bundle`, {
+      headers: {"X-GHBF-Platform-Token": state.platformToken},
+    });
+    if (!response.ok) throw new Error("Download failed. The encrypted artifact remains available to the operator.");
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url; link.download = `tenant-${id}.ghbf.enc`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    el("handoffExportStatus").textContent = "Encrypted bundle downloaded. Validate its restore before customer cutover.";
     await loadSales();
   } catch (err) {
-    alert(err.message);
+    el("handoffExportStatus").textContent = err.message;
+  } finally {
+    el("handoffExportPassphrase").value = "";
+    button.disabled = false;
   }
 }
 
 async function deactivateHandoffRuntime(id) {
-  if (!confirm("Are you sure you want to deactivate the managed bot runtime? Telegram polling will immediately cease on this cluster so the customer can start their standalone VPS.")) return;
+  if (!confirm("Are you sure you want to deactivate the managed bot runtime? This requests a polling stop. Verify observed runtime shutdown before starting the destination.")) return;
   try {
     const res = await platformApi(`/api/v1/platform/sales/handoffs/${id}/deactivate-managed`, { method: "POST" });
-    alert(`Managed runtime for license ${res.license_key} deactivated successfully. Safe for standalone cutover.`);
+    alert(`Managed runtime for license ${res.license_key} disable requested. Verify runtime shutdown and destination restore before cutover.`);
     await loadSales();
   } catch (err) {
     alert(err.message);
@@ -1252,6 +1273,9 @@ async function saveOnboardTenant(event) {
 async function refreshCurrent(){ const active=document.querySelector(".nav.active")?.dataset.view; if(active==="plan") await loadSaas(); else if(active==="bots") await loadBots(); else if(active==="products") await Promise.all([loadCategories(),loadProducts()]); else if(active==="orders") await loadOrders(); else if(active==="fulfillment") await loadFulfillment(); else if(active==="providers") await loadProviderOps(); else if(active==="members") await loadMembers(); else if(active==="finance") await Promise.all([loadFinancialCases(),loadPaymentOperationsHealth()]); else if(active==="analytics") await loadAnalytics(); else if(active==="audit") await loadAuditLogs(0); else if(active==="reconciliation") await loadEvents(); else if(active==="sales") await loadSales(); else await loadBootstrap(); }
 
 function bind(){
+  el("handoffExportForm").addEventListener("submit", submitHandoffExport);
+  el("handoffExportCancel").addEventListener("click", () => el("handoffExportDialog").close());
+  el("handoffExportDialog").addEventListener("close", () => { el("handoffExportPassphrase").value = ""; });
   document.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".nav,.view").forEach(n=>n.classList.remove("active"));b.classList.add("active");el(`view-${b.dataset.view}`).classList.add("active");el("viewTitle").textContent=b.textContent;await refreshCurrent();}));
   el("refreshButton").addEventListener("click",refreshCurrent); el("newProduct").addEventListener("click",()=>openProduct()); el("productForm").addEventListener("submit",saveProduct);
   el("billingPortal").addEventListener("click",()=>openBillingPortal().catch(err=>alert(err.message)));el("billingCatalog").addEventListener("click",e=>{const price=e.target.closest("[data-billing-checkout]")?.dataset.billingCheckout;if(price)startBillingCheckout(price).catch(err=>alert(err.message));});

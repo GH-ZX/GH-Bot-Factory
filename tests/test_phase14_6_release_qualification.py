@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ from packages.marketplace.models import (
     LicenseType,
     QuoteStatus,
 )
+from packages.marketplace.tenant_bundle import decrypt
 from packages.providers.models import Provider, ProviderCategory, ProviderCredential
 from packages.telegram.models import Bot
 from packages.telegram.secrets import EnvSecretStorage
@@ -35,9 +37,10 @@ TEST_JWT_SECRET = "phase14-qual-jwt-secret-0123456789abcdef-0123456789abcdef"
 
 @pytest_asyncio.fixture
 async def qual_env(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> AsyncGenerator[dict[str, Any], None]:
     monkeypatch.setattr(settings, "platform_admin_token", TEST_PLATFORM_TOKEN)
+    monkeypatch.setattr(settings, "handoff_export_dir", str(tmp_path / "exports"))
     vault: dict[str, str] = {}
     storage = EnvSecretStorage(vault)
     monkeypatch.setattr("packages.providers.service.get_default_secret_storage", lambda: storage)
@@ -171,6 +174,7 @@ async def test_end_to_end_tenant_isolation_and_secret_safety_audit(
         token_secret_ref="ALPHA_BOT_TOKEN_REF",
         is_enabled=True,
     )
+    vault["ALPHA_BOT_TOKEN_REF"] = "test-alpha-token-value"
     session.add(bot_a)
     await session.commit()
 
@@ -183,16 +187,19 @@ async def test_end_to_end_tenant_isolation_and_secret_safety_audit(
     )
 
     bundle = await DeploymentHandoffService.generate_single_tenant_export_bundle(
-        session, handoff_id=handoff.id
+        session,
+        handoff_id=handoff.id,
+        passphrase="test-export-passphrase-only",
+        confirm_quiesced=True,
     )
 
     bundle_file = Path(bundle["bundle_file"])
-    bundle_text = bundle_file.read_text(encoding="utf-8")
+    payload = decrypt(bundle_file.read_bytes(), "test-export-passphrase-only")
+    bundle_text = json.dumps(payload)
     assert "tenant-alpha" in bundle_text
     assert "tenant-beta" not in bundle_text
     assert "Beta Secret Supplier" not in bundle_text
     assert "user_beta" not in bundle_text
-
     # 3. Secret leak audit: ensure no plaintext secret values stored in DB columns
     prov_cred = ProviderCredential(
         tenant_id=tenant_a.id,

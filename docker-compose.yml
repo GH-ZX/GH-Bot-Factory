@@ -17,6 +17,7 @@ x-app-common: &app-common
     - /tmp:size=64m,mode=1777
   volumes:
     - secret_store_data:/var/lib/ghbf/secret-store
+    - handoff_data:/var/lib/ghbf/handoffs
   restart: unless-stopped
   stop_grace_period: 30s
   security_opt:
@@ -110,3 +111,4 @@ volumes:
   postgres_data:
   redis_data:
   secret_store_data:
+  handoff_data:

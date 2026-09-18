@@ -3,13 +3,13 @@
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
 - **Last updated:** 2026-09-19
-- **Current phase:** Phase 14 — Reliable Owner Onboarding Repair
-- **Implementation status:** Phase 14 is complete across all sub-phases: Phase 14.0 Template Guidance & 4-tier actor model (ADR-039), Phase 14.1 Public Configurator on `botfac.gh-store.me/build/` with Server-Authoritative Quote Engine (ADR-040, apex `gh-store.me` untouched), Phase 14.2 Platform Sales Console & Immutable Quotes (ADR-041), Phase 14.3 Customer Onboarding & Setup Checklist (ADR-042), Phase 14.4 Integration & API Marketplace (ADR-043), Phase 14.5 Dedicated Deployment & Source License Handoff (ADR-044), and Phase 14.6 Commercial Governance & Release Qualification (ADR-045).
+- **Current phase:** Phase 14 — Reliable Owner Onboarding & Single-Tenant Portability Repair
+- **Implementation status:** Phase 14 is complete across all sub-phases and repairs: Phase 14.0 Template Guidance & 4-tier actor model (ADR-039), Phase 14.1 Public Configurator on `botfac.gh-store.me/build/` with Server-Authoritative Quote Engine (ADR-040, apex `gh-store.me` untouched), Phase 14.2 Platform Sales Console & Immutable Quotes (ADR-041), Phase 14.3 Customer Onboarding & Setup Checklist (ADR-042), Phase 14.4 Integration & API Marketplace (ADR-043), Phase 14.5 Dedicated Deployment & Source License Handoff (ADR-044), Phase 14.6 Commercial Governance & Release Qualification (ADR-045), Reliable Owner Onboarding Repair (ADR-046), and Encrypted Single-Tenant Portability & Destination Restore Repair (ADR-047).
 - **Current migration head:** `e5f6a8b9c1d2`
 - **Primary branch:** `main`
 - **Latest milestone commit:** `c8380506ebce65675f96aa19e34a6ef927a7c5c0` (`feat(phase14): deliver phase 14.5 dedicated deployment and source license handoff`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Canonical `make verify` passed: 435 fast tests, 14 PostgreSQL tests including concurrent onboarding, Ruff clean, Alembic no drift, and handoff/secret/JS/compile/dependency checks clean. Admin browser regression passed (direct entry, failed login recovery, reload, logout, mobile layout). Application deployment remains on the prior image.
+- **Verification:** Canonical `make verify` passed: 438 fast tests, 15 PostgreSQL tests including concurrent onboarding and isolated schema restore, Ruff clean, Alembic no drift, and handoff/secret/JS/compile/dependency checks clean. Application deployment remains on the prior image.
 - **Deployment:** The Compose application serves port 8010 on the server LAN address (`10.70.5.5:8010`), keeping port 8000 reserved for Portainer (Law 4). Cache-busted Admin assets (`v=20260918_06`), image rebuild (`gh-bot-factory:local`), and container restart (`api`, `worker`, `bot-runtime`) are verified live.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
@@ -165,6 +165,13 @@
    - Admin Sales Console KPI header grid displaying real-time commercial indicators.
    - Release qualification test suite `tests/test_phase14_6_release_qualification.py` verifying metrics accuracy, tenant isolation, and zero secret leakage.
    - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
+26. Encrypted Single-Tenant Portability & Destination Restore:
+   - ADR-047 defines the encrypted snapshot format (`ghbf-tenant-encrypted-v2`) via Scrypt KDF + Fernet cipher.
+   - Schema fingerprint binding with explicit `INCLUDED` and `EXCLUDED` table registry; cross-tenant foreign keys fail closed.
+   - Required secrets encapsulated inside the encrypted envelope; global user passwords/emails stripped while `token_version` is incremented.
+   - Source quiescence required before export (`confirm_quiesced: bool = True` / `--confirm-quiesced`) with PostgreSQL `REPEATABLE READ, READ ONLY` transaction isolation.
+   - Safe offline destination restore script (`scripts/import_tenant_bundle.py`) into empty migrated databases, secret vault injection, install state initialization, and environment URL resetting.
+   - Platform API endpoint `GET /api/v1/platform/sales/handoffs/{handoff_id}/bundle` for authenticated operator download with SHA-256 integrity verification.
 ## Current Trust Boundaries
 - Tenant/user identity always comes from `AuthenticatedPrincipal`; browser clients cannot choose authoritative tenant/user IDs.
 - Money mutates only through ledger services and PostgreSQL serialization/idempotency controls.
@@ -241,3 +248,8 @@ Removed the hard-coded sales username from the configurator and the default sett
 ### Phase 14 — Reliable Owner Onboarding Repair
 
 Accepted quotes now create tenants only for unused slugs, require operator-confirmed numeric owner Telegram IDs, and serialize same-quote onboarding with PostgreSQL row locks. Retries cannot add/promote owners or reactivate disabled identities. Removed synthetic users/bots and fake login-code fallback. Purpose-bound, five-minute single-use owner setup grants permit tenant Admin access without a bot and recheck quote linkage, OWNER membership, active identity, and token version. Redis failures roll back with HTTP 503. Real bots use the existing verified provisioning wizard; template intent carries into the wizard/checklist. Admin/CLI require the owner ID and support renewed setup links. ADR-046 documents the boundary; migration head unchanged. Canonical `make verify` passed: 435 fast tests, 14 PostgreSQL tests including concurrent onboarding, Ruff clean, Alembic no drift, and handoff/secret/JS/compile/dependency checks clean. Admin browser regression passed (direct entry, failed login recovery, reload, logout, mobile layout). No deployment or automatic legacy-row repair; export hardening and first-live-sale/release qualification remain outstanding.
+
+
+### Encrypted Single-Tenant Portability & Destination Restore Repair — 2026-09-19
+
+Replaced plaintext single-tenant export with encrypted snapshots (`ghbf-tenant-encrypted-v2`) via Scrypt KDF + Fernet cipher. Added strict schema fingerprint binding and comprehensive table registry (`INCLUDED` and `EXCLUDED`), rejecting cross-tenant foreign key references. Secrets required by tenant records are resolved from source `SecretStorage` and encrypted inside the envelope; global user auth credentials (hashed passwords/emails) are stripped on export while incrementing `token_version`. Implemented safe offline destination restore script (`scripts/import_tenant_bundle.py`) importing into empty migrated databases only, populating destination `SecretStorage` with unique namespaced references, initializing install state, resetting environment URLs, and disabling bots by default until explicit activation and confirmed source shutdown. Added platform bundle download endpoint (`GET /api/v1/platform/sales/handoffs/{id}/bundle`), `--confirm-quiesced` flag to CLI and Admin UI passphrase dialog, volume `handoff_data:/var/lib/ghbf/handoffs`, and updated status chips. ADR-047 documents the boundary; migration head unchanged at `e5f6a8b9c1d2`. Canonical `make verify` passed: Ruff clean, 438 fast tests, 15 PostgreSQL tests (including isolated schema restore), Alembic no drift, handoff/secret/JS/compile/dependency checks clean.

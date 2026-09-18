@@ -19,6 +19,7 @@ from packages.core.auth import AuthTokenService
 from packages.core.config import settings
 from packages.core.database import get_db_session
 from packages.marketplace.models import CommercialQuote, QuoteStatus
+from packages.marketplace.tenant_bundle import decrypt
 from packages.providers.models import Provider, ProviderCategory, ProviderCredential
 from packages.saas.models import PlatformAuditLog
 from packages.telegram.models import Bot
@@ -32,9 +33,10 @@ TEST_JWT_SECRET = "phase14-handoff-jwt-secret-0123456789abcdef-0123456789abcdef"
 
 @pytest_asyncio.fixture
 async def client_env(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> AsyncGenerator[dict[str, Any], None]:
     monkeypatch.setattr(settings, "platform_admin_token", TEST_PLATFORM_TOKEN)
+    monkeypatch.setattr(settings, "handoff_export_dir", str(tmp_path / "exports"))
     vault: dict[str, str] = {}
     storage = EnvSecretStorage(vault)
     monkeypatch.setattr("packages.providers.service.get_default_secret_storage", lambda: storage)
@@ -85,6 +87,7 @@ async def test_dedicated_deployment_handoff_and_runtime_deactivation(
         runtime_revision=1,
     )
     session.add(bot)
+    vault["DEDICATED_BOT_TOKEN_REF"] = "777666555:test-bot-token"
 
     category = Category(tenant_id=tenant.id, name="Digital Codes", slug="digital-codes", is_active=True)
     session.add(category)
@@ -181,29 +184,31 @@ async def test_dedicated_deployment_handoff_and_runtime_deactivation(
     res_bundle = await client.post(
         f"/api/v1/platform/sales/handoffs/{handoff_id}/generate-bundle",
         headers=platform_auth(),
+        json={"passphrase": "test-export-passphrase-only", "confirm_quiesced": True},
     )
     assert res_bundle.status_code == 200, res_bundle.text
     bundle_meta = res_bundle.json()
 
     bundle_file = Path(bundle_meta["bundle_file"])
     assert bundle_file.exists()
-    bundle_json = json.loads(bundle_file.read_text(encoding="utf-8"))
-
-    # Assert strict single-tenant isolation
-    assert bundle_json["tenant"]["slug"] == "dedicated-client"
+    raw = bundle_file.read_bytes()
+    assert b"super-secret-provider-key-999" not in raw
+    bundle_json = decrypt(raw, "test-export-passphrase-only")
+    rows = bundle_json["tables"]
+    assert rows["tenants"][0]["slug"] == "dedicated-client"
     assert "other-client" not in str(bundle_json)
     assert bundle_json["license"]["key"] == license_key
-    assert bundle_json["license"]["type"] == "SOURCE_LICENSE"
-    assert len(bundle_json["catalog"]["products"]) == 1
-    assert bundle_json["catalog"]["products"][0]["title"] == "Pro License"
-    assert bundle_json["provider_credentials"]["API_KEY"] == "super-secret-provider-key-999"
-
-    # Verify manifest and standalone compose file
+    assert rows["products"][0]["title"] == "Pro License"
+    assert bundle_json["secrets"][secret_ref] == "super-secret-provider-key-999"
     target_dir = Path(bundle_meta["artifact_dir"])
-    manifest = json.loads((target_dir / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["license_key"] == license_key
+    manifest = json.loads((target_dir / "manifest.json").read_text())
     assert manifest["checksum_sha256"] == bundle_meta["checksum_sha256"]
-    assert (target_dir / "docker-compose.standalone.yml").exists()
+    assert bundle_file.stat().st_mode & 0o777 == 0o600
+    download = await client.get(f"/api/v1/platform/sales/handoffs/{handoff_id}/bundle", headers=platform_auth())
+    assert download.content == raw
+    assert download.headers["cache-control"] == "no-store"
+    forbidden = await client.get(f"/api/v1/platform/sales/handoffs/{handoff_id}/bundle")
+    assert forbidden.status_code in {401, 403}
 
     # 4. Deactivate Managed Runtime before customer cutover
     res_deact = await client.post(
@@ -213,8 +218,8 @@ async def test_dedicated_deployment_handoff_and_runtime_deactivation(
     assert res_deact.status_code == 200, res_deact.text
     deact_data = res_deact.json()
     assert deact_data["runtime_deactivated"] is True
-    assert deact_data["status"] == "HANDED_OFF"
-    assert deact_data["handed_off_at"] is not None
+    assert deact_data["status"] == "EXPORTED"
+    assert deact_data["handed_off_at"] is None
 
     # Verify bot was disabled on managed factory
     await session.refresh(bot)

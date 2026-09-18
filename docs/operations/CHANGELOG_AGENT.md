@@ -494,3 +494,15 @@ Removed the hard-coded sales username from the configurator and the default sett
 ### Phase 14 — Reliable Owner Onboarding Repair
 
 Accepted quotes now create tenants only for unused slugs, require operator-confirmed numeric owner Telegram IDs, and serialize same-quote onboarding with PostgreSQL row locks. Retries cannot add/promote owners or reactivate disabled identities. Removed synthetic users/bots and fake login-code fallback. Purpose-bound, five-minute single-use owner setup grants permit tenant Admin access without a bot and recheck quote linkage, OWNER membership, active identity, and token version. Redis failures roll back with HTTP 503. Real bots use the existing verified provisioning wizard; template intent carries into the wizard/checklist. Admin/CLI require the owner ID and support renewed setup links. ADR-046 documents the boundary; migration head unchanged. Canonical `make verify` passed: 435 fast tests, 14 PostgreSQL tests including concurrent onboarding, Ruff clean, Alembic no drift, and handoff/secret/JS/compile/dependency checks clean. Admin browser regression passed (direct entry, failed login recovery, reload, logout, mobile layout). No deployment or automatic legacy-row repair; export hardening and first-live-sale/release qualification remain outstanding.
+
+
+## 2026-09-19 — Phase 14 — Reliable Owner Onboarding & Single-Tenant Portability Repair
+
+- Replaced plaintext single-tenant export with encrypted snapshots (`ghbf-tenant-encrypted-v2`) using Scrypt KDF + Fernet cipher.
+- Enforced schema fingerprint binding and comprehensive table registry (`INCLUDED` and `EXCLUDED`); cross-tenant foreign keys fail closed.
+- Encapsulated required secrets inside the encrypted envelope; stripped global user passwords/emails while incrementing `token_version`.
+- Required source quiescence confirmation (`confirm_quiesced: bool = True` / `--confirm-quiesced`) with PostgreSQL `REPEATABLE READ, READ ONLY` transaction isolation.
+- Created offline destination restore script (`scripts/import_tenant_bundle.py`) into empty migrated databases only, populating destination `SecretStorage` with unique namespaced references, initializing install state, resetting environment URLs, and disabling bots by default until explicit activation and confirmed source shutdown.
+- Added platform API bundle download endpoint (`GET /api/v1/platform/sales/handoffs/{id}/bundle`), `--confirm-quiesced` CLI flag, Admin UI passphrase export dialog, and volume `handoff_data:/var/lib/ghbf/handoffs`.
+- Added ADR-047 (`docs/decisions/ADR-047-encrypted-single-tenant-portability-and-offline-restore.md`).
+- Canonical verification: Ruff clean, 438 fast tests passed, 15 PostgreSQL tests (including isolated schema restore), Alembic no drift, handoff/secret/JS/compile/dependency checks clean.

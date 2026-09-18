@@ -1787,3 +1787,40 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
 > what were u gonna do, do
 
 **Scope:** Resume the previously proposed onboarding-first repair milestone after the configurable Telegram contact fix. Implement tenant/owner identity safety, real single-use owner setup grants without a synthetic bot, rollback on grant failure, template continuity, Admin/CLI updates, regression and PostgreSQL concurrency coverage. See ADR-046 and CURRENT_STATE. Canonical `make verify` passed: 435 fast tests, 14 PostgreSQL tests including concurrent onboarding, Ruff clean, Alembic no drift, and handoff/secret/JS/compile/dependency checks clean. Admin browser regression passed (direct entry, failed login recovery, reload, logout, mobile layout). Broader export/staging work remains outstanding.
+
+
+## Post-Onboarding Priority Advisory — 2026-09-19
+
+**User prompt (verbatim):**
+
+> any suggestions ?
+
+**Recommendation:** Repair secret-bearing deployment exports and prove isolated restore before offering customer handoff; deploy the verified contact/onboarding fixes through the operator-owned release workflow; qualify one complete customer journey through first sale and failure recovery. Focus UI polish on observed friction. This is advisory work only; no new runtime implementation, deployment, or verification claim.
+
+
+## Encrypted Single-Tenant Portability & Destination Restore Repair — 2026-09-19
+
+**User prompt (verbatim):**
+
+> resume what codex was doing
+
+**Scope & Implementation:**
+
+Resumed and completed the deployment export and isolated restore repair initiated by Codex:
+1. **Encrypted Snapshot Envelope (`packages/marketplace/tenant_bundle.py`):**
+   - Replaced plaintext exports with `ghbf-tenant-encrypted-v2` encrypted snapshots using Scrypt KDF + Fernet cipher.
+   - Enforced strict schema fingerprint binding and complete table classification (`INCLUDED` and `EXCLUDED`).
+   - Validated single-tenant isolation: verified all rows belong to the target tenant, rejected cross-tenant foreign key references.
+   - Resolved required secrets from source `SecretStorage` and encrypted them inside the envelope; stripped global user passwords/emails while incrementing `token_version`.
+2. **Offline Destination Restore (`scripts/import_tenant_bundle.py`):**
+   - Created safe CLI restore script importing into empty, migrated database schemas only.
+   - Decrypts and injects secrets into destination `SecretStorage` with rollback cleanup on error.
+   - Initializes `system_install_state`, resets environment-owned URLs (`admin_public_url`, `miniapp_public_url`), and keeps bots disabled until explicit `--activate` and `--confirm-source-stopped`.
+3. **Platform Sales API, CLI, and Admin Console Updates:**
+   - `apps/api/v1/platform_sales.py`: Updated `POST /handoffs/{id}/generate-bundle` to require passphrase and quiescence confirmation; added `GET /handoffs/{id}/bundle` for authenticated operator artifact download with SHA-256 integrity checks.
+   - `scripts/platformctl.py`: Updated `handoff-bundle` with `--confirm-quiesced` and interactive passphrase prompt.
+   - `apps/admin/static/app.js` & `index.html`: Added modal `#handoffExportDialog` for passphrase entry, quiescence confirmation, and direct browser download of `tenant-{id}.ghbf.enc`. Clarified runtime deactivation status chips.
+   - `packages/core/config.py`, `Dockerfile`, `docker-compose.yml`: Added `HANDOFF_EXPORT_DIR` configuration and persistent volume `handoff_data:/var/lib/ghbf/handoffs`.
+4. **Verification:**
+   - Unit and integration test coverage: `tests/test_tenant_bundle.py` (encrypted roundtrip, tampering/cross-tenant rejection, vault rollback, CLI arg validation), `tests/postgres/test_tenant_restore.py` (isolated PostgreSQL schema restore), and updated `tests/test_phase14_5_deployment_handoff.py` and `tests/test_phase14_6_release_qualification.py`.
+   - Canonical `make verify` passed: Ruff clean, 438 fast tests passed, 15 PostgreSQL concurrency/restore tests passed, Alembic no drift, JS syntax clean.

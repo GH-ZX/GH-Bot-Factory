@@ -9,6 +9,7 @@ operation without exposing a platform administration UI publicly.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import sys
 import urllib.error
@@ -184,6 +185,7 @@ def parser() -> argparse.ArgumentParser:
 
     handoff_bundle = sub.add_parser("handoff-bundle")
     handoff_bundle.add_argument("--id", required=True)
+    handoff_bundle.add_argument("--confirm-quiesced", action="store_true", required=True)
 
     handoff_deact = sub.add_parser("handoff-deactivate")
     handoff_deact.add_argument("--id", required=True)
@@ -365,7 +367,7 @@ def main() -> None:
         }
         result = request_json("POST", f"/sales/tenants/{args.tenant}/handoffs", token=token, port=port, payload=payload)
     elif args.command == "handoff-bundle":
-        result = request_json("POST", f"/sales/handoffs/{args.id}/generate-bundle", token=token, port=port)
+        result = request_json("POST", f"/sales/handoffs/{args.id}/generate-bundle", token=token, port=port, payload={"passphrase": getpass.getpass("Export passphrase (16+ characters): "), "confirm_quiesced": args.confirm_quiesced})
     elif args.command == "handoff-deactivate":
         result = request_json("POST", f"/sales/handoffs/{args.id}/deactivate-managed", token=token, port=port)
     elif args.command == "sales-metrics":

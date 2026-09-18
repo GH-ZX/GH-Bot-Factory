@@ -23,7 +23,7 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
     APP_HOME=/app
 RUN groupadd --gid 10001 ghbf && useradd --uid 10001 --gid ghbf --create-home --shell /usr/sbin/nologin ghbf \
-    && mkdir -p /var/lib/ghbf/secret-store \
+    && mkdir -p /var/lib/ghbf/secret-store /var/lib/ghbf/handoffs \
     && chown -R ghbf:ghbf /var/lib/ghbf
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv

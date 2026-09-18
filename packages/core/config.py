@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     miniapp_public_url: str | None = Field(default=None, alias="MINIAPP_PUBLIC_URL")
     admin_public_url: str | None = Field(default=None, alias="ADMIN_PUBLIC_URL")
     miniapp_menu_text: str = Field(default="Open Store", alias="MINIAPP_MENU_TEXT")
+    handoff_export_dir: str = Field(default="/var/lib/ghbf/handoffs", alias="HANDOFF_EXPORT_DIR")
     owner_telegram_handle: str = Field(default="", alias="OWNER_TELEGRAM_HANDLE")
     bot_runtime_reconcile_seconds: float = Field(default=5.0, alias="BOT_RUNTIME_RECONCILE_SECONDS", ge=1.0, le=300.0)
     bot_runtime_release_channels: str = Field(default="STABLE,CANARY", alias="BOT_RUNTIME_RELEASE_CHANNELS")

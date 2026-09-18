@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field, SecretStr
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -193,6 +196,11 @@ class DeploymentHandoffResponse(BaseModel):
     handoff_notes: str | None
     handed_off_at: datetime | None
     created_at: datetime
+
+
+class GenerateBundleRequest(BaseModel):
+    passphrase: SecretStr = Field(min_length=16, max_length=1024)
+    confirm_quiesced: bool = False
 
 
 class GenerateBundleResponse(BaseModel):
@@ -960,6 +968,7 @@ async def create_deployment_handoff(
 @router.post("/handoffs/{handoff_id}/generate-bundle", response_model=GenerateBundleResponse)
 async def generate_handoff_bundle(
     handoff_id: uuid.UUID,
+    payload: GenerateBundleRequest,
     request: Request,
     operator: PlatformOperator = Depends(require_platform_operator),
     session: AsyncSession = Depends(get_db_session),
@@ -967,6 +976,8 @@ async def generate_handoff_bundle(
     try:
         data = await DeploymentHandoffService.generate_single_tenant_export_bundle(
             session,
+            passphrase=payload.passphrase.get_secret_value(),
+            confirm_quiesced=payload.confirm_quiesced,
             handoff_id=handoff_id,
             actor=operator.actor,
             ip_address=_client_ip(request),
@@ -1020,3 +1031,23 @@ async def get_commercial_governance_metrics(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     return await CommercialGovernanceService.collect_metrics(session)
+
+
+@router.get("/handoffs/{handoff_id}/bundle")
+async def download_handoff_bundle(
+    handoff_id: uuid.UUID,
+    _: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+):
+    from packages.core.config import settings
+
+    handoff = await session.get(DeploymentHandoff, handoff_id)
+    if not handoff or not handoff.export_artifact_path:
+        raise HTTPException(status_code=404, detail="No encrypted bundle is available.")
+    path = Path(handoff.export_artifact_path).resolve()
+    root = Path(settings.handoff_export_dir).resolve()
+    if root not in path.parents or path.name != "tenant.ghbf.enc" or not path.is_file():
+        raise HTTPException(status_code=404, detail="Encrypted artifact is unavailable; generate a new bundle.")
+    if hashlib.sha256(path.read_bytes()).hexdigest() != handoff.export_checksum:
+        raise HTTPException(status_code=409, detail="Artifact integrity check failed; generate a new bundle.")
+    return FileResponse(path, filename=f"tenant-{handoff_id}.ghbf.enc", media_type="application/octet-stream", headers={"Cache-Control": "no-store"})
