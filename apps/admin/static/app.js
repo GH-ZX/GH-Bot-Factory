@@ -1275,6 +1275,7 @@ async function refreshCurrent(){ const active=document.querySelector(".nav.activ
 function bind(){
   el("handoffExportForm").addEventListener("submit", submitHandoffExport);
   el("handoffExportCancel").addEventListener("click", () => el("handoffExportDialog").close());
+  document.querySelectorAll("[data-close-handoff-export]").forEach((b) => b.addEventListener("click", () => el("handoffExportDialog").close()));
   el("handoffExportDialog").addEventListener("close", () => { el("handoffExportPassphrase").value = ""; });
   document.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".nav,.view").forEach(n=>n.classList.remove("active"));b.classList.add("active");el(`view-${b.dataset.view}`).classList.add("active");el("viewTitle").textContent=b.textContent;await refreshCurrent();}));
   el("refreshButton").addEventListener("click",refreshCurrent); el("newProduct").addEventListener("click",()=>openProduct()); el("productForm").addEventListener("submit",saveProduct);

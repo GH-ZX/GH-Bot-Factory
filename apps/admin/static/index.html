@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css?v=20260919_03">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260919_04">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -507,16 +507,31 @@ orders:read"></textarea></label>
   </dialog>
   <dialog id="handoffExportDialog">
     <form id="handoffExportForm">
-      <h2>Export customer installation</h2>
-      <p>Pause source traffic and workers first. The encrypted file includes customer records and credentials.</p>
+      <div class="dialog-head">
+        <div>
+          <small class="eyebrow">DEPLOYMENT HANDOFF</small>
+          <h2>Export Customer Installation</h2>
+        </div>
+        <button type="button" class="icon" data-close-handoff-export aria-label="Close">×</button>
+      </div>
+      <p class="muted" style="margin-top:10px;line-height:1.5;">Pause source traffic and workers first. The encrypted bundle includes customer records and credentials.</p>
       <input id="handoffExportId" type="hidden">
-      <label>Export passphrase<input id="handoffExportPassphrase" type="password" minlength="16" maxlength="1024" autocomplete="new-password" required></label>
-      <label><input id="handoffQuiesced" type="checkbox" required> Source writes and workers are paused for this snapshot.</label>
-      <p>Keep the passphrase separately. It is required to restore the customer installation.</p>
-      <p id="handoffExportStatus" role="status"></p>
-      <div class="dialog-actions"><button type="button" id="handoffExportCancel" class="ghost">Cancel</button><button id="handoffExportSubmit" type="submit" class="primary">Encrypt and download</button></div>
+      <label>
+        Export Passphrase
+        <input id="handoffExportPassphrase" type="password" minlength="16" maxlength="1024" autocomplete="new-password" placeholder="Min 16 characters" required>
+      </label>
+      <label class="check" style="margin:14px 0;display:flex;align-items:center;gap:10px;cursor:pointer;">
+        <input id="handoffQuiesced" type="checkbox" required style="width:auto;min-height:auto;cursor:pointer;">
+        <span>Source writes and workers are paused for this snapshot.</span>
+      </label>
+      <p class="muted" style="font-size:12px;line-height:1.5;">Keep the passphrase safe. It is required to restore the customer installation into an empty destination database.</p>
+      <p id="handoffExportStatus" role="status" style="margin-top:10px;font-size:13px;min-height:18px;"></p>
+      <div class="dialog-actions">
+        <button type="button" id="handoffExportCancel" class="ghost">Cancel</button>
+        <button id="handoffExportSubmit" type="submit" class="primary">Encrypt &amp; Download</button>
+      </div>
     </form>
   </dialog>
-  <script src="/admin/app.js?v=20260919_03" defer></script>
+  <script src="/admin/app.js?v=20260919_04" defer></script>
 </body>
 </html>
