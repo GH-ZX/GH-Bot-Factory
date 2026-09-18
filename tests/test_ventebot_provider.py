@@ -257,3 +257,53 @@ async def test_ventebot_live_openapi_connectivity():
         assert "/api/reseller/me" in data.get("paths", {})
         assert "/api/reseller/orders" in data.get("paths", {})
         assert "/api/reseller/products" in data.get("paths", {})
+
+
+async def test_ventebot_multilingual_products():
+    captured_requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_requests.append({
+            "accept_lang": request.headers.get("accept-language"),
+            "query_lang": request.url.params.get("lang"),
+        })
+        lang = request.url.params.get("lang")
+        desc = "وصف باللغة العربية" if lang == "ar" else "Description in English"
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "products": [
+                    {
+                        "id": 101,
+                        "name": "Test Product",
+                        "description": desc,
+                        "price_usd": 5.0,
+                        "stock": 10,
+                    }
+                ],
+            },
+        )
+
+    client = create_client(transport=httpx.MockTransport(handler))
+
+    # 1. Fetch in Arabic
+    ar_prods = await client.list_products(lang="ar")
+    assert len(ar_prods) == 1
+    assert ar_prods[0].description == "وصف باللغة العربية"
+    assert captured_requests[-1]["accept_lang"] == "ar"
+    assert captured_requests[-1]["query_lang"] == "ar"
+
+    # 2. Fetch in English
+    en_prods = await client.list_products(lang="en")
+    assert len(en_prods) == 1
+    assert en_prods[0].description == "Description in English"
+    assert captured_requests[-1]["accept_lang"] == "en"
+    assert captured_requests[-1]["query_lang"] == "en"
+
+    # 3. Multilingual catalog
+    multi = await client.get_multilingual_catalog(languages=("en", "ar"))
+    assert "en" in multi
+    assert "ar" in multi
+    assert multi["ar"][0].description == "وصف باللغة العربية"
+    assert multi["en"][0].description == "Description in English"

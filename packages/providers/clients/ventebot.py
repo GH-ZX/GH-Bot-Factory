@@ -59,12 +59,15 @@ class VenteBotClient(BaseProviderClient):
             raise ProviderConfigurationError("VenteBot requires an 'API_KEY' credential.")
         self.api_key = str(api_key).strip()
         self.timeout_seconds = float(self.config.get("timeout_seconds") or 15.0)
+        self.default_lang = str(self.config.get("lang") or "en").strip().lower()
 
-    def _headers(self) -> dict[str, str]:
+    def _headers(self, lang: str | None = None) -> dict[str, str]:
+        selected_lang = (lang or self.default_lang).strip().lower()
         return {
             "User-Agent": "GH-Bot-Factory/1.0",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "Accept-Language": selected_lang,
             "X-Reseller-Key": self.api_key,
         }
 
@@ -75,6 +78,7 @@ class VenteBotClient(BaseProviderClient):
         *,
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
+        lang: str | None = None,
     ) -> dict[str, Any]:
         hostname = urlsplit(self.base_url).hostname
         assert hostname is not None
@@ -93,7 +97,7 @@ class VenteBotClient(BaseProviderClient):
             ) as client, client.stream(
                 method.upper(),
                 url,
-                headers=self._headers(),
+                headers=self._headers(lang=lang),
                 params=params,
                 json=json_data,
             ) as response:
@@ -157,8 +161,9 @@ class VenteBotClient(BaseProviderClient):
             currency="USD",
         )
 
-    async def list_products(self) -> list[ProviderProductDTO]:
-        data = await self._request("GET", "/api/reseller/products")
+    async def list_products(self, lang: str | None = None) -> list[ProviderProductDTO]:
+        target_lang = (lang or self.default_lang).strip().lower()
+        data = await self._request("GET", "/api/reseller/products", params={"lang": target_lang}, lang=target_lang)
         raw_products = data.get("products")
         if not isinstance(raw_products, list):
             raise ProviderError("VenteBot catalog did not return a products list.")
@@ -173,6 +178,7 @@ class VenteBotClient(BaseProviderClient):
                 continue
             cost = Decimal(str(item.get("price_usd") or "0.00"))
             stock = item.get("stock")
+            description = str(item.get("description") or "").strip()
             results.append(
                 ProviderProductDTO(
                     external_id=pid,
@@ -181,16 +187,26 @@ class VenteBotClient(BaseProviderClient):
                     currency="USD",
                     is_available=True,
                     stock=int(stock) if isinstance(stock, int) else None,
+                    description=description,
                 )
             )
         return results
 
-    async def get_product(self, external_id: str) -> ProviderProductDTO:
-        products = await self.list_products()
+    async def get_product(self, external_id: str, lang: str | None = None) -> ProviderProductDTO:
+        products = await self.list_products(lang=lang)
         for p in products:
             if p.external_id == str(external_id).strip():
                 return p
         raise ProviderProductUnavailableError(f"VenteBot product '{external_id}' not found.")
+
+    async def get_multilingual_catalog(
+        self, languages: tuple[str, ...] = ("en", "ar")
+    ) -> dict[str, list[ProviderProductDTO]]:
+        """Fetch catalog across multiple languages (e.g. English and Arabic)."""
+        results: dict[str, list[ProviderProductDTO]] = {}
+        for language in languages:
+            results[language] = await self.list_products(lang=language)
+        return results
 
     def _extract_delivery_artifacts(self, order_data: dict[str, Any]) -> tuple[ProviderDeliveryArtifact, ...]:
         artifacts: list[ProviderDeliveryArtifact] = []

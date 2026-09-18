@@ -34,6 +34,7 @@ class ProviderProductDTO:
     max_quantity: int = 100000
     price: Decimal | None = None
     stock: int | None = None
+    description: str = ""
 
     def __post_init__(self) -> None:
         if self.price is not None and self.cost == Decimal("0.00"):

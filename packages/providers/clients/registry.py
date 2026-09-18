@@ -172,6 +172,13 @@ class ProviderClientRegistry:
                         required=False,
                         description="Base URL for the VenteBot reseller API.",
                     ),
+                    ProviderConfigFieldSpec(
+                        key="lang",
+                        label="Catalog Language",
+                        default="en",
+                        required=False,
+                        description="Default language for product descriptions (e.g. 'ar' for Arabic, 'en' for English).",
+                    ),
                 ),
                 driver_family="ventebot",
                 docs_url="https://ventetelegrambotrailway-production.up.railway.app/api/swagger/",
