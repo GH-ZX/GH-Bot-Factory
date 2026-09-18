@@ -42,7 +42,7 @@ _INTEGRATIONS: dict[str, IntegrationOffering] = {
             key="numbers-sms",
             name="Virtual Numbers & SMS Activation",
             category="supplier_api",
-            description="Automated number reservations and real-time SMS activation codes via 5sim / SMS-Activate.",
+            description="Automated number reservations and real-time SMS activation codes via Spider Service, 5sim, or SMS-Activate.",
             setup_fee=Decimal("30.00"),
             monthly_fee=Decimal("15.00"),
             supported_templates=("numbers-sms", "reseller-hub", "hybrid-store"),
@@ -54,6 +54,24 @@ _INTEGRATIONS: dict[str, IntegrationOffering] = {
             requirements=(
                 "Customer's own supplier API key",
                 "Funded supplier balance",
+            ),
+        ),
+        IntegrationOffering(
+            key="spider-service",
+            name="Spider Service (Virtual Numbers & SMS)",
+            category="supplier_api",
+            description="Automated numbers and SMS activation codes via api.spider-service.com with real-time code polling.",
+            setup_fee=Decimal("30.00"),
+            monthly_fee=Decimal("15.00"),
+            supported_templates=("numbers-sms", "reseller-hub", "hybrid-store"),
+            features=(
+                "Real-time SMS code retrieval (getCode)",
+                "Instant multi-country number reservation (getNumber)",
+                "Live wallet balance tracking (getBalance)",
+            ),
+            requirements=(
+                "Spider Service API key (apiKay)",
+                "Funded Spider Service balance",
             ),
         ),
         IntegrationOffering(

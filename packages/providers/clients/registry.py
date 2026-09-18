@@ -11,6 +11,7 @@ from packages.providers.catalog import (
 from packages.providers.clients.base import BaseProviderClient
 from packages.providers.clients.example_digital import ExampleDigitalCodesProvider
 from packages.providers.clients.mock import MockProvider
+from packages.providers.clients.spider_service import SpiderServiceClient
 from packages.providers.clients.ventebot import VenteBotClient
 from packages.providers.exceptions import ProviderConfigurationError, ProviderError
 from packages.providers.http_generic import (
@@ -182,6 +183,66 @@ class ProviderClientRegistry:
                 ),
                 driver_family="ventebot",
                 docs_url="https://ventetelegrambotrailway-production.up.railway.app/api/swagger/",
+            ),
+        )
+        self.register_type(
+            "SPIDER_SERVICE",
+            lambda name, cfg: SpiderServiceClient(provider_name=name, config=cfg),
+            definition=ProviderDefinition(
+                key="SPIDER_SERVICE",
+                display_name="Spider Service (SMS & Virtual Numbers)",
+                description=(
+                    "Virtual numbers and automated SMS code activations via Spider Service API (api.spider-service.com)."
+                ),
+                categories=(
+                    ProviderCategory.NUMBER,
+                    ProviderCategory.SERVICE,
+                ),
+                capabilities=(
+                    ProviderCapability.HEALTH,
+                    ProviderCapability.BALANCE,
+                    ProviderCapability.CATALOG,
+                    ProviderCapability.PRODUCT_DETAIL,
+                    ProviderCapability.CREATE_ORDER,
+                    ProviderCapability.ORDER_STATUS,
+                    ProviderCapability.POLLING,
+                    ProviderCapability.NUMBER_COUNTRIES,
+                    ProviderCapability.NUMBER_RESERVE,
+                    ProviderCapability.NUMBER_ACTIVATION,
+                ),
+                category_capabilities={
+                    ProviderCategory.NUMBER: (
+                        ProviderCapability.HEALTH,
+                        ProviderCapability.BALANCE,
+                        ProviderCapability.CATALOG,
+                        ProviderCapability.PRODUCT_DETAIL,
+                        ProviderCapability.CREATE_ORDER,
+                        ProviderCapability.ORDER_STATUS,
+                        ProviderCapability.POLLING,
+                        ProviderCapability.NUMBER_COUNTRIES,
+                        ProviderCapability.NUMBER_RESERVE,
+                        ProviderCapability.NUMBER_ACTIVATION,
+                    )
+                },
+                credentials=(
+                    ProviderCredentialSpec(
+                        key="API_KEY",
+                        label="Spider Service API Key (apiKay)",
+                        required=True,
+                        description="API key obtained via the Spider Service Telegram bot main menu.",
+                    ),
+                ),
+                config_fields=(
+                    ProviderConfigFieldSpec(
+                        key="base_url",
+                        label="Spider Service API Base URL",
+                        default="https://api.spider-service.com",
+                        required=False,
+                        description="Base URL for Spider Service API.",
+                    ),
+                ),
+                driver_family="spider_service",
+                docs_url="https://www.spider-service.com/",
             ),
         )
 

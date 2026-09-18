@@ -148,7 +148,7 @@ class VenteBotClient(BaseProviderClient):
         except (ProviderError, httpx.HTTPError, OSError, ValueError) as exc:
             elapsed = (asyncio.get_running_loop().time() - started) * 1000
             return ProviderHealthResult(
-                status=ProviderHealthStatus.UNHEALTHY,
+                status=ProviderHealthStatus.UNAVAILABLE,
                 latency_ms=elapsed,
                 message=str(exc)[:500],
             )

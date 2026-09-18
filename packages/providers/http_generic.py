@@ -132,6 +132,8 @@ class HttpResponseMapping(BaseModel):
     fields: dict[str, str] = Field(default_factory=dict)
     status_map: dict[str, str] = Field(default_factory=dict)
     delivery: list[HttpDeliveryMapping] = Field(default_factory=list)
+    error_field: str | None = Field(default=None, max_length=120)
+    success_field: str | None = Field(default=None, max_length=120)
 
     @field_validator("fields", "status_map")
     @classmethod
@@ -620,11 +622,13 @@ class GenericHttpProvider(BaseProviderClient):
 
         url = f"{self.mapping.base_url}{path}"
         timeout = httpx.Timeout(self.mapping.timeout_seconds)
+        transport = self.config.get("transport")
         try:
             async with httpx.AsyncClient(
                 timeout=timeout,
                 follow_redirects=False,
                 trust_env=False,
+                transport=transport,
             ) as client, client.stream(
                 operation.method,
                 url,
@@ -646,9 +650,31 @@ class GenericHttpProvider(BaseProviderClient):
         if not payload:
             return {}, operation
         try:
-            return json.loads(payload), operation
+            data = json.loads(payload)
         except json.JSONDecodeError as exc:
             raise ProviderError("Generic HTTP provider returned invalid JSON.") from exc
+
+        resp_mapping = operation.response
+        if isinstance(data, dict):
+            error_val = None
+            if resp_mapping.error_field:
+                error_val = _select(data, resp_mapping.error_field)
+            if resp_mapping.success_field:
+                is_ok = _select(data, resp_mapping.success_field)
+                if is_ok is False and not error_val:
+                    error_val = _select(data, "error") or _select(data, "msg") or "Operation returned unsuccessful status."
+            if error_val:
+                error_str = str(error_val).strip()
+                upper = error_str.upper()
+                if any(k in upper for k in ("BAD_KEY", "NO_KEY", "INVALID_KEY", "UNAUTHORIZED", "AUTH")):
+                    raise ProviderAuthenticationError(f"Provider rejected authentication: {error_str}")
+                if any(k in upper for k in ("NO_BALANCE", "LOW_BALANCE", "INSUFFICIENT_BALANCE")):
+                    raise ProviderInsufficientBalanceError(f"Provider reported insufficient balance: {error_str}")
+                if any(k in upper for k in ("NO_NUMBER", "NOT_FOUND", "UNAVAILABLE")):
+                    raise ProviderProductUnavailableError(f"Provider resource unavailable: {error_str}")
+                raise ProviderError(f"Provider error: {error_str}")
+
+        return data, operation
 
     async def _bounded_body(self, response: httpx.Response) -> bytes:
         declared = response.headers.get("content-length")
@@ -704,7 +730,15 @@ class GenericHttpProvider(BaseProviderClient):
                 "Generic HTTP adapter requires HEALTH, BALANCE, or CATALOG for connection testing."
             )
         started = asyncio.get_running_loop().time()
-        data, operation = await self._request_json(probe)
+        try:
+            data, operation = await self._request_json(probe)
+        except (ProviderError, httpx.HTTPError, OSError, ValueError) as exc:
+            elapsed = (asyncio.get_running_loop().time() - started) * 1000
+            return ProviderHealthResult(
+                status=ProviderHealthStatus.UNAVAILABLE,
+                latency_ms=elapsed,
+                message=str(exc)[:500],
+            )
         elapsed = (asyncio.get_running_loop().time() - started) * 1000
         status = ProviderHealthStatus.HEALTHY
         message = "Generic HTTP provider responded successfully."
