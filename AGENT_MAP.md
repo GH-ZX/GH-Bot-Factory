@@ -3,6 +3,8 @@
 > **Single Source of Truth for Autonomous Coding Agents**
 > *Last Updated: 2026-09-18 (Phase 14 Customer Marketplace Closure)*
 
+> **2026-09-19 advisory review:** User requested next priorities because the project remains unfinished. See “Project Next-Priority Advisory” in `docs/prompts/prompt_history.md`. Static marketplace review identified onboarding and secret-bearing export concerns; prioritize repair, complete customer journeys, and release evidence. Prior phase completion labels do not establish end-to-end readiness. No implementation milestone or fresh gate is claimed by this advisory.
+
 ---
 
 ## 1. The Sovereign Laws of GH-Bot-Factory
@@ -944,3 +946,8 @@ All verbatim user prompts, architectural requirements, and commit records are ca
   6. Bumped Admin asset cache busters to `v=20260918_06`.
   7. Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
   8. Canonical gate passed: Ruff clean, 417 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `e5f6a8b9c1d2`.
+
+
+### Configurable configurator Telegram contact — 2026-09-19
+
+Removed the hard-coded sales username from the configurator and the default settings. Both estimate and inquiry links use `OWNER_TELEGRAM_HANDLE` (username, @username, or Telegram profile URL). Empty configuration hides the chat action while preserving inquiry submission. This public sales setting is separate from Admin authentication and bot credentials. No schema or deployment change. Regression coverage includes non-default destinations, special characters, invalid profile URLs, and unconfigured inquiry submission. Canonical `make verify` passed: Ruff clean, 426 fast tests, 13 PostgreSQL tests, Alembic no drift, handoff/secret/JS/compile/dependency checks clean. A Node rendering smoke check passed for configured and unconfigured contact states. Verification ran outside the sandbox after sandboxed runs stalled. Live deployment and Telegram account reachability were not exercised.

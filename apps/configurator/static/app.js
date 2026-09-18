@@ -213,10 +213,21 @@ function renderEstimateUI(est) {
     `• Estimated Total: $${est.total_one_time} setup + $${est.total_monthly}/mo\n` +
     `\nI'd like to review this with you and get started!`;
 
-  el("telegramChatBtn").href = `https://t.me/GH_Store?text=${encodeURIComponent(msg)}`;
+  el("telegramChatBtn").hidden = !est.telegram_contact_url;
+  if (!est.telegram_contact_url) {
+    el("telegramChatBtn").removeAttribute("href");
+    return;
+  }
+  const contactUrl = new URL(est.telegram_contact_url);
+  contactUrl.searchParams.set("text", msg);
+  el("telegramChatBtn").href = contactUrl.toString();
+  el("telegramChatBtn").removeAttribute("aria-disabled");
 }
 
 function bindEvents() {
+  el("telegramChatBtn").addEventListener("click", (event) => {
+    if (!el("telegramChatBtn").hasAttribute("href")) event.preventDefault();
+  });
   // Format choice
   el("formatChoices").addEventListener("change", (e) => {
     state.selectedFormat = e.target.value;
@@ -328,11 +339,13 @@ function bindEvents() {
       statusMsg.className = "status-msg success";
       statusMsg.innerHTML = `
         <strong>✓ Inquiry #${result.inquiry_id.slice(0, 8)} submitted successfully!</strong>
-        <p style="margin: 4px 0 0">The Factory Owner has received your request. You can also chat directly on Telegram now:</p>
+        <p style="margin: 4px 0 0">Your request has been saved for review.${result.telegram_link ? " You can also chat directly on Telegram now:" : ""}</p>
       `;
 
       if (result.telegram_link) {
+        el("telegramChatBtn").hidden = false;
         el("telegramChatBtn").href = result.telegram_link;
+        el("telegramChatBtn").removeAttribute("aria-disabled");
         el("telegramChatBtn").classList.add("pulse");
       }
 

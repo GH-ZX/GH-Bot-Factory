@@ -90,6 +90,7 @@ class ConfiguratorEstimateResponse(BaseModel):
     total_monthly: str
     currency: str
     notes: str
+    telegram_contact_url: str | None
 
 
 class CreateInquiryRequest(BaseModel):
@@ -110,7 +111,7 @@ class CreateInquiryResponse(BaseModel):
     total_one_time: str
     total_monthly: str
     currency: str
-    telegram_link: str
+    telegram_link: str | None
 
 
 @router.get("/templates", response_model=PublicTemplatesResponse)
@@ -161,6 +162,7 @@ async def calculate_estimate(request_data: ConfiguratorEstimateRequest) -> Confi
         total_monthly=str(estimate.total_monthly),
         currency=estimate.currency,
         notes=estimate.notes,
+        telegram_contact_url=(f"https://t.me/{settings.owner_telegram_handle}" if settings.owner_telegram_handle else None),
     )
 
 
@@ -206,7 +208,7 @@ async def submit_inquiry(
     await session.commit()
     await session.refresh(inquiry)
 
-    owner_handle = getattr(settings, "owner_telegram_handle", "GH_Store").lstrip("@")
+    owner_handle = settings.owner_telegram_handle
     msg_summary = (
         f"Hello! I want to build a bot with GH Bot Factory.\n\n"
         f"• Inquiry #{str(inquiry.id)[:8]}\n"
@@ -221,7 +223,7 @@ async def submit_inquiry(
     if inquiry.project_notes:
         msg_summary += f"• Notes: {inquiry.project_notes}\n"
 
-    telegram_link = f"https://t.me/{owner_handle}?text={quote(msg_summary)}"
+    telegram_link = f"https://t.me/{owner_handle}?text={quote(msg_summary, safe='')}" if owner_handle else None
 
     return CreateInquiryResponse(
         inquiry_id=inquiry.id,

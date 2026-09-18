@@ -1760,3 +1760,21 @@ Resumed execution of Phase 13 Advanced Bot Factory and Storefront UX delivery.
    - Rebuilt Docker image `gh-bot-factory:local` and recreated Compose services (`api`, `worker`, `bot-runtime`).
    - Verified live with `platformctl.py sales-metrics`.
    - Canonical `make verify` green: 417 fast tests passed, 13 PostgreSQL concurrency tests passed, Ruff clean, Alembic no-drift clean at `e5f6a8b9c1d2`.
+## Project Next-Priority Advisory — 2026-09-19
+
+**User prompt (verbatim):**
+
+> what you suggest next for this project, its not perfected at all
+
+**Review:** Read current state, roadmap, handoff protocol, and marketplace onboarding/integration/export services. Recommend a repair and usability milestone: reliable onboarding and verified identity, encrypted and restorable tenant handoff, complete customer journeys, and staging/release evidence. Static inspection found a random login-code fallback after grant issuance failure, reuse of tenants by slug during onboarding, synthetic enabled bot identities, and plaintext resolved provider credentials in export JSON keyed only by credential type. These require focused regression tests and repairs before claiming complete delivery. No runtime changes, deployment, or fresh canonical verification performed; this is advisory work, not a completed implementation milestone.
+
+
+## Configurator Telegram Contact Repair — 2026-09-19
+
+**User prompts (verbatim):**
+
+> yah ok, tho after the client choose his option, the ur to my telegram is broken
+
+> dont hardcode the username  or bot for the admin, should be configuarable
+
+**Implementation:** Removed browser hardcoding and the default sales handle; estimate and inquiry responses share the configured destination. Normalize username/profile URLs, encode draft messages, and hide contact action when unconfigured while retaining inquiry submission. Configure `OWNER_TELEGRAM_HANDLE` in destination-owned environment; no Admin identity or bot token is hardcoded. Updated API regression tests and handoff documents. Canonical `make verify` passed (426 fast + 13 PostgreSQL tests, Ruff and Alembic clean); Node contact rendering smoke check passed. Application has not been redeployed. Broader onboarding repairs from the advisory remain outstanding.

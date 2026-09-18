@@ -1,3 +1,6 @@
+import re
+from urllib.parse import urlsplit
+
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,7 +29,7 @@ class Settings(BaseSettings):
     miniapp_public_url: str | None = Field(default=None, alias="MINIAPP_PUBLIC_URL")
     admin_public_url: str | None = Field(default=None, alias="ADMIN_PUBLIC_URL")
     miniapp_menu_text: str = Field(default="Open Store", alias="MINIAPP_MENU_TEXT")
-    owner_telegram_handle: str = Field(default="GH_Store", alias="OWNER_TELEGRAM_HANDLE")
+    owner_telegram_handle: str = Field(default="", alias="OWNER_TELEGRAM_HANDLE")
     bot_runtime_reconcile_seconds: float = Field(default=5.0, alias="BOT_RUNTIME_RECONCILE_SECONDS", ge=1.0, le=300.0)
     bot_runtime_release_channels: str = Field(default="STABLE,CANARY", alias="BOT_RUNTIME_RELEASE_CHANNELS")
     factory_max_bots_per_tenant: int = Field(default=50, alias="FACTORY_MAX_BOTS_PER_TENANT", ge=1, le=10000)
@@ -129,6 +132,22 @@ class Settings(BaseSettings):
     rate_limit_auth_per_minute: int = Field(default=30, alias="RATE_LIMIT_AUTH_PER_MINUTE")
     rate_limit_money_per_minute: int = Field(default=20, alias="RATE_LIMIT_MONEY_PER_MINUTE")
     rate_limit_admin_write_per_minute: int = Field(default=60, alias="RATE_LIMIT_ADMIN_WRITE_PER_MINUTE")
+
+    @field_validator("owner_telegram_handle")
+    @classmethod
+    def normalize_owner_telegram_handle(cls, value: str) -> str:
+        handle = value.strip()
+        if not handle:
+            return ""
+        if handle.startswith(("https://", "http://", "t.me/", "telegram.me/")):
+            parsed = urlsplit(handle if "://" in handle else f"https://{handle}")
+            if parsed.netloc.lower() not in {"t.me", "telegram.me", "www.t.me"} or parsed.query or parsed.fragment:
+                raise ValueError("OWNER_TELEGRAM_HANDLE must be a Telegram username or profile URL")
+            handle = parsed.path.strip("/")
+        handle = handle.removeprefix("@")
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{3,31}", handle):
+            raise ValueError("OWNER_TELEGRAM_HANDLE must be a valid Telegram username")
+        return handle
 
     @field_validator("app_env")
     @classmethod

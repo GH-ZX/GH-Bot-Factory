@@ -112,9 +112,12 @@ async def test_public_estimate_calculates_server_authoritative_pricing(public_cl
 
 
 async def test_public_inquiry_submission_persists_lead_and_returns_telegram_link(
-    public_client: dict[str, Any],
+    public_client: dict[str, Any], monkeypatch,
 ) -> None:
     client: httpx.AsyncClient = public_client["client"]
+    from packages.core.config import settings
+
+    monkeypatch.setattr(settings, "owner_telegram_handle", "FactorySales")
     session: AsyncSession = public_client["session"]
 
     payload = {
@@ -154,3 +157,49 @@ async def test_build_static_configurator_page_loads(public_client: dict[str, Any
     assert res.status_code == 200
     assert "Build Your Bot" in res.text
     assert "/build/app.js" in res.text
+
+
+async def test_contact_destination_matches_before_and_after_submission(public_client, monkeypatch):
+    from urllib.parse import parse_qs, urlsplit
+
+    from packages.core.config import settings
+
+    monkeypatch.setattr(settings, "owner_telegram_handle", "FactorySales")
+    client = public_client["client"]
+    estimate = await client.post("/api/v1/public/estimate", json={})
+    assert estimate.json()["telegram_contact_url"] == "https://t.me/FactorySales"
+    response = await client.post("/api/v1/public/inquiries", json={
+        "contact_handle": "@buyer", "project_notes": "A&B #1 / café",
+    })
+    assert response.status_code == 201
+    link = urlsplit(response.json()["telegram_link"])
+    assert link.netloc == "t.me"
+    assert link.path == "/FactorySales"
+    assert "A&B #1 / café" in parse_qs(link.query)["text"][0]
+
+
+@pytest.mark.parametrize("value", ["FactorySales", " @FactorySales ", "https://t.me/FactorySales", "t.me/FactorySales/"])
+async def test_contact_setting_normalizes_profile_urls(value):
+    from packages.core.config import Settings
+
+    assert Settings.normalize_owner_telegram_handle(value) == "FactorySales"
+
+
+@pytest.mark.parametrize("value", ["https://example.com/FactorySales", "https://t.me/FactorySales?start=x", "bad/name"])
+async def test_contact_setting_rejects_invalid_destinations(value):
+    from packages.core.config import Settings
+
+    with pytest.raises(ValueError):
+        Settings.normalize_owner_telegram_handle(value)
+
+
+async def test_inquiry_works_without_configured_telegram_contact(public_client, monkeypatch):
+    from packages.core.config import settings
+
+    monkeypatch.setattr(settings, "owner_telegram_handle", "")
+    client = public_client["client"]
+    estimate = await client.post("/api/v1/public/estimate", json={})
+    assert estimate.json()["telegram_contact_url"] is None
+    inquiry = await client.post("/api/v1/public/inquiries", json={"contact_handle": "@buyer"})
+    assert inquiry.status_code == 201
+    assert inquiry.json()["telegram_link"] is None

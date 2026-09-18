@@ -707,3 +707,5 @@ input:focus, select:focus, textarea:focus {
     justify-content: center;
   }
 }
+
+.btn-telegram[hidden] { display: none; }

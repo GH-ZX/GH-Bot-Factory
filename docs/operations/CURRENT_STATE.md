@@ -231,3 +231,8 @@ Read in order:
 
 ## Next Recommended Work
 Complete the operator-owned trusted HTTPS proxy certificate cutover in [the local-domain reverse-proxy runbook](../runbooks/local-domain-reverse-proxy.md) to activate `APP_ENV=staging` and secure Mini App URLs. Run complete staging failure injection and restore drills before public launch.
+
+
+### Configurable configurator Telegram contact — 2026-09-19
+
+Removed the hard-coded sales username from the configurator and the default settings. Both estimate and inquiry links use `OWNER_TELEGRAM_HANDLE` (username, @username, or Telegram profile URL). Empty configuration hides the chat action while preserving inquiry submission. This public sales setting is separate from Admin authentication and bot credentials. No schema or deployment change. Regression coverage includes non-default destinations, special characters, invalid profile URLs, and unconfigured inquiry submission. Canonical `make verify` passed: Ruff clean, 426 fast tests, 13 PostgreSQL tests, Alembic no drift, handoff/secret/JS/compile/dependency checks clean. A Node rendering smoke check passed for configured and unconfigured contact states. Verification ran outside the sandbox after sandboxed runs stalled. Live deployment and Telegram account reachability were not exercised.

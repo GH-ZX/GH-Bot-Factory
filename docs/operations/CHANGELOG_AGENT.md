@@ -484,3 +484,8 @@ Current phase checkpoint: **Phase 14 — Customer Marketplace product definition
 - Bumped Admin asset cache busters to `v=20260918_06`.
 - Rebuilt Docker image `gh-bot-factory:local` and verified live on Compose services (`api`, `worker`, `bot-runtime`).
 - Canonical verification: Ruff clean, 417 fast tests passed, 13 PostgreSQL concurrency tests passed, Alembic no-drift clean at `e5f6a8b9c1d2`.
+
+
+### Configurable configurator Telegram contact — 2026-09-19
+
+Removed the hard-coded sales username from the configurator and the default settings. Both estimate and inquiry links use `OWNER_TELEGRAM_HANDLE` (username, @username, or Telegram profile URL). Empty configuration hides the chat action while preserving inquiry submission. This public sales setting is separate from Admin authentication and bot credentials. No schema or deployment change. Regression coverage includes non-default destinations, special characters, invalid profile URLs, and unconfigured inquiry submission. Canonical `make verify` passed: Ruff clean, 426 fast tests, 13 PostgreSQL tests, Alembic no drift, handoff/secret/JS/compile/dependency checks clean. A Node rendering smoke check passed for configured and unconfigured contact states. Verification ran outside the sandbox after sandboxed runs stalled. Live deployment and Telegram account reachability were not exercised.
