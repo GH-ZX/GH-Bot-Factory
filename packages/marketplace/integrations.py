@@ -201,6 +201,35 @@ _INTEGRATIONS: dict[str, IntegrationOffering] = {
                 "Swagger / OpenAPI specification or API docs",
             ),
         ),
+        IntegrationOffering(
+            key="custom-api-request",
+            name="💡 Request Custom / Unlisted API",
+            category="supplier_api",
+            description="Need a supplier, bot API, or service not listed here? Tell us what you need and we will integrate it into the factory for you.",
+            setup_fee=Decimal("0.00"),
+            monthly_fee=Decimal("0.00"),
+            supported_templates=(
+                "general-commerce",
+                "digital-goods",
+                "gift-cards",
+                "gaming-store",
+                "services",
+                "reseller-hub",
+                "numbers-sms",
+                "accounts-store",
+                "gift-reseller",
+                "digital-reseller",
+                "hybrid-store",
+            ),
+            features=(
+                "Connect any wholesale API of your choice",
+                "Factory Owner develops adapter for your store",
+                "Pre-configured in your tenant prior to launch",
+            ),
+            requirements=(
+                "Supplier API documentation or website",
+            ),
+        ),
     ]
 }
 

@@ -1106,6 +1106,7 @@ async function openInquiryDetail(id) {
               <span>Hosting: ${escapeHtml(conf.delivery_model || "—")}</span>
             </div>
             ${conf.integration_keys?.length ? `<p class="muted compact"><strong>Integrations:</strong> ${escapeHtml(conf.integration_keys.join(", "))}</p>` : ""}
+            ${conf.custom_api_request ? `<div style="margin-top:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:10px;background:color-mix(in srgb,var(--accent) 12%,transparent);"><strong style="color:var(--accent);display:block;margin-bottom:4px">💡 Customer Requested Custom API:</strong> <span style="color:var(--text);font-size:13px;white-space:pre-wrap;">${escapeHtml(conf.custom_api_request)}</span></div>` : ""}
             ${inq.project_notes ? `<p class="muted compact"><strong>Project Notes:</strong> ${escapeHtml(inq.project_notes)}</p>` : ""}
           </div>
         </div>

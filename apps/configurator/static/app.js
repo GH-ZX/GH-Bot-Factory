@@ -204,15 +204,16 @@ function renderEstimateUI(est) {
     .join("");
 
   // Update direct Telegram button prefill
+  const customReq = el("requestCustomApiCheck")?.checked ? el("customApiDescription")?.value.trim() : "";
   const msg =
     `Hello! I configured a Telegram Bot on your configurator:\n\n` +
     `• Format: ${formatNames[est.format] || est.format}\n` +
     `• Template: ${est.template_name}\n` +
     `• Product Source: ${sourceNames[est.product_source] || est.product_source}\n` +
     `• Hosting: ${hostingNames[est.delivery_model] || est.delivery_model}\n` +
+    (customReq ? `• Requested Custom API: ${customReq}\n` : "") +
     `• Estimated Total: $${est.total_one_time} setup + $${est.total_monthly}/mo\n` +
     `\nI'd like to review this with you and get started!`;
-
   el("telegramChatBtn").hidden = !est.telegram_contact_url;
   if (!est.telegram_contact_url) {
     el("telegramChatBtn").removeAttribute("href");
@@ -296,6 +297,25 @@ function bindEvents() {
     updateEstimate();
   });
 
+  // Custom API Request Toggle & Input
+  el("requestCustomApiCheck")?.addEventListener("change", (e) => {
+    const checked = e.target.checked;
+    el("customApiFields")?.classList.toggle("hidden", !checked);
+    if (checked) {
+      state.selectedIntegrations.add("custom-api-request");
+      el("customApiDescription")?.focus();
+    } else {
+      state.selectedIntegrations.delete("custom-api-request");
+    }
+    updateEstimate();
+  });
+
+  el("customApiDescription")?.addEventListener("input", () => {
+    if (state.currentEstimate) {
+      renderEstimateUI(state.currentEstimate);
+    }
+  });
+
   // Hosting Choice
   el("hostingChoices").addEventListener("change", (e) => {
     state.selectedHosting = e.target.value;
@@ -320,6 +340,10 @@ function bindEvents() {
     statusMsg.className = "status-msg hidden";
 
     try {
+      const customApiChecked = el("requestCustomApiCheck")?.checked;
+      const customApiText = el("customApiDescription")?.value.trim() || "";
+      const customApiRequest = customApiChecked && customApiText ? customApiText : null;
+
       const payload = {
         contact_method: el("contactMethod").value,
         contact_handle: el("contactHandle").value.trim(),
@@ -329,8 +353,8 @@ function bindEvents() {
         product_source: state.selectedSource,
         delivery_model: state.selectedHosting,
         integration_keys: Array.from(state.selectedIntegrations),
+        custom_api_request: customApiRequest,
       };
-
       const result = await api("/api/v1/public/inquiries", {
         method: "POST",
         body: JSON.stringify(payload),

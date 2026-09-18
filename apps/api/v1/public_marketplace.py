@@ -102,6 +102,11 @@ class CreateInquiryRequest(BaseModel):
     product_source: str = Field(default="stored")
     delivery_model: str = Field(default="managed")
     integration_keys: list[str] = Field(default_factory=list)
+    custom_api_request: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Customer-requested API name, URL, or details to add to the factory",
+    )
 
 
 class CreateInquiryResponse(BaseModel):
@@ -189,16 +194,22 @@ async def submit_inquiry(
     except KeyError:
         contact_method = ContactMethod.TELEGRAM
 
+    custom_api = payload.custom_api_request.strip() if payload.custom_api_request else None
+    notes = payload.project_notes.strip() if payload.project_notes else ""
+    if custom_api:
+        notes = f"{notes}\n\n[Requested Custom API: {custom_api}]".strip()
+
     inquiry = CustomerInquiry(
         contact_method=contact_method,
         contact_handle=payload.contact_handle.strip(),
-        project_notes=payload.project_notes.strip() if payload.project_notes else None,
+        project_notes=notes or None,
         configuration={
             "format": payload.format,
             "template_key": payload.template_key,
             "product_source": payload.product_source,
             "delivery_model": payload.delivery_model,
             "integration_keys": payload.integration_keys,
+            "custom_api_request": custom_api,
         },
         estimated_quote=estimate.to_dict(),
         status=InquiryStatus.NEW,
@@ -219,6 +230,7 @@ async def submit_inquiry(
         f"• Est. One-Time: ${estimate.total_one_time}\n"
         f"• Est. Monthly: ${estimate.total_monthly}\n"
         f"• Contact: {inquiry.contact_handle} ({inquiry.contact_method.value})\n"
+        + (f"• Requested Custom API: {custom_api}\n" if custom_api else "")
     )
     if inquiry.project_notes:
         msg_summary += f"• Notes: {inquiry.project_notes}\n"

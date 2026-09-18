@@ -129,8 +129,8 @@ async def test_public_inquiry_submission_persists_lead_and_returns_telegram_link
         "product_source": "provider_api",
         "delivery_model": "managed",
         "integration_keys": ["numbers-sms"],
+        "custom_api_request": "Custom SMS Gateway (api.example.com)",
     }
-
     res = await client.post("/api/v1/public/inquiries", json=payload)
     assert res.status_code == 201, res.text
     data = res.json()
@@ -149,7 +149,8 @@ async def test_public_inquiry_submission_persists_lead_and_returns_telegram_link
     assert inquiry.configuration["format"] == "combo"
     assert inquiry.estimated_quote["total_one_time"] == "134.00"
     assert inquiry.estimated_quote["total_monthly"] == "74.00"
-
+    assert inquiry.configuration["custom_api_request"] == "Custom SMS Gateway (api.example.com)"
+    assert "Custom SMS Gateway" in inquiry.project_notes
 
 async def test_build_static_configurator_page_loads(public_client: dict[str, Any]) -> None:
     client: httpx.AsyncClient = public_client["client"]

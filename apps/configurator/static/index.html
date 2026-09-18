@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080c18">
   <title>Build Your Bot — GH Bot Factory</title>
-  <link rel="stylesheet" href="/build/styles.css?v=20260919_02">
+  <link rel="stylesheet" href="/build/styles.css?v=20260919_03">
 </head>
 <body>
   <div class="shell">
@@ -158,6 +158,18 @@
             </div>
             <div class="integrations-grid" id="integrationsGrid">
               <div class="loading">Loading integrations...</div>
+            </div>
+
+            <!-- Tell Us What API You Need -->
+            <div class="custom-api-box" style="margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel2);">
+              <label class="check" style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;margin:0;">
+                <input type="checkbox" id="requestCustomApiCheck" style="width:auto;min-height:auto;cursor:pointer;">
+                <span>💡 Need a supplier, bot, or API not listed here? Tell us what to add!</span>
+              </label>
+              <div id="customApiFields" class="hidden" style="margin-top:12px;">
+                <p class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.4;">Tell us about the supplier, service, or API you want connected to your store bot (e.g. name, website, documentation URL, or specific goods). We will review it and add it to our factory for your bot!</p>
+                <textarea id="customApiDescription" rows="2" placeholder="e.g. Supplier name (website.com), API swagger link, or specific goods you want to wholesale..." style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:10px;background:#0c1322;color:var(--text);padding:10px 12px;"></textarea>
+              </div>
             </div>
           </section>
 
@@ -313,6 +325,6 @@
     </footer>
   </div>
 
-  <script src="/build/app.js?v=20260919_02" defer></script>
+  <script src="/build/app.js?v=20260919_03" defer></script>
 </body>
 </html>
