@@ -40,6 +40,41 @@ from packages.providers.models import ProviderHealthStatus
 
 DEFAULT_SPIDER_BASE_URL = "https://api.spider-service.com"
 
+COUNTRY_NAMES: dict[str, str] = {
+    "PS": "Palestine",
+    "SA": "Saudi Arabia",
+    "AE": "United Arab Emirates",
+    "EG": "Egypt",
+    "JO": "Jordan",
+    "LB": "Lebanon",
+    "SY": "Syria",
+    "IQ": "Iraq",
+    "KW": "Kuwait",
+    "QA": "Qatar",
+    "BH": "Bahrain",
+    "OM": "Oman",
+    "YE": "Yemen",
+    "TR": "Turkey",
+    "US": "United States",
+    "GB": "United Kingdom",
+    "CA": "Canada",
+    "DE": "Germany",
+    "FR": "France",
+    "NL": "Netherlands",
+    "RU": "Russia",
+    "UZ": "Uzbekistan",
+    "KZ": "Kazakhstan",
+    "KG": "Kyrgyzstan",
+    "TJ": "Tajikistan",
+    "IN": "India",
+    "PK": "Pakistan",
+    "BD": "Bangladesh",
+    "ID": "Indonesia",
+    "MY": "Malaysia",
+    "MA": "Morocco",
+    "DZ": "Algeria",
+    "TN": "Tunisia",
+}
 
 class SpiderServiceClient(BaseProviderClient):
     """Native integration client for Spider Service (api.spider-service.com).
@@ -121,7 +156,7 @@ class SpiderServiceClient(BaseProviderClient):
             err_upper = err.upper()
             if err_upper in {"BAD_KEY", "NO_KEYS", "INVALID_KEY", "AUTH_ERROR"}:
                 raise ProviderAuthenticationError(f"Invalid Spider Service API key ({err}).")
-            if err_upper in {"NO_BALANCE", "LOW_BALANCE", "INSUFFICIENT_BALANCE"}:
+            if err_upper in {"BALANCE_INSUFFICIENT", "NO_BALANCE", "LOW_BALANCE", "INSUFFICIENT_BALANCE"}:
                 raise ProviderInsufficientBalanceError(f"Spider Service reported insufficient balance ({err}).")
             if err_upper in {"NO_NUMBER", "NO_NUMBERS", "NO_STOCK"}:
                 raise ProviderProductUnavailableError(f"No numbers available in selected country ({err}).")
@@ -153,33 +188,57 @@ class SpiderServiceClient(BaseProviderClient):
         data = await self._request("getBalance")
         result = data.get("result")
         raw_bal = 0.0
+        currency = "USD"
         if isinstance(result, dict):
-            raw_bal = result.get("balance") or result.get("main_balance") or 0.0
+            raw_bal = result.get("wallet") if result.get("wallet") is not None else (result.get("balance") or 0.0)
+            currency = str(result.get("currency") or "USD").upper()
         elif isinstance(result, (int, float, str)):
             raw_bal = result
         else:
-            raw_bal = data.get("balance", 0.0)
+            raw_bal = data.get("wallet") if data.get("wallet") is not None else (data.get("balance") or 0.0)
+            currency = str(data.get("currency") or "USD").upper()
 
         return ProviderBalanceResult(
             balance=Decimal(str(raw_bal)),
-            currency="USD",
+            currency=currency,
         )
 
     async def list_number_countries(self, service: str | None = None) -> list[NumberCountryDTO]:
         data = await self._request("getCountrys")
-        countries = data.get("result") or data.get("countries") or []
+        result = data.get("result") or {}
+        countries_data = result.get("countries") if isinstance(result, dict) else data.get("countries")
         results: list[NumberCountryDTO] = []
-        if isinstance(countries, list):
-            for c in countries:
+        seen: set[str] = set()
+
+        if isinstance(countries_data, dict):
+            for srv_id, c_map in countries_data.items():
+                if isinstance(c_map, dict):
+                    for code, price in c_map.items():
+                        c_up = str(code).strip().upper()
+                        if c_up and c_up not in seen:
+                            seen.add(c_up)
+                            name = COUNTRY_NAMES.get(c_up, c_up)
+                            results.append(
+                                NumberCountryDTO(
+                                    code=c_up,
+                                    name=name,
+                                    metadata={"price": str(price), "server": str(srv_id)},
+                                )
+                            )
+        elif isinstance(countries_data, list):
+            for c in countries_data:
                 if isinstance(c, dict):
                     code = str(c.get("country") or c.get("code") or "").strip().upper()
-                    name = str(c.get("name") or code).strip()
+                    name = str(c.get("name") or COUNTRY_NAMES.get(code, code)).strip()
                     dial = str(c.get("dial_code") or c.get("prefix") or "").strip() or None
-                    if code:
+                    if code and code not in seen:
+                        seen.add(code)
                         results.append(NumberCountryDTO(code=code, name=name, dial_code=dial))
                 elif isinstance(c, str) and c.strip():
                     code = c.strip().upper()
-                    results.append(NumberCountryDTO(code=code, name=code))
+                    if code not in seen:
+                        seen.add(code)
+                        results.append(NumberCountryDTO(code=code, name=COUNTRY_NAMES.get(code, code)))
         return results
 
     async def reserve_number(self, request: Any) -> NumberActivationSnapshot:
@@ -257,10 +316,10 @@ class SpiderServiceClient(BaseProviderClient):
             ProviderProductDTO(
                 external_id=c.code,
                 name=f"Spider Number - {c.name} ({c.code})",
-                cost=Decimal("1.00"),
+                cost=Decimal(str(c.metadata.get("price") or "1.00")),
                 currency="USD",
                 is_available=True,
-                description=f"Virtual number reservation for {c.name}.",
+                description=f"Virtual number reservation for {c.name} ({c.code}) via Spider Service.",
             )
             for c in countries
         ]

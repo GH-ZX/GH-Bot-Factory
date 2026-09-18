@@ -75,10 +75,15 @@ async def test_spider_service_countries():
             200,
             json={
                 "ok": True,
-                "result": [
-                    {"country": "PS", "name": "Palestine", "dial_code": "+970"},
-                    {"country": "US", "name": "United States", "dial_code": "+1"},
-                ],
+                "result": {
+                    "currency": "USD",
+                    "countries": {
+                        "1": {
+                            "PS": "1.00",
+                            "SA": "0.80",
+                        }
+                    },
+                },
             },
         )
 
@@ -87,7 +92,14 @@ async def test_spider_service_countries():
     assert len(countries) == 2
     assert countries[0].code == "PS"
     assert countries[0].name == "Palestine"
-    assert countries[0].dial_code == "+970"
+    assert countries[0].metadata["price"] == "1.00"
+    assert countries[1].code == "SA"
+    assert countries[1].name == "Saudi Arabia"
+
+    products = await client.list_products()
+    assert len(products) == 2
+    assert products[0].external_id == "PS"
+    assert products[0].cost == Decimal("1.00")
 
 
 async def test_spider_service_number_reserve_and_activation():
