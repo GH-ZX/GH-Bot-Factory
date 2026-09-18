@@ -93,14 +93,25 @@ async def configure_admin_integration(
         )
 
     # 2. Configure provider or payment method
-    if norm_key in {"numbers-sms", "gift-cards-api", "accounts-api", "custom-http-api"}:
+    if norm_key in {"numbers-sms", "gift-cards-api", "accounts-api", "custom-http-api", "ventebot", "spider-service"}:
         cat_map = {
             "numbers-sms": ProviderCategory.NUMBER,
+            "spider-service": ProviderCategory.NUMBER,
             "gift-cards-api": ProviderCategory.GIFT,
             "accounts-api": ProviderCategory.ACCOUNT,
+            "ventebot": ProviderCategory.ACCOUNT,
             "custom-http-api": ProviderCategory.DIGITAL_PRODUCT,
         }
+        type_map = {
+            "ventebot": "VENTEBOT",
+            "spider-service": "SPIDER_SERVICE",
+            "custom-http-api": "HTTP_OPENAPI",
+            "numbers-sms": "mock",
+            "gift-cards-api": "mock",
+            "accounts-api": "mock",
+        }
         category = cat_map[norm_key]
+        provider_type = type_map.get(norm_key, "mock")
         provider_name = (payload.display_name or norm_key.replace("-", " ").title()).strip()
 
         # Find or create Provider
@@ -109,6 +120,7 @@ async def configure_admin_integration(
                 select(Provider).where(
                     Provider.tenant_id == tenant_id,
                     Provider.category == category,
+                    Provider.provider_type == provider_type,
                 )
             )
         ).scalars().first()
@@ -119,7 +131,7 @@ async def configure_admin_integration(
                 name=provider_name,
                 slug=f"{norm_key}-{uuid.uuid4().hex[:6]}",
                 category=category,
-                provider_type="http_generic" if norm_key == "custom-http-api" else "mock",
+                provider_type=provider_type,
                 priority=100,
                 is_enabled=True,
                 metadata_json=payload.extra_settings,
