@@ -66,7 +66,10 @@ class Settings(BaseSettings):
     )
     provider_reconcile_enabled: bool = Field(default=True, alias="PROVIDER_RECONCILE_ENABLED")
     provider_reconcile_interval_seconds: int = Field(
-        default=30, alias="PROVIDER_RECONCILE_INTERVAL_SECONDS", ge=15, le=3600
+        default=10, alias="PROVIDER_RECONCILE_INTERVAL_SECONDS", ge=3, le=3600
+    )
+    number_activation_timeout_seconds: int = Field(
+        default=900, alias="NUMBER_ACTIVATION_TIMEOUT_SECONDS", ge=60, le=7200
     )
     provider_reconcile_batch_size: int = Field(
         default=200, alias="PROVIDER_RECONCILE_BATCH_SIZE", ge=1, le=1000

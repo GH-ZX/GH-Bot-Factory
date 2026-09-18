@@ -1,6 +1,7 @@
 import logging
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -10,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from packages.commerce.economics import PricingService
 from packages.commerce.models import Order
 from packages.commerce.state_machine import OrderStatus
+from packages.core.config import settings
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
 from packages.fulfillment.service import _provider_response_payload
 from packages.notifications.service import (
@@ -177,6 +179,75 @@ class ReconciliationService:
                             action_taken="Marked attempt FAILED and executed automated ledger refund",
                         )
                     ]
+
+                # Check activation timeout for pending/processing orders (e.g. virtual numbers awaiting SMS)
+                started_at = attempt.started_at or attempt.created_at
+                if started_at is not None:
+                    if started_at.tzinfo is None:
+                        started_at = started_at.replace(tzinfo=UTC)
+                    elapsed_seconds = (datetime.now(UTC) - started_at).total_seconds()
+                    activation_timeout = float(
+                        (provider_record.metadata_json or {}).get("activation_timeout_seconds")
+                        or settings.number_activation_timeout_seconds
+                    )
+                    if elapsed_seconds >= activation_timeout and check_res.canonical_state in {
+                        ProviderOrderState.PROCESSING,
+                        ProviderOrderState.PENDING,
+                    }:
+                        logger.info(
+                            "Order %s activation %s timed out after %.0fs (limit: %.0fs). Executing auto-refund.",
+                            order.order_number,
+                            query_target,
+                            elapsed_seconds,
+                            activation_timeout,
+                        )
+                        try:
+                            await client.cancel_order(query_target)
+                        except Exception as cancel_err:  # noqa: BLE001
+                            logger.debug("Upstream cancellation query failed for %s: %s", query_target, cancel_err)
+
+                        attempt.status = FulfillmentStatus.FAILED
+                        attempt.error_classification = "UPSTREAM_ACTIVATION_TIMEOUT"
+                        order.transition_to(OrderStatus.FAILED)
+
+                        wallet = await LedgerService.get_or_create_wallet(
+                            session=session,
+                            tenant_id=order.tenant_id,
+                            user_id=order.user_id,
+                            currency=order.currency,
+                        )
+                        await LedgerService.refund(
+                            session=session,
+                            wallet=wallet,
+                            amount=order.total_amount,
+                            reference_id=str(order.id),
+                            reference_type=CANONICAL_REFUND_TYPE,
+                            description=f"Automated refund: activation timed out after {int(activation_timeout // 60)}m for order #{order.order_number}",
+                        )
+                        await session.commit()
+
+                        await self.notifications.notify(
+                            NotificationPayload(
+                                event_type=NotificationEventType.ORDER_REFUNDED,
+                                tenant_id=order.tenant_id,
+                                recipient="customer",
+                                order_id=order.id,
+                                order_number=order.order_number,
+                                message=f"⌛ Order #{order.order_number} timed out waiting for activation code. Your balance of ${order.total_amount} {order.currency} has been refunded.",
+                                metadata={"order_number": order.order_number, "reason": "activation_timeout"},
+                            )
+                        )
+
+                        return [
+                            ReconciliationDiscrepancy(
+                                order_id=order.id,
+                                order_number=order.order_number,
+                                issue_type="ACTIVATION_TIMED_OUT_REFUNDED",
+                                details=f"Activation {query_target} timed out after {int(elapsed_seconds)}s; refunded customer.",
+                                action_taken="Marked attempt FAILED and executed automated ledger refund",
+                                metadata={"elapsed_seconds": elapsed_seconds, "timeout": activation_timeout},
+                            )
+                        ]
 
                 attempt.status = (
                     FulfillmentStatus.UNKNOWN

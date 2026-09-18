@@ -362,13 +362,21 @@ class SpiderServiceClient(BaseProviderClient):
         snapshot = await self.get_number_activation(external_order_id)
         is_completed = snapshot.state == NumberActivationState.SMS_RECEIVED
         artifacts: list[ProviderDeliveryArtifact] = []
+        if snapshot.phone_number:
+            artifacts.append(
+                ProviderDeliveryArtifact(
+                    kind=ProviderDeliveryKind.PHONE_NUMBER,
+                    value=snapshot.phone_number,
+                    fields={"hash_code": external_order_id},
+                )
+            )
         for msg in snapshot.messages:
             if msg.code:
                 artifacts.append(
                     ProviderDeliveryArtifact(
                         kind=ProviderDeliveryKind.CODE,
                         value=msg.code,
-                        fields={"text": msg.text},
+                        fields={"text": msg.text, "phone_number": snapshot.phone_number},
                     )
                 )
         return ProviderOrderCheckResponse(

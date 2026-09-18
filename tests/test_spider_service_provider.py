@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.providers.clients.registry import provider_registry
 from packages.providers.clients.spider_service import SpiderServiceClient
@@ -224,3 +225,107 @@ async def test_generic_http_provider_supports_spider_service():
     health = await provider.health_check()
     assert health.status == ProviderHealthStatus.UNAVAILABLE
     assert "BAD_KEY" in health.message
+
+
+async def test_reconciliation_activation_timeout_auto_refund(db_session: AsyncSession):
+    """Verify that virtual number activations waiting for SMS beyond timeout are auto-cancelled and refunded."""
+    import uuid
+    from datetime import UTC, datetime, timedelta
+
+    from packages.commerce.models import Order
+    from packages.commerce.state_machine import OrderStatus
+    from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
+    from packages.fulfillment.reconciliation import ReconciliationService
+    from packages.payments.service import LedgerService
+    from packages.providers.models import Provider
+    from packages.tenants.models import Tenant, User
+
+    tenant = Tenant(name="Spider SMS Store", slug=f"spider-store-{uuid.uuid4().hex[:6]}")
+    user = User(username=f"shopper_{uuid.uuid4().hex[:6]}")
+    db_session.add_all([tenant, user])
+    await db_session.flush()
+
+    # User wallet funded with $10
+    wallet = await LedgerService.get_or_create_wallet(db_session, tenant.id, user.id, "USD")
+    await LedgerService.credit(db_session, wallet, Decimal("10.00"), reference_id="seed-wallet", reference_type="TOPUP")
+
+    # Order placed for $1.00 virtual number
+    order = Order(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        order_number=f"ORD-SPIDER-{uuid.uuid4().hex[:6].upper()}",
+        status=OrderStatus.PROCESSING,
+        currency="USD",
+        total_amount=Decimal("1.00"),
+    )
+    db_session.add(order)
+    await db_session.flush()
+
+    # Provider record for Spider Service with 60s test timeout
+    provider = Provider(
+        tenant_id=tenant.id,
+        name="Spider-Auto-Refund",
+        slug=f"spider-auto-refund-{uuid.uuid4().hex[:6]}",
+        provider_type="SPIDER_SERVICE",
+        category=ProviderCategory.NUMBER,
+        is_enabled=True,
+        metadata_json={"activation_timeout_seconds": 60},
+    )
+    db_session.add(provider)
+    await db_session.flush()
+
+    from packages.providers.models import ProviderCredential
+    from packages.providers.router import ProviderRouter
+    from packages.telegram.secrets import EnvSecretStorage
+
+    secret_storage = EnvSecretStorage({"SPIDER_KEY_REF": "test_spider_key"})
+    db_session.add(
+        ProviderCredential(
+            tenant_id=tenant.id,
+            provider_id=provider.id,
+            credential_type="API_KEY",
+            secret_ref="SPIDER_KEY_REF",
+        )
+    )
+    await db_session.flush()
+    # Create active attempt started 120s ago (exceeding 60s timeout)
+    attempt = FulfillmentAttempt(
+        tenant_id=tenant.id,
+        order_id=order.id,
+        provider_id=provider.id,
+        attempt_number=1,
+        idempotency_key=f"order:{order.id}:attempt:1",
+        external_order_id="hash_spider_pending_123",
+        status=FulfillmentStatus.PROCESSING,
+        cost_amount=Decimal("1.00"),
+        cost_currency="USD",
+        started_at=datetime.now(UTC) - timedelta(seconds=120),
+    )
+    db_session.add(attempt)
+    await db_session.commit()
+
+    # Mock Spider Service client returning WAIT_CODE
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"ok": False, "error": "WAIT_CODE", "msg": "error"})
+
+    client = create_spider_client(transport=httpx.MockTransport(handler))
+    provider_registry.register_singleton(str(provider.id), client)
+
+    # Reconcile attempt
+    router = ProviderRouter(registry=provider_registry, secret_storage=secret_storage)
+    reconciliation = ReconciliationService(registry=provider_registry, provider_router=router)
+    discrepancies = await reconciliation.reconcile_order(db_session, tenant.id, order.id)
+
+    assert len(discrepancies) == 1
+    assert discrepancies[0].issue_type == "ACTIVATION_TIMED_OUT_REFUNDED"
+
+    # Verify attempt and order are FAILED
+    await db_session.refresh(attempt)
+    await db_session.refresh(order)
+    assert attempt.status == FulfillmentStatus.FAILED
+    assert attempt.error_classification == "UPSTREAM_ACTIVATION_TIMEOUT"
+    assert order.status == OrderStatus.FAILED
+
+    # Verify customer wallet received automated refund (balance is $10.00 + $1.00 = $11.00)
+    await db_session.refresh(wallet)
+    assert wallet.balance == Decimal("11.00")

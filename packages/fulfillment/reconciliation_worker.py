@@ -34,7 +34,7 @@ class ProviderReconciliationWorker:
             settings.provider_reconcile_enabled if enabled is None else bool(enabled)
         )
         self.interval_seconds = max(
-            15,
+            3,
             min(
                 int(
                     settings.provider_reconcile_interval_seconds
