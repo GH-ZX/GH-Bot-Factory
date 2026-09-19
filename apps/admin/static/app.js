@@ -822,8 +822,7 @@ async function submitCatalogImport(event) {
   const statusEl = el("importStatusMsg");
   btn.disabled = true;
   statusEl.className = "muted";
-  statusEl.textContent = "Importing products, calculating markups, and creating mappings…";
-
+  statusEl.textContent = "Adding selected products to your store menu…";
   const checkedBoxes = document.querySelectorAll("input[name='importProductCheck']:checked");
   const selectedIds = Array.from(checkedBoxes).map((cb) => cb.value);
 
@@ -843,14 +842,14 @@ async function submitCatalogImport(event) {
     });
 
     statusEl.className = "ok-text";
-    statusEl.textContent = `✓ Successfully imported ${res.imported_count} new products and updated ${res.updated_count} existing mappings in category "${res.category_name}"!`;
+    statusEl.textContent = `✓ Successfully added ${res.imported_count} new products and updated ${res.updated_count} in your store menu!`;
     await Promise.all([loadCategories(), loadProducts()]);
     setTimeout(() => {
       el("catalogImportDialog")?.close();
     }, 1800);
   } catch (err) {
     statusEl.className = "danger-text";
-    statusEl.textContent = `Import failed: ${err.message}`;
+    statusEl.textContent = `Failed to update store menu: ${err.message}`;
   } finally {
     btn.disabled = false;
   }

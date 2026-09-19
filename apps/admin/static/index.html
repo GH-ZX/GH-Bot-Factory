@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css?v=20260919_06">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260919_07">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -97,7 +97,7 @@
       </section>
 
       <section id="view-products" class="view">
-        <div class="toolbar"><input id="productSearch" placeholder="Search products or SKU"><select id="productActive"><option value="">All states</option><option value="true">Active</option><option value="false">Inactive</option></select><button id="newProduct" class="primary">New product</button><button id="openCatalogImportBtn" type="button" class="ghost">📥 Import from Supplier</button></div>
+        <div class="toolbar"><input id="productSearch" placeholder="Search products or SKU"><select id="productActive"><option value="">All states</option><option value="true">Active</option><option value="false">Inactive</option></select><button id="newProduct" class="primary">New product</button><button id="openCatalogImportBtn" type="button" class="ghost">📋 Show Products Menu</button></div>
         <div id="productList" class="stack"></div>
       </section>
 
@@ -536,13 +536,13 @@ orders:read"></textarea></label>
     <form id="catalogImportForm">
       <div class="dialog-head">
         <div>
-          <small class="eyebrow">CATALOG ONBOARDING</small>
-          <h2>📥 1-Click Supplier Catalog Importer</h2>
+          <small class="eyebrow">SUPPLIER CATALOG</small>
+          <h2>📋 Show Products Menu</h2>
         </div>
         <button type="button" class="icon" data-close-catalog-import aria-label="Close">×</button>
       </div>
       <p class="muted" style="margin:8px 0 16px;line-height:1.5;">
-        Import wholesale products, gaming top-ups, or digital accounts from your configured suppliers with automatic profit markup and category mapping.
+        Browse products from your connected supplier, customize your retail profit prices, and show them in your store menu.
       </p>
 
       <div class="grid2">
@@ -593,10 +593,10 @@ orders:read"></textarea></label>
 
       <div class="dialog-actions">
         <button type="button" class="ghost" data-close-catalog-import>Cancel</button>
-        <button id="importSubmitBtn" type="submit" class="primary">📥 Import &amp; Map Selected Products</button>
+        <button id="importSubmitBtn" type="submit" class="primary">Show Selected Products in Store</button>
       </div>
     </form>
   </dialog>
-  <script src="/admin/app.js?v=20260919_06" defer></script>
+  <script src="/admin/app.js?v=20260919_07" defer></script>
 </body>
 </html>
