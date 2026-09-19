@@ -231,6 +231,24 @@ async def test_g2bulk_purchase_pending_and_delivery_polling():
     assert check_410.canonical_state == ProviderOrderState.FAILED
 
 
+
+async def test_g2bulk_get_game_requirements():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/games/fields":
+            return httpx.Response(200, json={"code": "200", "info": {"fields": ["userid", "serverid"], "notes": "Sample note"}})
+        if request.url.path == "/v1/games/servers":
+            return httpx.Response(200, json={"code": "200", "servers": {"US": "United States", "EU": "Europe"}})
+        return httpx.Response(404)
+
+    client = create_g2bulk_client(transport=httpx.MockTransport(handler))
+    reqs = await client.get_game_requirements("sample_game")
+    assert reqs["game"] == "sample_game"
+    assert reqs["fields"] == ["userid", "serverid"]
+    assert reqs["requires_server"] is True
+    assert reqs["requires_charname"] is False
+    assert reqs["server_dropdown"] == {"US": "United States", "EU": "Europe"}
+    assert reqs["notes"] == "Sample note"
+
 async def test_g2bulk_error_handling():
     # 401 Unauthorized
     client_401 = create_g2bulk_client(transport=httpx.MockTransport(lambda r: httpx.Response(401, json={"error": "Invalid key"})))

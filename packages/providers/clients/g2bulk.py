@@ -252,7 +252,69 @@ class G2BulkClient(BaseProviderClient):
 
     async def create_order(self, request: ProviderOrderRequest) -> ProviderOrderResponse:
         pid = request.external_product_id.strip()
-        body: dict[str, Any] = {
+        params = request.parameters or {}
+        game_code = params.get("game_code") or params.get("game")
+
+        # Mode 1: Direct Game Top-Up (e.g. PUBG Mobile, MLBB, Free Fire)
+        if game_code or pid.startswith("game:"):
+            code = str(game_code or pid.split(":", 1)[1]).strip()
+            player_id = params.get("player_id") or params.get("user_id") or request.recipient
+            if not player_id:
+                raise ProviderConfigurationError(f"Game top-up for '{code}' requires a player ID / user ID.")
+
+            catalogue_name = str(params.get("catalogue_name") or params.get("denomination") or pid).strip()
+            body: dict[str, Any] = {
+                "catalogue_name": catalogue_name,
+                "player_id": str(player_id).strip(),
+            }
+            if params.get("server_id"):
+                body["server_id"] = str(params["server_id"]).strip()
+            if params.get("charname"):
+                body["charname"] = str(params["charname"]).strip()
+            if params.get("remark"):
+                body["remark"] = str(params["remark"])[:200]
+
+            data = await self._request(
+                "POST",
+                f"/games/{code}/order",
+                json_data=body,
+                idempotency_key=request.idempotency_key,
+            )
+            order_info = data.get("order") if isinstance(data.get("order"), dict) else data
+            ext_order_id = str(order_info.get("order_id") or data.get("order_id") or "").strip()
+            if not ext_order_id:
+                raise ProviderError("G2Bulk game order response did not include order_id.")
+
+            raw_status = str(order_info.get("status") or data.get("status") or "PENDING").upper()
+            canonical = self._normalize_status(raw_status)
+            cost = Decimal(str(order_info.get("price") or data.get("price") or "0.00"))
+
+            delivery_artifacts = (
+                ProviderDeliveryArtifact(
+                    kind=ProviderDeliveryKind.STRUCTURED,
+                    value=f"Player: {player_id}",
+                    fields={
+                        "game": code,
+                        "player_id": player_id,
+                        "player_name": order_info.get("player_name"),
+                        "catalogue": catalogue_name,
+                        "server_id": body.get("server_id"),
+                    },
+                ),
+            )
+
+            return ProviderOrderResponse(
+                external_order_id=ext_order_id,
+                status=canonical.value,
+                cost=cost,
+                is_success=canonical != ProviderOrderState.FAILED,
+                canonical_state=canonical,
+                delivery=delivery_artifacts,
+                raw_data=data,
+            )
+
+        # Mode 2: Digital Voucher / Gift Card / Product Purchase
+        body = {
             "quantity": request.quantity or 1,
         }
 
@@ -336,3 +398,36 @@ class G2BulkClient(BaseProviderClient):
         if charname:
             body["charname"] = charname
         return await self._request("POST", "/games/checkPlayerId", json_data=body)
+
+    async def get_game_requirements(self, game_code: str) -> dict[str, Any]:
+        """Fetch required fields and available servers for any game title.
+
+        Returns structured metadata detailing if the game needs:
+        - 1 field (UID)
+        - 2 fields (UID + Server / Region)
+        - 3 fields (UID + Server + Character name)
+        - Dropdown server options (if supported) vs freeform input
+        """
+        code = game_code.strip()
+        fields_data = await self._request("POST", "/games/fields", json_data={"game": code})
+        fields_info = fields_data.get("info") if isinstance(fields_data.get("info"), dict) else {}
+        required_fields = list(fields_info.get("fields") or ["userid"])
+        notes = str(fields_info.get("notes") or "")
+
+        servers: dict[str, str] | None = None
+        try:
+            servers_data = await self._request("POST", "/games/servers", json_data={"game": code})
+            raw_servers = servers_data.get("servers")
+            if isinstance(raw_servers, dict):
+                servers = {str(k): str(v) for k, v in raw_servers.items()}
+        except Exception:  # noqa: BLE001 - 403 or unavailable server dropdown returns None cleanly
+            servers = None
+
+        return {
+            "game": code,
+            "fields": required_fields,
+            "requires_server": "serverid" in required_fields,
+            "requires_charname": "charname" in required_fields,
+            "server_dropdown": servers,
+            "notes": notes,
+        }
