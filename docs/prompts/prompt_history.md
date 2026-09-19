@@ -1843,3 +1843,11 @@ Resumed and completed the deployment export and isolated restore repair initiate
 **Scope:** Implement all ten accepted UX recommendations. Track steps in `docs/plans/usability-simplification.md`; defer verification until the end. Preserve backend template identities and commercial authority. Implementation completed; verification results below.
 
 **Implementation:** All ten UX recommendations are implemented across Admin and the public configurator. Added shared chooser/previews, resumable non-secret drafts, direct onboarding tasks, responsive navigation and inline setup errors. Handoff documents updated. Canonical `make verify` passed: 466 fast tests, 15 PostgreSQL tests, Ruff, migration upgrade/Alembic no drift, handoff/secret/JavaScript/compile/dependency checks clean. Existing Admin/Mini App browser regression and new setup UX browser regression passed. Desktop/mobile screenshots inspected; browser coverage includes drafts without tokens, tenant-separated draft restoration, failed submissions, simulated previews, collapsed choices, and mobile portrait/landscape layout. Final verification initially found trailing whitespace and a test synchronization issue; both were corrected, and the mobile wizard footer was improved before the passing rerun. No deployment or real Telegram/payment purchase was performed.
+
+## Usability Deployment — 2026-09-20
+
+**User prompt (verbatim):**
+
+> ok deploy now so i can see the new  things
+
+**Scope:** Deploy verified commit `4e216ad` to the existing local Compose installation. Running schema confirmed at `e5f6a8b9c1d2`; changes since the deployed image are presentation-only. Rebuild the application image and replace only the API service, then verify readiness and live Admin/configurator assets. Deployment completed; all project services healthy, live asset hashes and Chromium checks passed through `http://10.70.5.5:8010`. Standard build encountered Docker DNS failures; static assets were layered onto the prior image without changing dependencies. Only API was recreated. Domain DNS could not be verified from this host. See CURRENT_STATE deployment entry for image provenance.

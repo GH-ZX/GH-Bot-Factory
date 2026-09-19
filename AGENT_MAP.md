@@ -973,3 +973,5 @@ Replaced plaintext single-tenant export with encrypted snapshots (`ghbf-tenant-e
 ### Usability simplification — 2026-09-20
 
 Shared setup presentation lives in `apps/admin/static/store-setup.js` and `store-setup.css`, loaded by Admin and `/build/`. Existing server template keys remain authoritative. Follow `docs/plans/usability-simplification.md` for the implementation checklist and final verification. Drafts never store Telegram tokens or connection credentials. No new API, schema, or trust boundary.
+
+> **2026-09-20 deployment:** UI `4e216ad` is live on the local API; deployment provenance, health checks, and hostname-resolution limitation are recorded under “Usability Deployment” in CURRENT_STATE and prompt history.
