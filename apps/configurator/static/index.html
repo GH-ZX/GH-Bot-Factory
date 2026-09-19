@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080c18">
   <title>Build Your Bot — GH Bot Factory</title>
-  <link rel="stylesheet" href="/build/styles.css?v=20260919_04">
+  <link rel="stylesheet" href="/build/styles.css?v=20260920_01">
+  <link rel="stylesheet" href="/admin/store-setup.css?v=20260920_01">
 </head>
 <body>
   <div class="shell">
@@ -25,19 +26,38 @@
     <main class="container">
       <div class="hero">
         <span class="eyebrow">CUSTOM TELEGRAM BOT CONFIGURATOR</span>
-        <h2>Build Your Custom Telegram Bot or Mini App</h2>
-        <p class="hero-desc">Choose your business template, product sources, provider integrations, and hosting model. Get a live, transparent quote and start your project today.</p>
+        <h2>Let’s build your store</h2>
+        <p class="hero-desc">Tell us what you sell. We’ll suggest a starting setup, show you a demo, and calculate an estimate you can review before sending a request.</p>
       </div>
 
       <div class="configurator-layout">
         <!-- Main Guided Form -->
         <div class="wizard-column">
-          <!-- Step 1: Format -->
-          <section class="config-section" id="step-format">
+          <div class="setup-draft"><span id="draftStatus" role="status">Your non-contact choices are saved in this tab for 24 hours.</span><button type="button" class="btn-ghost" id="discardDraft">Start over</button></div>
+          <!-- Step 2: Template Selection -->
+          <section class="config-section" id="step-template">
             <div class="section-head">
               <span class="step-num">1</span>
               <div>
-                <h3>Select Platform Format</h3>
+                <h3>What do you want to sell?</h3>
+                <p class="muted">Choose a business and product source. We’ll recommend a setup; you can change it at any time.</p>
+              </div>
+            </div>
+
+            <div id="templatesGrid">
+              <div class="loading">Loading available templates...</div>
+            </div>
+          </section>
+
+          <section class="config-section" id="step-appearance">
+            <div class="section-head"><span class="step-num">2</span><div><h3>Make it yours</h3><p class="muted">Try a name and color. These are preferences for your project request, not a live store.</p></div></div>
+            <div class="grid2"><label>Store name<input id="previewName" maxlength="100" placeholder="My store"></label><label>Accent color<input id="previewAccent" type="color" value="#7c6cff"></label></div>
+          </section>
+          <!-- Step 1: Format -->
+          <details class="config-section setup-details" id="step-format"><summary>Customer experience · Bot + storefront selected</summary>
+            <div class="section-head">
+              <div>
+                <h3>Where customers shop</h3>
                 <p class="muted">Native Telegram chat bot, web Mini App, or a synchronized combo bundle.</p>
               </div>
             </div>
@@ -75,85 +95,14 @@
                 </div>
               </label>
             </div>
-          </section>
-
-          <!-- Step 2: Template Selection -->
-          <section class="config-section" id="step-template">
-            <div class="section-head">
-              <span class="step-num">2</span>
-              <div>
-                <h3>Choose Business Vertical / Template</h3>
-                <p class="muted">Select from 11 specialized templates pre-configured for your exact business model.</p>
-              </div>
-            </div>
-            
-            <div class="template-filter-bar">
-              <input type="search" id="templateSearch" placeholder="Search templates, goods (e.g. SMS, keys, cards, accounts)...">
-              <div class="filter-chips">
-                <button type="button" class="chip active" data-filter="all">All (11)</button>
-                <button type="button" class="chip" data-filter="stored">📦 Stored</button>
-                <button type="button" class="chip" data-filter="provider_api">⚡ Live APIs</button>
-                <button type="button" class="chip" data-filter="hybrid">🔀 Hybrid</button>
-              </div>
-            </div>
-
-            <div class="templates-grid" id="templatesGrid">
-              <div class="loading">Loading available templates...</div>
-            </div>
-          </section>
-
-          <!-- Step 3: Product Source -->
-          <section class="config-section" id="step-source">
-            <div class="section-head">
-              <span class="step-num">3</span>
-              <div>
-                <h3>Product Fulfillment Source</h3>
-                <p class="muted">Where do your products originate from?</p>
-              </div>
-            </div>
-            <div class="choice-grid" id="sourceChoices">
-              <label class="choice-card active" data-source="stored">
-                <input type="radio" name="product_source" value="stored" checked>
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>📦 Stored Manual Inventory</strong>
-                    <span class="price-tag">Included ($0)</span>
-                  </div>
-                  <p class="muted">You upload your own product codes, accounts, or services directly in your admin panel.</p>
-                </div>
-              </label>
-
-              <label class="choice-card" data-source="provider_api">
-                <input type="radio" name="product_source" value="provider_api">
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>⚡ Live Supplier APIs</strong>
-                    <span class="price-tag">+$15 setup · +$10/mo</span>
-                  </div>
-                  <p class="muted">Automated supplier ordering, upstream balance tracking, and auto-failover routing.</p>
-                </div>
-              </label>
-
-              <label class="choice-card" data-source="hybrid">
-                <input type="radio" name="product_source" value="hybrid">
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>🔀 Hybrid (Stored + Wholesale APIs)</strong>
-                    <span class="price-tag">+$25 setup · +$15/mo</span>
-                  </div>
-                  <p class="muted">Mix manually uploaded digital inventory with automated wholesale provider APIs.</p>
-                </div>
-              </label>
-            </div>
-          </section>
+          </details>
 
           <!-- Step 4: Add-On Integrations -->
-          <section class="config-section" id="step-integrations">
+          <details class="config-section setup-details" id="step-integrations"><summary>Optional connections · choose only what you need</summary>
             <div class="section-head">
-              <span class="step-num">4</span>
               <div>
-                <h3>Add-On API Integrations</h3>
-                <p class="muted">Select any third-party supplier or payment adapters you want pre-configured.</p>
+                <h3>Optional supplier and payment connections</h3>
+                <p class="muted">Select connections you already know you need. You can discuss these with us later.</p>
               </div>
             </div>
             <div class="integrations-grid" id="integrationsGrid">
@@ -167,18 +116,17 @@
                 <span>💡 Need a supplier, bot, or API not listed here? Tell us what to add!</span>
               </label>
               <div id="customApiFields" class="hidden" style="margin-top:12px;">
-                <p class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.4;">Tell us about the supplier, service, or API you want connected to your store bot (e.g. name, website, documentation URL, or specific goods). We will review it and add it to our factory for your bot!</p>
-                <textarea id="customApiDescription" rows="2" placeholder="e.g. Supplier name (website.com), API swagger link, or specific goods you want to wholesale..." style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:10px;background:#0c1322;color:var(--text);padding:10px 12px;"></textarea>
+                <p class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.4;">Tell us about the supplier, service, or API you want connected to your store bot (e.g. name, website, documentation URL, or specific goods). We will review compatibility and confirm the scope before connecting it.</p>
+                <textarea id="customApiDescription" rows="2" maxlength="1000" placeholder="e.g. Supplier name (website.com), API swagger link, or specific goods you want to wholesale..." style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:10px;background:#0c1322;color:var(--text);padding:10px 12px;"></textarea>
               </div>
             </div>
-          </section>
+          </details>
 
           <!-- Step 5: Hosting & Delivery Model -->
-          <section class="config-section" id="step-hosting">
+          <details class="config-section setup-details" id="step-hosting"><summary>Hosting · we host it for you by default</summary>
             <div class="section-head">
-              <span class="step-num">5</span>
               <div>
-                <h3>Hosting &amp; Delivery Model</h3>
+                <h3>Who will host your store?</h3>
                 <p class="muted">Choose between our managed cloud or self-hosted source code delivery.</p>
               </div>
             </div>
@@ -190,7 +138,7 @@
                     <strong>☁️ Managed Cloud Hosting</strong>
                     <span class="price-tag">Included in plan</span>
                   </div>
-                  <p class="muted">We host and maintain your bot on high-availability clusters with automated SSL and daily backups.</p>
+                  <p class="muted">We manage hosting for you. Hosting and support details are confirmed with your quote.</p>
                 </div>
               </label>
               <label class="choice-card" data-hosting="supabase_cloud">
@@ -226,15 +174,15 @@
                 </div>
               </label>
             </div>
-          </section>
+          </details>
 
           <!-- Step 6: Submit Request -->
           <section class="config-section" id="step-submit">
             <div class="section-head">
-              <span class="step-num">6</span>
+              <span class="step-num">3</span>
               <div>
-                <h3>Submit Project Inquiry</h3>
-                <p class="muted">Send your configuration to the Factory Owner for review, confirmation, and onboarding.</p>
+                <h3>Review and send your request</h3>
+                <p class="muted">Send your configuration to the our team for review, confirmation, and onboarding.</p>
               </div>
             </div>
 
@@ -257,28 +205,30 @@
 
               <label>
                 Project Notes or Special Requirements
-                <textarea id="projectNotes" rows="3" placeholder="Describe your store goods, specific APIs, or target launch timeline..."></textarea>
+                <textarea id="projectNotes" rows="3" maxlength="1750" placeholder="Describe your store goods, specific APIs, or target launch timeline..."></textarea>
               </label>
 
               <div class="form-actions">
                 <button type="submit" id="submitInquiryBtn" class="btn-primary">
-                  🚀 Send Project Inquiry
+                  Send request
                 </button>
                 <a id="telegramChatBtn" hidden aria-disabled="true" target="_blank" rel="noopener noreferrer" class="btn-telegram">
-                  💬 Chat on Telegram
+                  Chat on Telegram
                 </a>
               </div>
-              <p id="inquiryStatusMsg" class="status-msg hidden"></p>
+              <p id="inquiryStatusMsg" role="status" tabindex="-1" class="status-msg hidden"></p>
             </form>
           </section>
         </div>
 
         <!-- Sticky Live Estimate Column -->
         <aside class="estimate-column">
+          <section id="storeDemo" class="setup-preview" aria-label="Sample customer experience"></section>
           <div class="estimate-card">
+            <p id="estimateError" class="setup-error" role="alert"></p>
             <div class="estimate-head">
               <small class="eyebrow">ESTIMATED PRICE</small>
-              <h3>Live Quote Breakdown</h3>
+              <h3>Your estimate</h3>
             </div>
 
             <div class="estimate-totals">
@@ -322,7 +272,7 @@
             <div class="estimate-footer">
               <p class="estimate-note" id="estimateNote">First payment includes one-time setup plus first month's hosting.</p>
               <button type="button" class="btn-accent-full" id="jumpToSubmit">
-                Proceed to Inquiry ↓
+                Review my request
               </button>
             </div>
           </div>
@@ -331,10 +281,11 @@
     </main>
 
     <footer class="footer">
-      <p>GH Bot Factory &copy; 2026. Built on multi-tenant resilient commerce architecture.</p>
+      <p>GH Bot Factory &copy; 2026. Your business, ready for Telegram.</p>
     </footer>
   </div>
 
-  <script src="/build/app.js?v=20260919_04" defer></script>
+  <script src="/admin/store-setup.js?v=20260920_01" defer></script>
+  <script src="/build/app.js?v=20260920_01" defer></script>
 </body>
 </html>

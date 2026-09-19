@@ -481,3 +481,37 @@
     grid-template-columns: repeat(2, 1fr) !important;
   }
 }
+
+/* Task-oriented navigation and setup layout. */
+.sidebar { overflow-y:auto; }
+.nav-heading { color:var(--muted); padding:12px 14px 4px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+.nav-more summary { padding:14px; color:var(--muted); cursor:pointer; }
+.nav-more .nav { display:block; width:100%; }
+.home-actions { justify-content:flex-start; }
+.wizard-dialog form { padding:24px; }
+.wizard-step { min-height:180px; }
+.wizard-step h3 { margin:20px 0 8px; }
+.wizard-actions { position:static; background:var(--panel); padding:16px 0 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+.wizard-dialog label { line-height:1.5; }
+.wizard-dialog button,.wizard-dialog select,.wizard-dialog input:not([type=checkbox]) { min-height:44px; }
+.wizard-dialog a { color:#b8b1ff; }
+.wizard-dialog fieldset { border:1px solid var(--line); border-radius:12px; margin:16px 0; }
+.wizard-dialog .setup-details .template-preview { border:0; padding:0; background:none; }
+#homePreviewDialog { width:min(640px,calc(100vw - 24px)); padding:24px; }
+@media(max-width:820px) {
+  .sidebar nav { display:flex; flex-wrap:wrap; overflow:visible; gap:6px; }
+  .nav-heading { flex-basis:100%; padding:8px 6px 0; }
+  .nav { min-height:44px; flex:1 1 100px; }
+  .nav-more { flex-basis:100%; }
+  .nav-more[open] { display:flex; flex-wrap:wrap; }
+  .nav-more .nav { width:auto; display:inline-block; }
+  .wizard-dialog form { padding:16px; }
+  .wizard-actions { gap:8px; }
+  main { min-width:0; }
+}
+
+@media(max-width:820px) {
+  .sidebar nav { display:flex!important; }
+  .wizard-actions button { width:auto!important; flex:1 1 auto; }
+  .wizard-actions .wizard-spacer { display:none; }
+}

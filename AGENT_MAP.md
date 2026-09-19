@@ -3,6 +3,8 @@
 > **Single Source of Truth for Autonomous Coding Agents**
 > *Last Updated: 2026-09-18 (Phase 14 Customer Marketplace Closure)*
 
+> **2026-09-20 UX advisory:** See “Usability and Template Simplification Advisory” in `docs/prompts/prompt_history.md` for ten recommendations grounded in the template catalog and setup screens. Advisory only; no implementation milestone or new verification claim.
+
 > **2026-09-19 advisory review:** User requested next priorities because the project remains unfinished. See “Project Next-Priority Advisory” in `docs/prompts/prompt_history.md`. Static marketplace review identified onboarding and secret-bearing export concerns; prioritize repair, complete customer journeys, and release evidence. Prior phase completion labels do not establish end-to-end readiness. No implementation milestone or fresh gate is claimed by this advisory.
 
 ---
@@ -966,3 +968,8 @@ User requested further suggestions after `ed9c69a`. Prioritize encrypted/restora
 ### Encrypted Single-Tenant Portability & Destination Restore Repair — 2026-09-19
 
 Replaced plaintext single-tenant export with encrypted snapshots (`ghbf-tenant-encrypted-v2`) via Scrypt KDF + Fernet cipher. Added strict schema fingerprint binding and comprehensive table registry (`INCLUDED` and `EXCLUDED`), rejecting cross-tenant foreign key references. Secrets required by tenant records are resolved from source `SecretStorage` and encrypted inside the envelope; global user auth credentials (hashed passwords/emails) are stripped on export while incrementing `token_version`. Implemented safe offline destination restore script (`scripts/import_tenant_bundle.py`) importing into empty migrated databases only, populating destination `SecretStorage` with unique namespaced references, initializing install state, resetting environment URLs, and disabling bots by default until explicit activation and confirmed source shutdown. Added platform bundle download endpoint (`GET /api/v1/platform/sales/handoffs/{id}/bundle`), `--confirm-quiesced` flag to CLI and Admin UI passphrase dialog, volume `handoff_data:/var/lib/ghbf/handoffs`, and updated status chips. ADR-047 documents the boundary; migration head unchanged at `e5f6a8b9c1d2`. Canonical `make verify` passed: Ruff clean, 438 fast tests, 15 PostgreSQL tests (including isolated schema restore), Alembic no drift, handoff/secret/JS/compile/dependency checks clean.
+
+
+### Usability simplification — 2026-09-20
+
+Shared setup presentation lives in `apps/admin/static/store-setup.js` and `store-setup.css`, loaded by Admin and `/build/`. Existing server template keys remain authoritative. Follow `docs/plans/usability-simplification.md` for the implementation checklist and final verification. Drafts never store Telegram tokens or connection credentials. No new API, schema, or trust boundary.

@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  const match = url.pathname.match(/^\/(admin|miniapp)\/(index.html|app.js|styles.css)?$/);
+  const match = url.pathname.match(/^\/(admin|miniapp)\/(index.html|app.js|styles.css|store-setup.js|store-setup.css)?$/);
   if (!match) { res.writeHead(404); res.end(); return; }
   const file = match[2] || 'index.html';
   res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html');

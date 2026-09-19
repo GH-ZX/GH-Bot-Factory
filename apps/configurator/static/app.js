@@ -36,8 +36,13 @@ async function init() {
     state.templates = tRes.templates || [];
     state.integrations = iRes.integrations || [];
 
+    restoreChoices();
     renderTemplates();
+    if(StoreSetup.groupFor(state.selectedTemplate).id==="numbers")state.selectedSource="provider_api";
+    if(StoreSetup.groupFor(state.selectedTemplate).id==="services")state.selectedSource="stored";
     renderIntegrations();
+    syncChoices();
+    renderDemo();
     bindEvents();
     await updateEstimate();
   } catch (error) {
@@ -46,66 +51,38 @@ async function init() {
   }
 }
 
+const DRAFT_KEY = "ghbf_build_choices_v1";
 function renderTemplates() {
-  const container = el("templatesGrid");
-  const q = state.templateQuery.trim().toLowerCase();
-
-  const filtered = state.templates.filter((t) => {
-    const g = t.guidance || {};
-    if (state.templateFilter !== "all" && g.product_source !== state.templateFilter) {
-      return false;
-    }
-    if (!q) return true;
-    const haystack = [t.name, t.key, t.description, t.recommended_for, g.what_you_can_sell, g.example_business]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(q);
+  StoreSetup.chooser(el("templatesGrid"), {
+    templates:state.templates, key:state.selectedTemplate, source:state.selectedSource,
+    onChange:(key,source)=>{state.selectedTemplate=key;state.selectedSource=source;renderDemo();updateEstimate();},
   });
-
-  if (!filtered.length) {
-    container.innerHTML = `<div class="muted" style="grid-column: 1 / -1; padding: 20px; text-align: center;">No templates match your search.</div>`;
-    return;
+}
+function renderDemo() {
+  StoreSetup.preview(el("storeDemo"), {key:state.selectedTemplate,name:el("previewName").value,accent:el("previewAccent").value});
+}
+function saveChoices() {
+  const saved=StoreSetup.saveDraft(DRAFT_KEY, {template:state.selectedTemplate,source:state.selectedSource,format:state.selectedFormat,hosting:state.selectedHosting,integrations:[...state.selectedIntegrations].filter(k=>k!=="custom-api-request"),name:el("previewName").value,accent:el("previewAccent").value});
+  el("draftStatus").textContent=saved?"Choices saved in this tab for 24 hours. Contact details and notes are not saved.":"Browser storage is unavailable. Keep this tab open to preserve your choices.";
+}
+function restoreChoices() {
+  const d=StoreSetup.readDraft(DRAFT_KEY);if(!d)return;
+  if(state.templates.some(t=>t.key===d.template))state.selectedTemplate=d.template;
+  if(["stored","provider_api","hybrid"].includes(d.source))state.selectedSource=d.source;
+  if(["bot","miniapp","combo"].includes(d.format))state.selectedFormat=d.format;
+  if(["managed","supabase_cloud","dedicated","source_license"].includes(d.hosting))state.selectedHosting=d.hosting;
+  state.selectedIntegrations=new Set((Array.isArray(d.integrations)?d.integrations:[]).filter(k=>state.integrations.some(i=>i.key===k)));
+  el("previewName").value=typeof d.name==="string"?d.name.slice(0,100):"";
+  if(/^#[0-9a-f]{6}$/i.test(d.accent||""))el("previewAccent").value=d.accent;
+}
+function syncChoices() {
+  for(const [container,value,dataKey] of [["formatChoices",state.selectedFormat,"format"],["hostingChoices",state.selectedHosting,"hosting"]]){
+    el(container).querySelectorAll("input").forEach(n=>n.checked=n.value===value);
+    el(container).querySelectorAll(".choice-card").forEach(n=>n.classList.toggle("active",n.dataset[dataKey]===value));
   }
-
-  const complexityClasses = { Low: "low", Medium: "medium", High: "high" };
-  const sourceBadges = {
-    stored: "📦 Stored",
-    provider_api: "⚡ Live APIs",
-    hybrid: "🔀 Hybrid",
-  };
-
-  container.innerHTML = filtered
-    .map((t) => {
-      const isSelected = t.key === state.selectedTemplate;
-      const g = t.guidance || {};
-      const compClass = complexityClasses[g.operational_complexity] || "medium";
-      const sourceLabel = sourceBadges[g.product_source] || g.product_source || "Stored";
-
-      return `
-        <article class="template-card ${isSelected ? "active" : ""}" data-template-key="${escapeHtml(t.key)}">
-          <div>
-            <div class="template-card-head">
-              <h4>${escapeHtml(t.name)}</h4>
-              <span class="badge-source">${escapeHtml(sourceLabel)}</span>
-            </div>
-            <p class="template-desc">${escapeHtml(t.description)}</p>
-            ${
-              g.what_you_can_sell
-                ? `<div class="template-sellable"><strong>Sell:</strong> ${escapeHtml(g.what_you_can_sell)}</div>`
-                : ""
-            }
-          </div>
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px;">
-            <span class="badge-complexity ${compClass}">${escapeHtml(g.operational_complexity || "Low")} Complexity</span>
-            <span style="font-size: 12px; font-weight: 700; color: ${isSelected ? "var(--accent)" : "var(--muted)"}">
-              ${isSelected ? "✓ Selected" : "Select"}
-            </span>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+  el("step-format").querySelector("summary").textContent=`Customer experience · ${{combo:"Bot + storefront",bot:"Bot only",miniapp:"Storefront"}[state.selectedFormat]}`;
+  el("step-hosting").querySelector("summary").textContent=`Hosting · ${{managed:"We host it for you",supabase_cloud:"Your Supabase project",dedicated:"Dedicated server",source_license:"Source license"}[state.selectedHosting]}`;
+  el("step-integrations").querySelector("summary").textContent=`Optional connections · ${state.selectedIntegrations.size} selected`;
 }
 
 function renderIntegrations() {
@@ -135,8 +112,17 @@ function renderIntegrations() {
 }
 
 let estimateTimer = null;
+let estimateRevision = 0;
 async function updateEstimate() {
   clearTimeout(estimateTimer);
+  const revision=++estimateRevision;
+  state.currentEstimate=null;
+  el("telegramChatBtn").hidden=true;
+  el("estOneTime").textContent="Updating…";
+  el("estMonthly").textContent="Updating…";
+  el("estimateError").textContent="";
+  saveChoices();
+  syncChoices();
   estimateTimer = setTimeout(async () => {
     try {
       const payload = {
@@ -151,10 +137,15 @@ async function updateEstimate() {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      if(revision!==estimateRevision)return;
       state.currentEstimate = est;
       renderEstimateUI(est);
     } catch (err) {
-      console.error("Quote estimation error:", err);
+      if(revision!==estimateRevision)return;
+      el("estOneTime").textContent="Unavailable";
+      el("estMonthly").textContent="Unavailable";
+      el("itemizedReceipt").textContent="Change a choice to retry the estimate.";
+      el("estimateError").textContent=`Could not update the estimate. ${err.message}`;
     }
   }, 100);
 }
@@ -169,9 +160,9 @@ function renderEstimateUI(est) {
     bot: "Telegram Bot Only",
   };
   const sourceNames = {
-    stored: "Stored Manual Inventory",
-    provider_api: "Live Wholesale APIs",
-    hybrid: "Hybrid (Stored + APIs)",
+    stored: "My own stock or services",
+    provider_api: "Connected supplier",
+    hybrid: "Stock and suppliers",
   };
   const hostingNames = {
     managed: "Managed Cloud Hosting",
@@ -239,49 +230,10 @@ function bindEvents() {
     updateEstimate();
   });
 
-  // Template Search & Filter
-  el("templateSearch").addEventListener("input", (e) => {
-    state.templateQuery = e.target.value;
-    renderTemplates();
-  });
-
-  document.querySelectorAll(".filter-chips button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".filter-chips button").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      state.templateFilter = btn.dataset.filter;
-      renderTemplates();
-    });
-  });
-
-  // Template Card Selection
-  el("templatesGrid").addEventListener("click", (e) => {
-    const card = e.target.closest("[data-template-key]");
-    if (card) {
-      state.selectedTemplate = card.dataset.templateKey;
-      const t = state.templates.find((x) => x.key === state.selectedTemplate);
-      // Auto-switch source matching template guidance if appropriate
-      if (t?.guidance?.product_source) {
-        state.selectedSource = t.guidance.product_source;
-        document.querySelectorAll("#sourceChoices input").forEach((r) => {
-          r.checked = r.value === state.selectedSource;
-        });
-        document.querySelectorAll("#sourceChoices .choice-card").forEach((c) => {
-          c.classList.toggle("active", c.dataset.source === state.selectedSource);
-        });
-      }
-      renderTemplates();
-      updateEstimate();
-    }
-  });
-
-  // Source Choice
-  el("sourceChoices").addEventListener("change", (e) => {
-    state.selectedSource = e.target.value;
-    document.querySelectorAll("#sourceChoices .choice-card").forEach((card) => {
-      card.classList.toggle("active", card.dataset.source === state.selectedSource);
-    });
-    updateEstimate();
+  ["previewName","previewAccent"].forEach(id=>el(id).addEventListener("input",()=>{renderDemo();saveChoices();}));
+  el("discardDraft").addEventListener("click",()=>{
+    if(!confirm("Clear your choices and start again?"))return;
+    StoreSetup.clearDraft(DRAFT_KEY);location.reload();
   });
 
   // Integrations Grid
@@ -341,6 +293,7 @@ function bindEvents() {
     statusMsg.className = "status-msg hidden";
 
     try {
+      if(!state.currentEstimate)throw new Error("Wait for the estimate to update before sending. If it is unavailable, change a choice to retry.");
       const customApiChecked = el("requestCustomApiCheck")?.checked;
       const customApiText = el("customApiDescription")?.value.trim() || "";
       const customApiRequest = customApiChecked && customApiText ? customApiText : null;
@@ -348,7 +301,7 @@ function bindEvents() {
       const payload = {
         contact_method: el("contactMethod").value,
         contact_handle: el("contactHandle").value.trim(),
-        project_notes: el("projectNotes").value.trim() || null,
+        project_notes: [el("projectNotes").value.trim(), `Appearance preference: ${el("previewName").value.trim() || "Not named yet"}; accent ${el("previewAccent").value}.`].filter(Boolean).join("\n"),
         format: state.selectedFormat,
         template_key: state.selectedTemplate,
         product_source: state.selectedSource,
@@ -361,6 +314,8 @@ function bindEvents() {
         body: JSON.stringify(payload),
       });
 
+      StoreSetup.clearDraft(DRAFT_KEY);
+      el("draftStatus").textContent="Request sent. Your saved draft has been cleared.";
       statusMsg.className = "status-msg success";
       statusMsg.innerHTML = `
         <strong>✓ Inquiry #${result.inquiry_id.slice(0, 8)} submitted successfully!</strong>
@@ -378,8 +333,9 @@ function bindEvents() {
     } catch (err) {
       statusMsg.className = "status-msg error";
       statusMsg.textContent = `Error: ${err.message || "Could not submit inquiry."}`;
+      statusMsg.focus();
       btn.disabled = false;
-      btn.textContent = "🚀 Send Project Inquiry";
+      btn.textContent = "Send request";
     }
   });
 }

@@ -1824,3 +1824,22 @@ Resumed and completed the deployment export and isolated restore repair initiate
 4. **Verification:**
    - Unit and integration test coverage: `tests/test_tenant_bundle.py` (encrypted roundtrip, tampering/cross-tenant rejection, vault rollback, CLI arg validation), `tests/postgres/test_tenant_restore.py` (isolated PostgreSQL schema restore), and updated `tests/test_phase14_5_deployment_handoff.py` and `tests/test_phase14_6_release_qualification.py`.
    - Canonical `make verify` passed: Ruff clean, 438 fast tests passed, 15 PostgreSQL concurrency/restore tests passed, Alembic no drift, JS syntax clean.
+
+
+## Usability and Template Simplification Advisory — 2026-09-20
+
+**User prompt (verbatim):**
+
+> this project suffers from being somehow hard, teplates are just so much and feels off , suggest me top 10 things to do ( not as security or archetecture, like ui ux, guidence etcccc
+
+**Review:** Static inspection of the template catalog, public configurator, and Admin wizard found overlapping business/source template choices and technical setup language. Recommended simpler business choices, separate appearance/source decisions, goal-based guidance, advanced-option disclosure, interactive previews, actionable onboarding, plain language, task-based navigation, consistent visual hierarchy, and resumable setup with contextual help. Advisory only; no application changes, browser usability test, implementation milestone, or fresh canonical verification.
+
+## Usability Simplification Implementation — 2026-09-20
+
+**User prompt (verbatim):**
+
+> yah first write what you gonna do and every step , mark it as complete when u finish it now do them, no need for testing until the end , just once
+
+**Scope:** Implement all ten accepted UX recommendations. Track steps in `docs/plans/usability-simplification.md`; defer verification until the end. Preserve backend template identities and commercial authority. Implementation completed; verification results below.
+
+**Implementation:** All ten UX recommendations are implemented across Admin and the public configurator. Added shared chooser/previews, resumable non-secret drafts, direct onboarding tasks, responsive navigation and inline setup errors. Handoff documents updated. Canonical `make verify` passed: 466 fast tests, 15 PostgreSQL tests, Ruff, migration upgrade/Alembic no drift, handoff/secret/JavaScript/compile/dependency checks clean. Existing Admin/Mini App browser regression and new setup UX browser regression passed. Desktop/mobile screenshots inspected; browser coverage includes drafts without tokens, tenant-separated draft restoration, failed submissions, simulated previews, collapsed choices, and mobile portrait/landscape layout. Final verification initially found trailing whitespace and a test synchronization issue; both were corrected, and the mobile wizard footer was improved before the passing rerun. No deployment or real Telegram/payment purchase was performed.

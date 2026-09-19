@@ -709,3 +709,17 @@ input:focus, select:focus, textarea:focus {
 }
 
 .btn-telegram[hidden] { display: none; }
+
+/* Keep decisions and the next action visually distinct. */
+.config-section { padding:24px; }
+.config-section.setup-details { padding:0 24px; }
+.config-section.setup-details[open] { padding-bottom:24px; }
+.estimate-column { min-width:0; }
+.estimate-column .setup-preview { margin:0 0 20px; }
+.estimate-card { position:static; }
+.template-card { cursor:pointer; }
+input[type=color] { width:100%; height:46px; }
+label { line-height:1.5; }
+button,.btn-ghost { min-height:44px; }
+.config-section .step-num { flex-shrink:0; }
+@media(max-width:600px) { .config-section { padding:18px; } .config-section.setup-details { padding-inline:18px; } .topbar { position:static; } }

@@ -55,6 +55,74 @@ async function authenticate() {
   return true;
 }
 
+let botOptionsRevision=0, botOptionsReady=false, botSaving=false, botSaveSucceeded=false;
+const botDraftFields=["botDisplayName","botExpectedUsername","botBrandAccent","botStoreTagline","botWelcomeText","botLogoUrl","botSupportContact","botSupportUrl","botMenuText","botCurrency","botLocale","botModuleCatalog","botModuleOrders","botModuleAccount","botEnabled"];
+function supplierStrategyLabel(value){return {PRIORITY:"Use my supplier order",AVAILABILITY:"Choose an available supplier",LOWEST_COST:"Choose the lowest supplier cost",MANUAL:"Use one specific supplier"}[value]||value;}
+function botDraftKey(){const b=state.bootstrap;return b?.store?.id&&b?.actor?.id?`ghbf_bot_draft:${b.store.id}:${b.actor.id}:${el("botWizardBotId").value||"new"}`:"ghbf_bot_draft:unavailable";}
+function showBotError(message,field=null){el("botWizardError").textContent=message;if(field){field.setAttribute("aria-invalid","true");field.setAttribute("aria-describedby","botWizardError");field.focus();}else el("botWizardError").focus();}
+function showHomeError(error){el("homeActionError").textContent=error.message||String(error);el("homeActionError").scrollIntoView({block:"center"});}
+function renderBotDemo(){StoreSetup.preview(el("botCustomerDemo"),{key:el("botTemplate").value,name:el("botDisplayName").value,tagline:el("botStoreTagline").value,accent:el("botBrandAccent").value});}
+function renderBotChooser(){StoreSetup.chooser(el("botBusinessChooser"),{templates:state.botTemplates,key:el("botTemplate").value,source:state.botSource,onChange:(key,source)=>{state.botSource=source;el("botTemplate").value=key;changeBotTemplate(false);}});}
+function changeBotTemplate(redraw=true){
+  renderBotTemplatePreview();renderBotDemo();if(redraw)renderBotChooser();
+  loadBotWizardOptions().then(()=>saveBotDraft()).catch(err=>showBotError(`Could not load connection choices. ${err.message} Choose your setup again to retry.`));
+}
+function showBotDraft(){const draft=StoreSetup.readDraft(botDraftKey());el("resumeBotDraft").classList.toggle("hidden",!draft);el("discardBotDraft").classList.toggle("hidden",!draft);el("botDraftStatus").textContent=draft?"A saved draft is available for this store. Resume it or start with the current choices.":"Progress is saved in this tab for 24 hours. Tokens are never saved.";}
+function saveBotDraft(afterClose=false){
+  if((!el("botProvisionDialog").open&&!afterClose)||botSaveSucceeded||!state.token||!state.bootstrap?.store?.id)return;
+  const fields={};for(const id of botDraftFields)fields[id]=el(id).type==="checkbox"?el(id).checked:el(id).value;
+  const saved=StoreSetup.saveDraft(botDraftKey(),{template:el("botTemplate").value,source:state.botSource,fields,step:state.botWizardStep,profile:botOptionsReady?currentBotBusinessProfile():null});
+  el("botDraftStatus").textContent=saved?"Draft saved in this tab. Paste your token again when you return.":"Browser storage is unavailable. Keep this setup open to preserve your choices.";
+  el("resumeBotDraft").classList.add("hidden");el("discardBotDraft").classList.toggle("hidden",!saved);
+}
+async function resumeBotDraft(){
+  const draft=StoreSetup.readDraft(botDraftKey());if(!draft)return;
+  if(!state.botTemplates.some(t=>t.key===draft.template))throw new Error("This saved preset is no longer available. Choose a new starting setup.");
+  el("botTemplate").value=draft.template;
+  state.botSource=["stored","provider_api","hybrid"].includes(draft.source)?draft.source:undefined;
+  for(const id of botDraftFields){const v=draft.fields?.[id];if(el(id).type==="checkbox"){if(typeof v==="boolean")el(id).checked=v;}else if(typeof v==="string")el(id).value=v;}
+  el("botToken").value="";
+  await loadBotWizardOptions({profile:draft.profile});
+  renderBotChooser();renderBotTemplatePreview();renderBotBrandPreview();
+  setWizardStep(state.botWizardMode==="create"?Math.min(Number(draft.step)||1,2):Number(draft.step)||1);
+  el("botDraftStatus").textContent="Draft restored. Your token was not saved.";
+}
+function validateBotStep(all=false){
+  el("botWizardError").textContent="";
+  document.querySelectorAll('#botProvisionForm [aria-invalid]').forEach(n=>n.removeAttribute('aria-invalid'));
+  const controls=[...el("botProvisionForm").querySelectorAll("input,select,textarea")].filter(n=>!n.disabled&&n.type!=="hidden"&&(!n.closest('[data-wizard-step]')||all||Number(n.closest('[data-wizard-step]').dataset.wizardStep)===state.botWizardStep));
+  for(const field of controls){if(!field.checkValidity()){
+    const step=field.closest('[data-wizard-step]');if(step)setWizardStep(Number(step.dataset.wizardStep));
+    let parent=field.parentElement;while(parent&&parent!==el("botProvisionForm")){if(parent.tagName==="DETAILS")parent.open=true;parent=parent.parentElement;}
+    showBotError(`${field.closest('label')?.childNodes[0]?.textContent?.trim()||"This field"}: ${field.validationMessage}`,field);return false;
+  }}
+  if((all||state.botWizardStep===4)&&el("botRoutingStrategy").value==="MANUAL"&&!el("botPreferredProvider").value){setWizardStep(4);el("botAdvancedConnections").open=true;showBotError("Choose a supplier, or select a different supplier selection method.",el("botPreferredProvider"));return false;}
+  return true;
+}
+async function navigateTo(view){
+  const button=document.querySelector(`.nav[data-view="${view}"]`);if(!button)return;
+  document.querySelectorAll(".nav,.view").forEach(n=>n.classList.remove("active"));
+  button.classList.add("active");el(`view-${view}`).classList.add("active");el("viewTitle").textContent=button.textContent;
+  if(button.closest("details"))button.closest("details").open=true;
+  await refreshCurrent();
+}
+function onboardingLabel(key,fallback){return {bot_token:"Connect Telegram",branding:"Name your store",catalog:"Add a product",payments:"Set up payments",providers:"Connect a supplier"}[key]||fallback;}
+async function openOnboardingTask(key,view){
+  await navigateTo(view);
+  if(["bot_token","branding"].includes(key)&&canOperateBots())await openBotProvision(state.bots[0]||null);
+  else if(key==="catalog"&&state.bootstrap.actor.role!=="STAFF")openProduct();
+  else if(key==="payments")openPaymentProvider();
+  else if(key==="providers")openSupplier();
+}
+async function openHomePreview(){
+  const fleet=await api("/api/v1/admin/bots/fleet");
+  state.previewBots=fleet.bots||[];
+  el("homePreviewBot").innerHTML=state.previewBots.length?state.previewBots.map(b=>`<option value="${escapeHtml(b.id)}">${escapeHtml(b.display_name||b.username||"Store bot")}</option>`).join(""):'<option value="">Sample store · connect a bot to check launch readiness</option>';
+  el("previewLaunchCheck").disabled=!state.previewBots.length;el("previewLaunchError").textContent="";
+  renderHomeDemo();el("homePreviewDialog").showModal();
+}
+function renderHomeDemo(){const b=state.previewBots?.find(b=>b.id===el("homePreviewBot").value);StoreSetup.preview(el("homeCustomerDemo"),{key:templateKeyForBot(b),name:b?.display_name||"Sample store",accent:b?.config?.branding?.brand_accent});}
+
 let bound = false;
 function showLogin(message = "") {
   clearSessionToken();
@@ -106,7 +174,7 @@ async function loadBootstrap() {
   el("metricGrid").innerHTML = [
     ["Products", c.products, `${c.active_products} active`],
     ["Orders", c.orders, `${c.attention_orders} need attention`],
-    ["Dead letters", c.dead_letter_jobs, "Fulfillment queue"],
+    ["Delivery issues", c.dead_letter_jobs, "Orders needing help"],
     ["Financial cases", c.financial_open_cases, `${c.reconciliation_reviews} provider review event${c.reconciliation_reviews===1?"":"s"}`],
   ].map(([label,value,hint])=>`<article class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small class="muted">${escapeHtml(hint)}</small></article>`).join("");
   el("newProduct").classList.toggle("hidden", state.bootstrap.actor.role === "STAFF");
@@ -120,32 +188,34 @@ async function loadOnboardingChecklist() {
   if (!card) return;
   try {
     const data = await api("/api/v1/admin/onboarding/checklist");
-    if (data.launch_ready) {
-      card.classList.add("hidden");
-      return;
-    }
+    if(!Array.isArray(data.items))throw new Error("Checklist unavailable");
     card.classList.remove("hidden");
     el("onboardingProgressBadge").textContent = `${data.progress_percent}% Complete`;
     el("onboardingProgressBadge").className = `chip ${data.progress_percent >= 60 ? "chip-ok" : "chip-accent"}`;
     el("onboardingProgressBar").style.width = `${data.progress_percent}%`;
-    el("onboardingNextStep").innerHTML = `<strong>Next step:</strong> ${escapeHtml(data.next_step)}`;
+    const order=["bot_token","branding","catalog","payments","providers"];
+    data.items.sort((a,b)=>order.indexOf(a.key)-order.indexOf(b.key));
+    const next=data.items.find(it=>!it.completed);
+    el("onboardingNextStep").textContent=next?`Next: ${onboardingLabel(next.key,next.title)}.`:"Setup basics complete. Preview the customer experience, then check launch readiness below.";
 
     el("onboardingItemsList").innerHTML = data.items.map((it) => `
       <div class="item-row" style="background:#0c1322;padding:8px 12px;border-radius:10px;border:1px solid ${it.completed ? "rgba(85,211,159,0.3)" : "var(--line)"}">
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:16px">${it.completed ? "✅" : "⭕"}</span>
+          <span style="font-size:16px">${it.completed ? "✓" : "○"}</span>
           <div>
-            <strong style="color:${it.completed ? "var(--text)" : "var(--muted)"}">${escapeHtml(it.title)}</strong>
+            <strong style="color:${it.completed ? "var(--text)" : "var(--muted)"}">${escapeHtml(onboardingLabel(it.key,it.title))}</strong>
             <small style="display:block;color:var(--muted)">${escapeHtml(it.description)}</small>
           </div>
         </div>
         <div>
-          ${it.completed ? `<span class="chip chip-ok">Ready</span>` : `<button type="button" class="ghost" data-onboarding-target="${escapeHtml(it.action_view)}">Configure →</button>`}
+          ${it.completed ? `<span class="chip chip-ok">Done</span>` : `<button type="button" class="${next?.key===it.key?"primary":"ghost"}" data-onboarding-key="${escapeHtml(it.key)}" data-onboarding-target="${escapeHtml(it.action_view)}">${escapeHtml(onboardingLabel(it.key,"Continue"))}</button>`}
         </div>
       </div>
     `).join("");
   } catch (_) {
-    card.classList.add("hidden");
+    card.classList.remove("hidden");
+    el("onboardingNextStep").textContent="Could not load setup progress. Use Refresh to try again.";
+    el("onboardingItemsList").replaceChildren();
   }
 }
 
@@ -207,8 +277,8 @@ async function loadBots(){
     const provSummary = pCount ? `${pCount} provider${pCount===1?'':'s'}` : "All compatible";
     const rStrategy = b.business_profile?.routing_strategy || "default routing";
     return `<article class="item"><div class="item-row"><div><h3>${escapeHtml(b.display_name)} ${b.username?`<span class="chip">@${escapeHtml(b.username)}</span>`:""} <span class="chip chip-accent">${escapeHtml(bBadge)}</span></h3><div class="item-meta"><span>Telegram ${escapeHtml(b.telegram_bot_id)}</span><span>Credential v${escapeHtml(b.credential_version)} · ${escapeHtml(b.credential_status)}</span><span>Runtime ${escapeHtml(b.runtime_status)}</span><span>Channel ${escapeHtml(b.release_channel)}</span><span>${b.template_key?`${escapeHtml(b.template_key)} v${escapeHtml(b.template_version||1)}`:"legacy config"}</span><span>${escapeHtml(provSummary)}</span><span>${escapeHtml(rStrategy)}</span><span>Updated ${new Date(b.updated_at).toLocaleString()}</span></div>${b.runtime_detail?`<p class="muted compact">Runtime: ${escapeHtml(b.runtime_detail)}</p>`:""}</div><div class="ops-actions">${statusChip(b.desired_state)} ${statusChip(b.runtime_status)} ${statusChip(b.credential_status)}${canOperateBots()?`<button class="ghost" data-verify-bot-credential="${b.id}">Verify credential</button><button class="ghost" data-rotate-bot-credential="${b.id}">Rotate token</button><button class="ghost" data-launch-check-bot="${b.id}">Launch check</button><button class="ghost" data-restart-bot="${b.id}" ${b.is_enabled&&commercialMutationAllowed()&&saasFeatureEnabled("runtime_controls")?"":"disabled"}>Restart runtime</button><button class="ghost" data-release-channel-bot="${b.id}" data-release-channel="${b.release_channel}" ${b.release_channel==="CANARY"||commercialMutationAllowed()&&saasFeatureEnabled("canary_rollout")?"":"disabled"}>${b.release_channel==="CANARY"?"Promote stable":"Move to canary"}</button><button class="ghost" data-configure-bot="${b.id}">Configure</button><button class="ghost" data-toggle-bot="${b.id}" data-enabled="${b.is_enabled}" ${b.is_enabled||commercialMutationAllowed()?"":"disabled"}>${b.is_enabled?"Disable":"Enable"}</button>`:""}</div></div></article>`;
-  }).join(""):`<div class="empty">No bots provisioned for this tenant.</div>`;
-  el("botJobList").innerHTML=state.botJobs.length?state.botJobs.map(j=>`<article class="item"><div class="item-row"><div><h3>${escapeHtml(j.expected_username?`@${j.expected_username}`:(j.requested_display_name||"Bot provisioning"))}</h3><div class="item-meta"><span>Attempt ${j.attempt_count}/${j.max_attempts}</span><span>${j.verified_username?`Verified @${escapeHtml(j.verified_username)}`:"Identity pending"}</span><span>${new Date(j.created_at).toLocaleString()}</span></div><p class="muted compact">${escapeHtml(j.last_error_code||"Durable job awaiting or completed verification.")}</p></div><div class="ops-actions">${statusChip(j.status)}${canOperateBots()&&j.status==="FAILED"?`<button class="ghost" data-retry-bot-job="${j.id}" ${commercialMutationAllowed()?"":"disabled"}>Retry</button>`:""}${canOperateBots()&&["PENDING","RETRY"].includes(j.status)?`<button class="ghost" data-cancel-bot-job="${j.id}">Cancel</button>`:""}</div></div></article>`).join(""):`<div class="empty">No provisioning jobs yet.</div>`;
+  }).join(""):`<div class="empty">No bots yet. Choose Create bot to connect your first store.</div>`;
+  el("botJobList").innerHTML=state.botJobs.length?state.botJobs.map(j=>`<article class="item"><div class="item-row"><div><h3>${escapeHtml(j.expected_username?`@${j.expected_username}`:(j.requested_display_name||"Bot provisioning"))}</h3><div class="item-meta"><span>Attempt ${j.attempt_count}/${j.max_attempts}</span><span>${j.verified_username?`Verified @${escapeHtml(j.verified_username)}`:"Identity pending"}</span><span>${new Date(j.created_at).toLocaleString()}</span></div><p class="muted compact">${escapeHtml(j.last_error_code||"Telegram verification is queued or complete. Check the status for progress.")}</p></div><div class="ops-actions">${statusChip(j.status)}${canOperateBots()&&j.status==="FAILED"?`<button class="ghost" data-retry-bot-job="${j.id}" ${commercialMutationAllowed()?"":"disabled"}>Retry</button>`:""}${canOperateBots()&&["PENDING","RETRY"].includes(j.status)?`<button class="ghost" data-cancel-bot-job="${j.id}">Cancel</button>`:""}</div></div></article>`).join(""):`<div class="empty">No bot connections in progress.</div>`;
 }
 
 function selectedBotTemplate(){return state.botTemplates.find(t=>t.key===el("botTemplate").value)||state.botTemplates[0]||null;}
@@ -220,22 +290,32 @@ function setWizardStep(step){
   const last=state.botWizardStep===5;if(last)renderBotWizardReview();
   el("botWizardNext").classList.toggle("hidden",last);
   el("botWizardSubmit").classList.toggle("hidden",!last);
-  el("botWizardSubmit").textContent=state.botWizardMode==="edit"?"Save configuration":"Queue provisioning";
+  el("botWizardSubmit").textContent=state.botWizardMode==="edit"?"Save configuration":"Create bot";
+  el("botWizardError").textContent="";
+  document.querySelectorAll("[data-step-dot]").forEach(n=>{if(Number(n.dataset.stepDot)===state.botWizardStep)n.setAttribute("aria-current","step");else n.removeAttribute("aria-current");});
+  saveBotDraft();
 }
 async function loadBotWizardOptions({preserveSelections=false,profile=null}={}){
   const template=selectedBotTemplate();if(!template)return;
   const previousProviders=preserveSelections?new Set([...document.querySelectorAll('[data-bot-provider]:checked')].map(n=>n.value)):new Set((profile?.provider_ids||[]).map(String));
   const previousMethods=preserveSelections?new Set([...document.querySelectorAll('[data-bot-payment]:checked')].map(n=>n.value)):new Set((profile?.payment_method_ids||[]).map(String));
-  state.botWizardOptions=await api(`/api/v1/admin/bots/wizard/options?template_key=${encodeURIComponent(template.key)}`);
+  const request=++botOptionsRevision;
+  botOptionsReady=false;
+  el("botWizardNext").disabled=true;el("botWizardSubmit").disabled=true;
+  const options=await api(`/api/v1/admin/bots/wizard/options?template_key=${encodeURIComponent(template.key)}`);
+  if(request!==botOptionsRevision)return;
+  state.botWizardOptions=options;
   const o=state.botWizardOptions;
-  el("botRoutingStrategy").innerHTML=o.routing_strategies.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v.replaceAll('_',' '))}</option>`).join("");
+  el("botRoutingStrategy").innerHTML=o.routing_strategies.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(supplierStrategyLabel(v))}</option>`).join("");
   el("botRoutingStrategy").value=profile?.routing_strategy||o.default_routing_strategy||"PRIORITY";
-  el("botPricingTier").innerHTML=`<option value="">Tenant default</option>`+o.pricing_tiers.map(t=>`<option value="${t.id}">${escapeHtml(t.display_name)}${t.is_default?' · default':''}</option>`).join("");
+  el("botPricingTier").innerHTML=`<option value="">Store default</option>`+o.pricing_tiers.map(t=>`<option value="${t.id}">${escapeHtml(t.display_name)}${t.is_default?' · default':''}</option>`).join("");
   el("botPricingTier").value=profile?.default_pricing_tier_id||"";
-  el("botProviderChoices").innerHTML=o.providers.length?o.providers.map(v=>`<label class="choice-card"><input type="checkbox" data-bot-provider value="${v.id}" ${previousProviders.has(String(v.id))?'checked':''}><span><strong>${escapeHtml(v.name)}</strong><small class="muted">${escapeHtml(v.category)} · ${escapeHtml(v.health_status)}</small></span></label>`).join(""):`<div class="empty">No compatible enabled providers yet. You can provision the bot now and add providers later.</div>`;
+  el("botProviderChoices").innerHTML=o.providers.length?o.providers.map(v=>`<label class="choice-card"><input type="checkbox" data-bot-provider value="${v.id}" ${previousProviders.has(String(v.id))?'checked':''}><span><strong>${escapeHtml(v.name)}</strong><small class="muted">${escapeHtml(v.category)} · ${escapeHtml(v.health_status)}</small></span></label>`).join(""):`<div class="empty">No suppliers connected yet. Create your bot now, then add a supplier from Suppliers & payments.</div>`;
   el("botPaymentChoices").innerHTML=o.payment_methods.length?o.payment_methods.map(v=>`<label class="choice-card"><input type="checkbox" data-bot-payment value="${v.id}" ${previousMethods.has(String(v.id))?'checked':''}><span><strong>${escapeHtml(v.display_name)}</strong><small class="muted">${escapeHtml(v.method_type)}${v.provider_name?` · ${escapeHtml(v.provider_name)}`:''}${v.flexible_deposits_enabled?' · flexible':''}</small></span></label>`).join(""):`<div class="empty">No enabled payment methods yet. Wallet checkout remains available for pre-funded balances.</div>`;
   el("botAllowAutoCredit").checked=profile?.allow_flexible_auto_credit??false;
   refreshPreferredProvider(profile?.preferred_provider_id||null);
+  botOptionsReady=true;
+  el("botWizardNext").disabled=false;el("botWizardSubmit").disabled=false;
 }
 function refreshPreferredProvider(selected=null){
   const checked=[...document.querySelectorAll('[data-bot-provider]:checked')];
@@ -249,7 +329,7 @@ function currentBotBusinessProfile(){
 }
 function renderBotWizardReview(){
   const t=selectedBotTemplate(),p=currentBotBusinessProfile(),providers=[...document.querySelectorAll('[data-bot-provider]:checked')].map(n=>n.closest('label')?.querySelector('strong')?.textContent||n.value),methods=[...document.querySelectorAll('[data-bot-payment]:checked')].map(n=>n.closest('label')?.querySelector('strong')?.textContent||n.value);
-  el("botWizardReview").innerHTML=[['Template',t?.name||'—'],['Business type',p.business_type],['Providers',providers.length?providers.join(', '):'All compatible enabled providers'],['Routing',p.routing_strategy+(p.preferred_provider_id?` · preferred ${el("botPreferredProvider").selectedOptions[0]?.textContent||''}`:'')],['Payments',methods.length?methods.join(', '):'All enabled tenant payment methods'],['Pricing',el("botPricingTier").selectedOptions[0]?.textContent||'Tenant default'],['Flexible auto-credit',p.allow_flexible_auto_credit?'Allowed when method permits':'Disabled for this bot']].map(([a,b])=>`<article class="item"><div class="item-row"><strong>${escapeHtml(a)}</strong><span class="muted">${escapeHtml(b)}</span></div></article>`).join("");
+  el("botWizardReview").innerHTML=[['Starting setup',t?.name||'—'],['Business',StoreSetup.groupFor(t?.key).name],['Providers',providers.length?providers.join(', '):'All compatible enabled providers'],['Supplier selection',supplierStrategyLabel(p.routing_strategy)+(p.preferred_provider_id?` · preferred ${el("botPreferredProvider").selectedOptions[0]?.textContent||''}`:'')],['Payments',methods.length?methods.join(', '):'All enabled tenant payment methods'],['Pricing',el("botPricingTier").selectedOptions[0]?.textContent||'Store default'],['Flexible auto-credit',p.allow_flexible_auto_credit?'Allowed when method permits':'Disabled for this bot']].map(([a,b])=>`<article class="item"><div class="item-row"><strong>${escapeHtml(a)}</strong><span class="muted">${escapeHtml(b)}</span></div></article>`).join("");
 }
 function applyBotTemplateDefaults(template,{preserveIdentity=false}={}){
   if(!template)return;const c=template.default_config||{},b=c.branding||{};
@@ -399,26 +479,32 @@ function openTemplateGuidance() {
   renderTemplateGuidanceList();
   el("templateGuidanceDialog").showModal();
 }
-function renderBotBrandPreview(){const name=el("botDisplayName").value.trim()||selectedBotTemplate()?.name||"My Store";const tagline=el("botStoreTagline").value.trim()||"Your storefront preview";const accent=el("botBrandAccent").value||"#7c6cff";const logo=el("botLogoUrl").value.trim();const mark=el("botBrandPreviewMark");mark.style.backgroundColor=accent;mark.style.backgroundImage=logo?`url("${logo.replaceAll('"','%22')}")`:"";mark.textContent=logo?"":(name.charAt(0).toUpperCase()||"G");el("botBrandPreviewName").textContent=name;el("botBrandPreviewTagline").textContent=tagline;}
+function renderBotBrandPreview(){renderBotDemo();const name=el("botDisplayName").value.trim()||selectedBotTemplate()?.name||"My Store";const tagline=el("botStoreTagline").value.trim()||"Your storefront preview";const accent=el("botBrandAccent").value||"#7c6cff";const logo=el("botLogoUrl").value.trim();const mark=el("botBrandPreviewMark");mark.style.backgroundColor=accent;mark.style.backgroundImage=logo?`url("${logo.replaceAll('"','%22')}")`:"";mark.textContent=logo?"":(name.charAt(0).toUpperCase()||"G");el("botBrandPreviewName").textContent=name;el("botBrandPreviewTagline").textContent=tagline;}
 function templateKeyForBot(bot){return bot?.template_key||bot?.config?._factory?.template_key||"general-commerce";}
 async function openBotProvision(bot=null){
+  state.botSource=undefined;
   state.botWizardMode=bot?"edit":"create";el("botWizardBotId").value=bot?.id||"";el("botWizardTitle").textContent=bot?"Configure bot":"Create a bot";
   el("botTemplate").innerHTML=state.botTemplates.map(t=>`<option value="${escapeHtml(t.key)}">${escapeHtml(t.name)} · v${escapeHtml(t.version)}</option>`).join("");
   const onboarding = bot ? null : await api("/api/v1/admin/onboarding/checklist");
   const key=bot ? templateKeyForBot(bot) : onboarding.recommended_template_key;if(key&&state.botTemplates.some(t=>t.key===key))el("botTemplate").value=key;
+  state.botSource=selectedBotTemplate()?.guidance?.product_source;
   el("botToken").value="";el("botExpectedUsername").value=bot?.username||"";el("botDisplayName").value=bot?.display_name||"";el("botEnabled").checked=bot?.is_enabled??true;
   el("botCredentialFields").classList.toggle("hidden",Boolean(bot));el("botCredentialPreserved").classList.toggle("hidden",!bot);el("botToken").required=!bot;
   applyBotTemplateDefaults(selectedBotTemplate(),{preserveIdentity:Boolean(bot)});
   if(bot){const c=bot.config||{},b=c.branding||{};el("botCurrency").value=c.currency||el("botCurrency").value;el("botLocale").value=c.locale||el("botLocale").value;el("botBrandAccent").value=b.brand_accent||el("botBrandAccent").value;el("botStoreTagline").value=b.store_tagline||"";el("botWelcomeText").value=b.welcome_text||"";el("botLogoUrl").value=b.brand_logo_url||"";el("botSupportContact").value=b.support_contact||"";el("botSupportUrl").value=b.support_url||"";el("botMenuText").value=b.menu_text||"Open Store";const mods=new Set(c.enabled_modules||[]);el("botModuleCatalog").checked=mods.has("catalog");el("botModuleOrders").checked=mods.has("orders");el("botModuleAccount").checked=mods.has("account");}
   await loadBotWizardOptions({profile:bot?.business_profile||bot?.config?._business||null});
-  renderBotBrandPreview();setWizardStep(1);el("botProvisionDialog").showModal();
+  renderBotChooser();renderBotBrandPreview();setWizardStep(1);el("botProvisionDialog").showModal();
+  botSaveSucceeded=false;showBotDraft();
 }
 function botWizardPayload(){const template=selectedBotTemplate();if(!template)throw new Error("Select a bot template.");const modules=[["catalog","botModuleCatalog"],["orders","botModuleOrders"],["account","botModuleAccount"]].filter(([,id])=>el(id).checked).map(([name])=>name);if(!modules.length)throw new Error("Enable at least one bot module.");return {display_name:el("botDisplayName").value.trim(),template_key:template.key,template_version:template.version,currency:el("botCurrency").value.trim().toUpperCase(),locale:el("botLocale").value.trim(),branding:{brand_accent:el("botBrandAccent").value,store_tagline:el("botStoreTagline").value.trim(),welcome_text:el("botWelcomeText").value.trim(),brand_logo_url:el("botLogoUrl").value.trim(),support_contact:el("botSupportContact").value.trim(),support_url:el("botSupportUrl").value.trim(),menu_text:el("botMenuText").value.trim(),store_button_text:`🛍️ ${el("botMenuText").value.trim()||"Open Store"}`},enabled_modules:modules,business_profile:currentBotBusinessProfile()};}
 async function saveBotProvision(event){
-  event.preventDefault();const payload=botWizardPayload();const botId=el("botWizardBotId").value;
+  event.preventDefault();if(!botOptionsReady)throw new Error("Connection choices could not load. Close setup and reopen it to retry.");
+  if(!validateBotStep(true))return;
+  const payload=botWizardPayload();const botId=el("botWizardBotId").value;
   if(state.botWizardMode==="edit"&&botId){await api(`/api/v1/admin/bots/${botId}/configuration`,{method:"PATCH",body:JSON.stringify(payload)});}
   else{const key=crypto.randomUUID?.()||`bot-${Date.now()}-${Math.random()}`;await api("/api/v1/admin/bots/provision",{method:"POST",headers:{"Idempotency-Key":key},body:JSON.stringify({...payload,bot_token:el("botToken").value.trim(),expected_username:el("botExpectedUsername").value.trim()||null,is_enabled:el("botEnabled").checked})});}
-  el("botProvisionDialog").close();await loadBots();
+  botSaveSucceeded=true;StoreSetup.clearDraft(botDraftKey());el("botToken").value="";
+  el("botProvisionDialog").close();await loadBots();loadOnboardingChecklist();
 }
 async function toggleBot(id,enabled){if(!confirm(`${enabled?"Disable":"Enable"} this bot? Runtime reconciliation will apply the desired state automatically.`))return;await api(`/api/v1/admin/bots/${id}/state`,{method:"PATCH",body:JSON.stringify({is_enabled:!enabled})});await loadBots();}
 async function verifyBotCredential(id){await api(`/api/v1/admin/bots/${id}/credentials/verify`,{method:"POST"});await loadBots();}
@@ -1422,7 +1508,7 @@ function bind(){
   el("handoffExportCancel").addEventListener("click", () => el("handoffExportDialog").close());
   document.querySelectorAll("[data-close-handoff-export]").forEach((b) => b.addEventListener("click", () => el("handoffExportDialog").close()));
   el("handoffExportDialog").addEventListener("close", () => { el("handoffExportPassphrase").value = ""; });
-  document.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".nav,.view").forEach(n=>n.classList.remove("active"));b.classList.add("active");el(`view-${b.dataset.view}`).classList.add("active");el("viewTitle").textContent=b.textContent;await refreshCurrent();}));
+  document.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",()=>navigateTo(b.dataset.view).catch(showHomeError)));
   el("refreshButton").addEventListener("click",refreshCurrent); el("newProduct").addEventListener("click",()=>openProduct()); el("productForm").addEventListener("submit",saveProduct);
   el("openCatalogImportBtn")?.addEventListener("click", openCatalogImport);
   document.querySelectorAll("[data-close-catalog-import]").forEach((b) => b.addEventListener("click", () => el("catalogImportDialog")?.close()));
@@ -1433,7 +1519,29 @@ function bind(){
   el("importMarkupPercent")?.addEventListener("input", updateImportFormulaPreview);
   el("importMarkupFixed")?.addEventListener("input", updateImportFormulaPreview);
   el("billingPortal").addEventListener("click",()=>openBillingPortal().catch(err=>alert(err.message)));el("billingCatalog").addEventListener("click",e=>{const price=e.target.closest("[data-billing-checkout]")?.dataset.billingCheckout;if(price)startBillingCheckout(price).catch(err=>alert(err.message));});
-  el("newBot").addEventListener("click",()=>openBotProvision().catch(err=>alert(err.message)));el("botProvisionForm").addEventListener("submit",e=>saveBotProvision(e).catch(err=>alert(err.message)));document.querySelectorAll("[data-close-bot]").forEach(b=>b.addEventListener("click",()=>el("botProvisionDialog").close()));el("botWizardNext").addEventListener("click",()=>{if(state.botWizardStep===2&&state.botWizardMode!=="edit"&&!el("botToken").value.trim()){alert("Paste the BotFather token.");return;}if(state.botWizardStep===4&&el("botRoutingStrategy").value==="MANUAL"&&!el("botPreferredProvider").value){alert("Manual routing requires a preferred provider.");return;}setWizardStep(state.botWizardStep+1);});el("botWizardBack").addEventListener("click",()=>setWizardStep(state.botWizardStep-1));el("botTemplate").addEventListener("change",()=>{applyBotTemplateDefaults(selectedBotTemplate(),{preserveIdentity:true});loadBotWizardOptions().catch(err=>alert(err.message));});el("botRoutingStrategy").addEventListener("change",()=>refreshPreferredProvider());el("botProviderChoices").addEventListener("change",()=>refreshPreferredProvider(el("botPreferredProvider").value));["botDisplayName","botStoreTagline","botBrandAccent","botLogoUrl"].forEach(id=>el(id).addEventListener("input",renderBotBrandPreview));
+  el("newBot").addEventListener("click",()=>openBotProvision().catch(err=>showHomeError(err)));
+  el("botProvisionForm").addEventListener("submit",async event=>{
+    event.preventDefault();if(botSaving)return;botSaving=true;el("botWizardSubmit").disabled=true;
+    try{await saveBotProvision(event);}catch(err){showBotError(err.message);}finally{botSaving=false;el("botWizardSubmit").disabled=!botOptionsReady;}
+  });
+  document.querySelectorAll("[data-close-bot]").forEach(b=>b.addEventListener("click",()=>{saveBotDraft();el("botProvisionDialog").close();}));
+  el("botProvisionDialog").addEventListener("close",()=>{if(!botSaveSucceeded)saveBotDraft(true);el("botToken").value="";});
+  el("botProvisionForm").addEventListener("input",()=>saveBotDraft());
+  el("botProvisionForm").addEventListener("change",()=>saveBotDraft());
+  el("resumeBotDraft").addEventListener("click",()=>resumeBotDraft().catch(err=>showBotError(err.message)));
+  el("discardBotDraft").addEventListener("click",()=>{StoreSetup.clearDraft(botDraftKey());showBotDraft();});
+  el("botWizardNext").addEventListener("click",()=>{if(validateBotStep())setWizardStep(state.botWizardStep+1);});
+  el("botWizardBack").addEventListener("click",()=>setWizardStep(state.botWizardStep-1));
+  el("botTemplate").addEventListener("change",()=>changeBotTemplate());
+  el("botRoutingStrategy").addEventListener("change",()=>refreshPreferredProvider());
+  el("botProviderChoices").addEventListener("change",()=>refreshPreferredProvider(el("botPreferredProvider").value));
+  ["botDisplayName","botStoreTagline","botBrandAccent","botLogoUrl"].forEach(id=>el(id).addEventListener("input",renderBotBrandPreview));
+  document.querySelectorAll("[data-home-view]").forEach(button=>button.addEventListener("click",()=>navigateTo(button.dataset.homeView).catch(showHomeError)));
+  el("homePreview").addEventListener("click",()=>openHomePreview().catch(showHomeError));
+  el("homeLaunch").addEventListener("click",()=>openHomePreview().catch(showHomeError));
+  el("closeHomePreview").addEventListener("click",()=>el("homePreviewDialog").close());
+  el("homePreviewBot").addEventListener("change",renderHomeDemo);
+  el("previewLaunchCheck").addEventListener("click",async()=>{try{await openBotLaunchCheck(el("homePreviewBot").value);}catch(err){el("previewLaunchError").textContent=err.message;}});
   el("openTemplateGuidance")?.addEventListener("click", openTemplateGuidance);
   document.querySelectorAll("[data-close-template-guidance]").forEach((b) => b.addEventListener("click", () => el("templateGuidanceDialog").close()));
   el("templateGuidanceSearch")?.addEventListener("input", (e) => {
@@ -1452,8 +1560,7 @@ function bind(){
     const key = e.target.closest("[data-select-template]")?.dataset.selectTemplate;
     if (key) {
       el("botTemplate").value = key;
-      applyBotTemplateDefaults(selectedBotTemplate(), { preserveIdentity: true });
-      loadBotWizardOptions().catch((err) => alert(err.message));
+      changeBotTemplate();
       el("templateGuidanceDialog").close();
     }
   });
@@ -1507,12 +1614,9 @@ function bind(){
   });
   el("onboardTenantForm")?.addEventListener("submit", saveOnboardTenant);
   document.querySelectorAll("[data-close-onboard-tenant]").forEach((b) => b.addEventListener("click", () => el("onboardTenantDialog").close()));
-  el("onboardingItemsList")?.addEventListener("click", (e) => {
-    const target = e.target.closest("[data-onboarding-target]")?.dataset.onboardingTarget;
-    if (target) {
-      const navBtn = document.querySelector(`.nav[data-view="${target}"]`);
-      if (navBtn) navBtn.click();
-    }
+  el("onboardingItemsList")?.addEventListener("click", e => {
+    const button=e.target.closest("[data-onboarding-key]");
+    if(button)openOnboardingTask(button.dataset.onboardingKey,button.dataset.onboardingTarget).catch(showHomeError);
   });
   el("saveInquiryStatusBtn")?.addEventListener("click", async () => {
     const inqId = el("inquiryDetailId").value;
@@ -1584,6 +1688,10 @@ function handleSignOut(event) {
   if (event) {
     try { event.preventDefault(); event.stopPropagation(); } catch (_) {}
   }
+  StoreSetup.clearDraft(botDraftKey());
+  document.querySelectorAll("dialog[open]").forEach(d=>d.close());
+  StoreSetup.clearDraft(botDraftKey());
+  el("botToken").value="";
   clearSessionToken();
   showLogin("You have signed out.");
 }

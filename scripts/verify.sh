@@ -28,6 +28,7 @@ run_fast() {
   python -m pytest "${pytest_args[@]}"
 
   node --check apps/admin/static/app.js
+  node --check apps/admin/static/store-setup.js
   node --check apps/miniapp/static/app.js
   node --check apps/configurator/static/app.js
   git diff --check

@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css?v=20260919_08">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260920_01">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/admin/store-setup.css?v=20260920_01">
 </head>
 <body>
   <section id="login" class="login-card panel hidden" aria-labelledby="loginTitle">
@@ -28,26 +29,31 @@
   <div id="app" class="shell hidden">
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">GH</span><div><strong id="storeName">Admin</strong><small id="actorRole">Secure console</small></div></div>
-      <nav>
-        <button class="nav active" data-view="dashboard">Overview</button>
-        <button class="nav" data-view="plan">Plan</button>
-        <button class="nav" data-view="bots">Bots</button>
-        <button class="nav" data-view="analytics">Analytics</button>
+      <nav aria-label="Store navigation">
+        <small class="nav-heading">Daily work</small>
+        <button class="nav active" data-view="dashboard">Home</button>
         <button class="nav" data-view="products">Products</button>
         <button class="nav" data-view="orders">Orders</button>
-        <button class="nav" data-view="fulfillment">Fulfillment</button>
-        <button class="nav" data-view="providers">Providers</button>
-        <button class="nav" data-view="members" data-admin-only>Members</button>
-        <button class="nav" data-view="finance">Financial Center</button>
-        <button class="nav" data-view="audit">Audit</button>
-        <button class="nav" data-view="reconciliation">Evidence</button>
-        <button class="nav" data-view="sales" data-admin-only>Sales &amp; Leads</button>
+        <button class="nav" data-view="analytics">Reports</button>
+        <small class="nav-heading">Store setup</small>
+        <button class="nav" data-view="bots">Store &amp; bots</button>
+        <button class="nav" data-view="providers">Suppliers &amp; payments</button>
+        <details class="nav-more"><summary>Settings &amp; operations</summary>
+          <button class="nav" data-view="plan">Plan &amp; billing</button>
+          <button class="nav" data-view="members" data-admin-only>Team</button>
+          <button class="nav" data-view="fulfillment">Delivery issues</button>
+          <button class="nav" data-view="finance">Payment issues</button>
+          <button class="nav" data-view="audit">Activity log</button>
+          <button class="nav" data-view="reconciliation">Payment evidence</button>
+          <button class="nav" data-view="sales" data-admin-only>Sales &amp; leads</button>
+        </details>
       </nav>
       <div class="sidebar-foot"><span id="actorName">Telegram staff</span><small>Tenant-scoped access</small><button id="signOut" class="ghost" type="button" onclick="handleSignOut(event)">Sign out / Exit</button></div>
     </aside>
     <main>
-      <header><div><small class="eyebrow">OPERATIONS</small><h1 id="viewTitle">Overview</h1></div><div class="header-actions"><button id="refreshButton" class="ghost">Refresh</button><button id="headerSignOut" class="ghost" type="button" title="Sign out / Exit" onclick="handleSignOut(event)">Exit</button></div></header>
+      <header><div><small class="eyebrow">OPERATIONS</small><h1 id="viewTitle">Home</h1></div><div class="header-actions"><button id="refreshButton" class="ghost">Refresh</button><button id="headerSignOut" class="ghost" type="button" title="Sign out / Exit" onclick="handleSignOut(event)">Exit</button></div></header>
 
+      <p id="homeActionError" class="setup-error" role="alert"></p>
       <section id="view-dashboard" class="view active">
         <div id="onboardingChecklistCard" class="panel hidden" style="margin-bottom:18px;border-color:color-mix(in srgb, var(--accent) 40%, var(--line))">
           <div class="panel-head">
@@ -64,7 +70,7 @@
           <div id="onboardingItemsList" class="stack" style="gap:8px"></div>
         </div>
         <div id="metricGrid" class="metric-grid"></div>
-        <div class="panel"><div class="panel-head"><div><small class="eyebrow">SECURITY BOUNDARY</small><h2>Tenant operations</h2></div></div><p class="muted">All data and mutations are resolved from the authenticated principal. The client never submits a tenant ID.</p></div>
+        <div class="panel"><h2>What needs attention?</h2><p class="muted">Review orders and payment issues, or walk through your customer experience before launching.</p><div class="ops-actions home-actions"><button type="button" class="ghost" data-home-view="orders">Review orders</button><button type="button" class="ghost" data-home-view="finance">Review payment issues</button><button type="button" class="ghost" id="homePreview">Preview a purchase</button><button type="button" class="primary" id="homeLaunch" data-admin-only>Check launch readiness</button></div></div>
       </section>
 
       <section id="view-plan" class="view">
@@ -76,8 +82,8 @@
       </section>
 
       <section id="view-bots" class="view">
-        <div class="toolbar"><div></div><button id="newBot" class="primary" data-admin-only>Provision bot</button></div>
-        <div class="panel operation-note"><strong>Durable provisioning.</strong><span class="muted"> Paste the BotFather token into the wizard. It is moved into the encrypted server vault, never stored in the database, and never returned to the browser.</span></div>
+        <div class="toolbar"><div></div><button id="newBot" class="primary" data-admin-only>Create bot</button></div>
+        <div class="panel operation-note"><strong>Connect your store to Telegram.</strong><span class="muted"> Create a bot with BotFather, then follow the setup steps here. You can save your progress and return later.</span></div>
         <div class="panel-head"><div><small class="eyebrow">FLEET</small><h2>Tenant bots</h2></div></div>
         <div id="botList" class="stack"></div>
         <div class="panel-head mapping-head"><div><small class="eyebrow">PROVISIONING</small><h2>Recent jobs</h2></div></div>
@@ -195,27 +201,25 @@
   </div>
 
   <dialog id="botProvisionDialog" class="wizard-dialog">
-    <form id="botProvisionForm" method="dialog">
+    <form id="botProvisionForm" method="dialog" novalidate>
       <div class="dialog-head"><div><small class="eyebrow">BOT FACTORY</small><h2 id="botWizardTitle">Create a bot</h2></div><button type="button" class="icon" data-close-bot>×</button></div>
-      <input id="botWizardBotId" type="hidden">
-      <div class="wizard-steps" aria-label="Provisioning steps"><span data-step-dot="1">1 · Template</span><span data-step-dot="2">2 · Telegram</span><span data-step-dot="3">3 · Brand</span><span data-step-dot="4">4 · Business</span><span data-step-dot="5">5 · Review</span></div>
+      <input id="botWizardBotId" type="hidden"><p id="botWizardError" class="setup-error" role="alert" tabindex="-1"></p><div class="setup-draft"><span id="botDraftStatus" role="status"></span><button type="button" id="resumeBotDraft" class="ghost hidden">Resume draft</button><button type="button" id="discardBotDraft" class="ghost hidden">Discard draft</button></div>
+      <div class="wizard-steps" aria-label="Provisioning steps"><span data-step-dot="1">1 · Business</span><span data-step-dot="2">2 · Telegram</span><span data-step-dot="3">3 · Appearance</span><span data-step-dot="4">4 · Connections</span><span data-step-dot="5">5 · Review</span></div>
 
       <section class="wizard-step" data-wizard-step="1">
-        <div class="template-step-head">
-          <label for="botTemplate" style="margin-bottom:0">Store template</label>
-          <button type="button" id="openTemplateGuidance" class="chip chip-accent help-btn" title="Open template catalog and guide">? Help &amp; Guidance</button>
-        </div>
-        <select id="botTemplate" required></select>
-        <div id="botTemplatePreview" class="template-preview"></div>
-        <p class="muted">Templates are versioned server-side. Future template updates never silently rewrite an existing bot.</p>
+        <h3>What do you want to sell?</h3><p class="muted">Pick a business and product source for a recommended starting setup.</p>
+        <div id="botBusinessChooser"></div>
+        <select id="botTemplate" class="hidden" aria-label="Selected preset"></select>
+        <details class="setup-details"><summary>About this setup</summary><div id="botTemplatePreview" class="template-preview"></div><button type="button" id="openTemplateGuidance" class="ghost">Compare all presets</button></details>
       </section>
 
       <section class="wizard-step hidden" data-wizard-step="2">
         <div id="botCredentialFields">
+          <details class="setup-details"><summary>How to get a BotFather token</summary><ol><li>Open <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">the official BotFather</a> in Telegram.</li><li>Send <code>/newbot</code> and choose a name and username.</li><li>Copy the token BotFather sends you and paste it below. Keep it private.</li></ol><p class="muted">Already have a bot? Use <code>/mybots</code> in BotFather and select its API Token option.</p></details>
           <label>BotFather token<input id="botToken" type="password" autocomplete="off" placeholder="123456789:AA…"></label>
-          <p class="muted">The token is sent once to the API and stored only in the encrypted server vault. It is never returned to the browser.</p>
-          <label>Expected @username<input id="botExpectedUsername" maxlength="100" placeholder="my_store_bot"></label>
-          <p class="muted">The worker verifies this with Telegram <code>getMe</code> before the bot can become READY.</p>
+          <p class="muted">Paste the token from BotFather. It is stored securely and is never included in saved drafts.</p>
+          <label>Bot username (optional)<input id="botExpectedUsername" maxlength="100" placeholder="my_store_bot"></label>
+          <p class="muted">We check that the token belongs to this bot before connecting it.</p>
         </div>
         <div id="botCredentialPreserved" class="panel operation-note hidden"><strong>Credential preserved.</strong><span class="muted"> Editing branding never exposes or replaces the existing Telegram credential.</span></div>
       </section>
@@ -223,30 +227,31 @@
       <section class="wizard-step hidden" data-wizard-step="3">
         <div class="grid2"><label>Display name<input id="botDisplayName" required maxlength="100" placeholder="My Store"></label><label>Accent color<input id="botBrandAccent" type="color" value="#7c6cff"></label></div>
         <label>Store tagline<input id="botStoreTagline" maxlength="240" placeholder="Fast checkout. Secure delivery."></label>
-        <label>Welcome message<textarea id="botWelcomeText" rows="3" maxlength="500" placeholder="Welcome to our store!"></textarea></label>
+        <details class="setup-details"><summary>More appearance options · welcome message, logo, and support</summary><label>Welcome message<textarea id="botWelcomeText" rows="3" maxlength="500" placeholder="Welcome to our store!"></textarea></label>
         <div class="grid2"><label>Logo URL (HTTPS)<input id="botLogoUrl" type="url" maxlength="500" placeholder="https://example.com/logo.png"></label><label>Support @handle<input id="botSupportContact" maxlength="64" placeholder="@support"></label></div>
         <div class="grid2"><label>Support URL (HTTPS)<input id="botSupportUrl" type="url" maxlength="500" placeholder="https://example.com/support"></label><label>Menu button text<input id="botMenuText" maxlength="64" value="Open Store"></label></div>
-        <div class="grid2"><label>Currency<input id="botCurrency" maxlength="3" value="USD"></label><label>Locale<input id="botLocale" maxlength="20" value="en"></label></div>
+        </details><details class="setup-details"><summary>Store preferences · currency, language, and sections</summary><div class="grid2"><label>Currency<input id="botCurrency" maxlength="3" value="USD"></label><label>Locale<input id="botLocale" maxlength="20" value="en"></label></div>
         <fieldset class="module-picker"><legend>Enabled modules</legend><label class="check"><input id="botModuleCatalog" type="checkbox" checked> Catalog</label><label class="check"><input id="botModuleOrders" type="checkbox" checked> Orders</label><label class="check"><input id="botModuleAccount" type="checkbox" checked> Wallet & account</label></fieldset>
-        <label class="check"><input id="botEnabled" type="checkbox" checked> Runtime enabled after verification</label>
-        <div id="botBrandPreview" class="brand-preview"><div id="botBrandPreviewMark" class="brand-preview-mark">G</div><div><strong id="botBrandPreviewName">My Store</strong><span id="botBrandPreviewTagline">Your storefront preview</span></div></div>
+        <label class="check"><input id="botEnabled" type="checkbox" checked> Connect the bot after verification</label>
+        </details><div id="botBrandPreview" class="brand-preview"><div id="botBrandPreviewMark" class="brand-preview-mark">G</div><div><strong id="botBrandPreviewName">My Store</strong><span id="botBrandPreviewTagline">Your storefront preview</span></div></div>
       </section>
 
-      <section class="wizard-step hidden" data-wizard-step="4">
-        <div class="panel operation-note"><strong>Business profile.</strong><span class="muted"> These choices are enforced by the server for this bot. Empty provider/payment selections mean use all compatible enabled tenant options.</span></div>
-        <div class="grid2"><label>Routing strategy<select id="botRoutingStrategy"></select></label><label>Default pricing tier<select id="botPricingTier"><option value="">Tenant default</option></select></label></div>
+      <section class="wizard-step hidden" data-wizard-step="4"><p class="muted">Your store uses compatible suppliers and payment methods you have enabled. Add missing connections from Suppliers &amp; payments after creating your bot.</p><details class="setup-details" id="botAdvancedConnections"><summary>Advanced connection choices · optional</summary>
+        <div class="panel operation-note"><strong>Limit connections for this bot.</strong><span class="muted"> Leave the lists unchecked to use all compatible enabled connections.</span></div>
+        <div class="grid2"><label>How to choose a supplier<select id="botRoutingStrategy"></select></label><label>Customer price group<select id="botPricingTier"><option value="">Store default</option></select></label></div>
         <label id="botPreferredProviderWrap" class="hidden">Preferred provider<select id="botPreferredProvider"><option value="">Select provider</option></select></label>
-        <fieldset><legend>Allowed providers</legend><div id="botProviderChoices" class="choice-grid"></div></fieldset>
-        <fieldset><legend>Allowed payment methods</legend><div id="botPaymentChoices" class="choice-grid"></div></fieldset>
-        <label class="check"><input id="botAllowAutoCredit" type="checkbox"> Allow flexible-deposit auto-credit when the selected payment method also enables it</label>
+        <fieldset><legend>Use only these suppliers</legend><div id="botProviderChoices" class="choice-grid"></div></fieldset>
+        <fieldset><legend>Use only these payment methods</legend><div id="botPaymentChoices" class="choice-grid"></div></fieldset>
+        <label class="check"><input id="botAllowAutoCredit" type="checkbox"> Automatically credit flexible deposits when the payment method allows it</label></details>
       </section>
 
       <section class="wizard-step hidden" data-wizard-step="5">
         <div id="botWizardReview" class="stack"></div>
-        <div class="panel operation-note"><strong>Server-authoritative.</strong><span class="muted"> Provider/payment ownership, business-category compatibility, pricing tier ownership, and routing constraints are validated again by the API before provisioning or saving.</span></div>
+        <div class="panel operation-note"><strong>Ready to connect?</strong><span class="muted"> We’ll verify your Telegram bot and save this setup. Creating a bot does not mean products and payments are ready; finish the checklist on Home before launching.</span></div>
       </section>
 
-      <div class="dialog-actions wizard-actions"><button id="botWizardBack" type="button" class="ghost hidden">Back</button><div class="wizard-spacer"></div><button type="button" class="ghost" data-close-bot>Cancel</button><button id="botWizardNext" class="primary" type="button">Next</button><button id="botWizardSubmit" class="primary hidden" type="submit">Queue provisioning</button></div>
+      <details class="setup-details"><summary>Try the customer experience · simulated demo</summary><div id="botCustomerDemo" class="setup-preview"></div></details>
+      <div class="dialog-actions wizard-actions"><button id="botWizardBack" type="button" class="ghost hidden">Back</button><div class="wizard-spacer"></div><button type="button" class="ghost" data-close-bot>Continue later</button><button id="botWizardNext" class="primary" type="button">Next</button><button id="botWizardSubmit" class="primary hidden" type="submit">Create bot</button></div>
     </form>
   </dialog>
 
@@ -597,6 +602,8 @@ orders:read"></textarea></label>
       </div>
     </form>
   </dialog>
-  <script src="/admin/app.js?v=20260919_08" defer></script>
+  <dialog id="homePreviewDialog" aria-labelledby="homePreviewTitle"><div class="dialog-head"><h2 id="homePreviewTitle">Preview and launch checks</h2><button type="button" class="ghost" id="closeHomePreview">Close</button></div><label>Choose a bot<select id="homePreviewBot"></select></label><div id="homeCustomerDemo" class="setup-preview"></div><p class="muted">This demo does not test a real payment. Use launch checks to review the selected bot’s configuration.</p><button type="button" class="primary" id="previewLaunchCheck" data-admin-only>Check this bot</button><p id="previewLaunchError" class="setup-error" role="alert"></p></dialog>
+  <script src="/admin/store-setup.js?v=20260920_01" defer></script>
+  <script src="/admin/app.js?v=20260920_01" defer></script>
 </body>
 </html>
