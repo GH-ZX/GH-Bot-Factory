@@ -58,7 +58,7 @@ class Settings(BaseSettings):
         default=False, alias="PROVIDER_HTTP_ALLOW_PRIVATE_NETWORKS"
     )
     provider_http_allowed_hosts: str = Field(
-        default="*.up.railway.app,ventetelegrambotrailway-production.up.railway.app,api.spider-service.com,*.spider-service.com",
+        default="*.up.railway.app,ventetelegrambotrailway-production.up.railway.app,api.spider-service.com,*.spider-service.com,api.g2bulk.com,*.g2bulk.com",
         alias="PROVIDER_HTTP_ALLOWED_HOSTS",
     )
     provider_offer_freshness_seconds: int = Field(

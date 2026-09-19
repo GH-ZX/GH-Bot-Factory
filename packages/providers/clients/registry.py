@@ -10,6 +10,7 @@ from packages.providers.catalog import (
 )
 from packages.providers.clients.base import BaseProviderClient
 from packages.providers.clients.example_digital import ExampleDigitalCodesProvider
+from packages.providers.clients.g2bulk import G2BulkClient
 from packages.providers.clients.mock import MockProvider
 from packages.providers.clients.spider_service import SpiderServiceClient
 from packages.providers.clients.ventebot import VenteBotClient
@@ -243,6 +244,52 @@ class ProviderClientRegistry:
                 ),
                 driver_family="spider_service",
                 docs_url="https://www.spider-service.com/",
+            ),
+        )
+        self.register_type(
+            "G2BULK",
+            lambda name, cfg: G2BulkClient(provider_name=name, config=cfg),
+            definition=ProviderDefinition(
+                key="G2BULK",
+                display_name="G2Bulk (Gaming Top-Ups & Vouchers)",
+                description=(
+                    "Wholesale automated supplier for gamers: 180+ games (PUBG Mobile, Free Fire, "
+                    "Mobile Legends, Roblox), digital game top-ups, voucher codes, and gift cards."
+                ),
+                categories=(
+                    ProviderCategory.DIGITAL_PRODUCT,
+                    ProviderCategory.GIFT,
+                    ProviderCategory.SERVICE,
+                    ProviderCategory.ACCOUNT,
+                ),
+                capabilities=(
+                    ProviderCapability.HEALTH,
+                    ProviderCapability.BALANCE,
+                    ProviderCapability.CATALOG,
+                    ProviderCapability.PRODUCT_DETAIL,
+                    ProviderCapability.CREATE_ORDER,
+                    ProviderCapability.ORDER_STATUS,
+                    ProviderCapability.POLLING,
+                ),
+                credentials=(
+                    ProviderCredentialSpec(
+                        key="API_KEY",
+                        label="G2Bulk API Key (X-API-Key)",
+                        required=True,
+                        description="API key generated via the @G2BULKBOT Telegram bot.",
+                    ),
+                ),
+                config_fields=(
+                    ProviderConfigFieldSpec(
+                        key="base_url",
+                        label="G2Bulk API Base URL",
+                        default="https://api.g2bulk.com/v1",
+                        required=False,
+                        description="Base URL for G2Bulk API (defaults to https://api.g2bulk.com/v1).",
+                    ),
+                ),
+                driver_family="g2bulk",
+                docs_url="https://api.g2bulk.com/docs",
             ),
         )
 

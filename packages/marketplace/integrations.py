@@ -185,6 +185,30 @@ _INTEGRATIONS: dict[str, IntegrationOffering] = {
             ),
         ),
         IntegrationOffering(
+            key="g2bulk",
+            name="G2Bulk Gaming Top-Ups & Vouchers",
+            category="supplier_api",
+            description="Direct connection to G2Bulk wholesale API for 180+ game top-ups (PUBG Mobile, Free Fire, MLBB), Razer Gold, Steam, and gift cards with sub-second delivery.",
+            setup_fee=Decimal("30.00"),
+            monthly_fee=Decimal("15.00"),
+            supported_templates=(
+                "gaming-store",
+                "digital-goods",
+                "gift-cards",
+                "reseller-hub",
+                "hybrid-store",
+            ),
+            features=(
+                "Direct in-game player ID validation before charging",
+                "1,100+ digital game vouchers and cards with live stock",
+                "Instant voucher code delivery and automated status polling",
+            ),
+            requirements=(
+                "G2Bulk API key (X-API-Key)",
+                "Funded G2Bulk wallet balance via @G2BULKBOT",
+            ),
+        ),
+        IntegrationOffering(
             key="custom-http-api",
             name="Custom OpenAPI / Generic HTTP Adapter",
             category="supplier_api",

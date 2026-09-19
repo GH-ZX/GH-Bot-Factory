@@ -93,18 +93,20 @@ async def configure_admin_integration(
         )
 
     # 2. Configure provider or payment method
-    if norm_key in {"numbers-sms", "gift-cards-api", "accounts-api", "custom-http-api", "ventebot", "spider-service"}:
+    if norm_key in {"numbers-sms", "gift-cards-api", "accounts-api", "custom-http-api", "ventebot", "spider-service", "g2bulk"}:
         cat_map = {
             "numbers-sms": ProviderCategory.NUMBER,
             "spider-service": ProviderCategory.NUMBER,
             "gift-cards-api": ProviderCategory.GIFT,
             "accounts-api": ProviderCategory.ACCOUNT,
             "ventebot": ProviderCategory.ACCOUNT,
+            "g2bulk": ProviderCategory.DIGITAL_PRODUCT,
             "custom-http-api": ProviderCategory.DIGITAL_PRODUCT,
         }
         type_map = {
             "ventebot": "VENTEBOT",
             "spider-service": "SPIDER_SERVICE",
+            "g2bulk": "G2BULK",
             "custom-http-api": "HTTP_OPENAPI",
             "numbers-sms": "mock",
             "gift-cards-api": "mock",
