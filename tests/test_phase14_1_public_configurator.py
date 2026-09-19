@@ -204,3 +204,41 @@ async def test_inquiry_works_without_configured_telegram_contact(public_client, 
     inquiry = await client.post("/api/v1/public/inquiries", json={"contact_handle": "@buyer"})
     assert inquiry.status_code == 201
     assert inquiry.json()["telegram_link"] is None
+
+
+async def test_supabase_cloud_estimate_and_database_helpers(public_client):
+    from packages.core.database import (
+        format_supabase_connection_url,
+        get_async_engine_connect_args,
+        is_supabase_database_url,
+    )
+
+    client = public_client["client"]
+
+    # 1. Estimate for Supabase cloud hosting
+    estimate_res = await client.post(
+        "/api/v1/public/estimate",
+        json={
+            "format": "combo",
+            "delivery_model": "supabase_cloud",
+            "integration_keys": ["supabase"],
+        },
+    )
+    assert estimate_res.status_code == 200
+    data = estimate_res.json()
+    assert data["delivery_model"] == "supabase_cloud"
+    # Setup fee: $89 combo + $150 supabase_cloud + $25 supabase integration = $264.00
+    assert data["total_one_time"] == "264.00"
+    # Monthly fee: $49 combo + $25 supabase_cloud + $10 supabase integration = $84.00
+    assert data["total_monthly"] == "84.00"
+
+    # 2. Database URL detection and pooler connect_args
+    direct_url = format_supabase_connection_url("myprojectref", "mypassword123", pooler=False)
+    assert "db.myprojectref.supabase.co:5432" in direct_url
+    assert is_supabase_database_url(direct_url) is True
+
+    pooler_url = format_supabase_connection_url("myprojectref", "mypassword123", pooler=True)
+    assert "pooler.supabase.com:6543" in pooler_url
+    assert is_supabase_database_url(pooler_url) is True
+    args = get_async_engine_connect_args(pooler_url)
+    assert args.get("statement_cache_size") == 0

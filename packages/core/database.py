@@ -1,6 +1,8 @@
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import quote_plus
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.ext.asyncio import (
@@ -65,13 +67,41 @@ class SoftDeleteMixin:
     def restore(self) -> None:
         self.deleted_at = None
 
+def is_supabase_database_url(url: str) -> bool:
+    """Detect if the database URL points to a Supabase managed instance or transaction pooler."""
+    lowered = (url or "").lower()
+    return "supabase.co" in lowered or "pooler.supabase.com" in lowered or "statement_cache_size=0" in lowered
+
+
+def format_supabase_connection_url(
+    project_ref: str,
+    db_password: str,
+    *,
+    pooler: bool = True,
+    region: str = "eu-central-1",
+    db_name: str = "postgres",
+) -> str:
+    """Construct an asyncpg-compatible PostgreSQL URL for a customer's Supabase project."""
+    ref = project_ref.strip().replace("https://", "").replace(".supabase.co", "")
+    pwd = quote_plus(db_password)
+    if pooler:
+        return f"postgresql+asyncpg://postgres.{ref}:{pwd}@aws-0-{region}.pooler.supabase.com:6543/{db_name}?statement_cache_size=0"
+    return f"postgresql+asyncpg://postgres:{pwd}@db.{ref}.supabase.co:5432/{db_name}"
+
+
+def get_async_engine_connect_args(db_url: str) -> dict[str, Any]:
+    connect_args: dict[str, Any] = {}
+    if is_supabase_database_url(db_url):
+        connect_args["statement_cache_size"] = 0
+    return connect_args
+
 
 engine = create_async_engine(
     settings.database_url,
     echo=False,
     future=True,
+    connect_args=get_async_engine_connect_args(settings.database_url),
 )
-
 async_session_factory = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,

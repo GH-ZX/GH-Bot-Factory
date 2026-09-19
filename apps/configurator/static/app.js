@@ -175,6 +175,7 @@ function renderEstimateUI(est) {
   };
   const hostingNames = {
     managed: "Managed Cloud Hosting",
+    supabase_cloud: "Supabase Dedicated Cloud",
     dedicated: "Dedicated VPS Deployment",
     source_license: "Source Code Buyout License",
   };

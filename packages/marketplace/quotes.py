@@ -109,6 +109,12 @@ class QuoteEngine:
             "monthly": Decimal("0.00"),  # Included in base format monthly
             "desc": "Fully hosted on our high-availability cloud cluster with SSL, database backups, and updates.",
         },
+        "supabase_cloud": {
+            "name": "Supabase Dedicated Cloud Deployment",
+            "setup": Decimal("150.00"),
+            "monthly": Decimal("25.00"),
+            "desc": "Dedicated managed PostgreSQL on customer's Supabase project with automated migrations.",
+        },
         "dedicated": {
             "name": "Dedicated Single-Tenant VPS Deployment",
             "setup": Decimal("450.00"),
