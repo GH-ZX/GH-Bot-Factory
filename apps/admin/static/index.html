@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1020">
   <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css?v=20260919_05">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260919_06">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -97,7 +97,7 @@
       </section>
 
       <section id="view-products" class="view">
-        <div class="toolbar"><input id="productSearch" placeholder="Search products or SKU"><select id="productActive"><option value="">All states</option><option value="true">Active</option><option value="false">Inactive</option></select><button id="newProduct" class="primary">New product</button></div>
+        <div class="toolbar"><input id="productSearch" placeholder="Search products or SKU"><select id="productActive"><option value="">All states</option><option value="true">Active</option><option value="false">Inactive</option></select><button id="newProduct" class="primary">New product</button><button id="openCatalogImportBtn" type="button" class="ghost">📥 Import from Supplier</button></div>
         <div id="productList" class="stack"></div>
       </section>
 
@@ -532,6 +532,71 @@ orders:read"></textarea></label>
       </div>
     </form>
   </dialog>
-  <script src="/admin/app.js?v=20260919_05" defer></script>
+  <dialog id="catalogImportDialog" class="wizard-dialog">
+    <form id="catalogImportForm">
+      <div class="dialog-head">
+        <div>
+          <small class="eyebrow">CATALOG ONBOARDING</small>
+          <h2>📥 1-Click Supplier Catalog Importer</h2>
+        </div>
+        <button type="button" class="icon" data-close-catalog-import aria-label="Close">×</button>
+      </div>
+      <p class="muted" style="margin:8px 0 16px;line-height:1.5;">
+        Import wholesale products, gaming top-ups, or digital accounts from your configured suppliers with automatic profit markup and category mapping.
+      </p>
+
+      <div class="grid2">
+        <label>
+          Supplier Provider
+          <select id="importProviderSelect" required></select>
+        </label>
+        <label>
+          Catalog Language
+          <select id="importLanguageSelect">
+            <option value="en">English</option>
+            <option value="ar">العربية (Arabic)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="grid3">
+        <label>
+          Markup Percentage
+          <input id="importMarkupPercent" type="number" step="0.5" min="0" max="1000" value="20.0" required>
+        </label>
+        <label>
+          Fixed Addition ($)
+          <input id="importMarkupFixed" type="number" step="0.05" min="0" max="1000" value="0.50" required>
+        </label>
+        <label>
+          Category Name
+          <input id="importCategoryName" placeholder="Auto / Supplier Name" maxlength="100">
+        </label>
+      </div>
+
+      <div id="importPricingPreview" style="margin:12px 0;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#0c1322;font-size:13px;">
+        <span class="muted">Live Markup Formula: </span>
+        <strong id="importFormulaText" style="color:var(--accent);">Cost + 20% + $0.50</strong>
+        <span class="muted" style="display:block;margin-top:4px;font-size:12px;" id="importExampleText">Example: $1.00 supplier cost ➔ $1.70 retail price (+70% profit)</span>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px;">
+        <strong>Available Products on Supplier (<span id="importAvailableCount">0</span>)</strong>
+        <button type="button" id="importRefreshProductsBtn" class="ghost" style="padding:4px 10px;font-size:12px;">↻ Refresh List</button>
+      </div>
+
+      <div id="importProductsContainer" style="max-height:280px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;padding:8px;background:#0c1322;margin-bottom:14px;">
+        <div class="muted" style="padding:16px;text-align:center;">Select a provider above to load available products.</div>
+      </div>
+
+      <p id="importStatusMsg" role="status" style="font-size:13px;min-height:18px;margin:10px 0;"></p>
+
+      <div class="dialog-actions">
+        <button type="button" class="ghost" data-close-catalog-import>Cancel</button>
+        <button id="importSubmitBtn" type="submit" class="primary">📥 Import &amp; Map Selected Products</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="/admin/app.js?v=20260919_06" defer></script>
 </body>
 </html>

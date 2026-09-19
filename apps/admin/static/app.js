@@ -715,6 +715,147 @@ async function healthSupplier(providerId){
   const result=await api(`/api/v1/admin/providers/${providerId}/health-check`,{method:"POST"});alert(`Health: ${result.status}${result.balance!==null?`\nBalance: ${money(result.balance,result.balance_currency)}`:""}`);await loadSuppliers();
 }
 
+let currentImportableProducts = [];
+
+function updateImportFormulaPreview() {
+  const p = parseFloat(el("importMarkupPercent")?.value || "0");
+  const f = parseFloat(el("importMarkupFixed")?.value || "0");
+  const formula = `Cost + ${p}% + $${f.toFixed(2)}`;
+  const exampleCost = 1.0;
+  const exampleRetail = Math.max(exampleCost * (1 + p / 100) + f, exampleCost + 0.01).toFixed(2);
+  const marginPct = Math.round(((exampleRetail - exampleCost) / exampleCost) * 100);
+  if (el("importFormulaText")) el("importFormulaText").textContent = formula;
+  if (el("importExampleText")) el("importExampleText").textContent = `Example: $1.00 supplier cost ➔ $${exampleRetail} retail price (+${marginPct}% margin)`;
+}
+
+async function openCatalogImport() {
+  el("catalogImportForm").reset();
+  el("importStatusMsg").textContent = "";
+  el("importMarkupPercent").value = "20.0";
+  el("importMarkupFixed").value = "0.50";
+  updateImportFormulaPreview();
+
+  const select = el("importProviderSelect");
+  select.innerHTML = '<option value="">Loading providers…</option>';
+  el("catalogImportDialog").showModal();
+
+  try {
+    const providers = await api("/api/v1/admin/providers");
+    const configured = (providers || []).filter((p) => p.is_enabled);
+    if (!configured.length) {
+      select.innerHTML = '<option value="">No configured providers found</option>';
+      el("importProductsContainer").innerHTML = '<div class="muted" style="padding:16px;text-align:center;">Configure a provider first in the Providers tab (e.g. VenteBot, G2Bulk, Spider Service).</div>';
+      return;
+    }
+
+    select.innerHTML = configured.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} (${escapeHtml(p.provider_type)})</option>`).join("");
+    await loadImportableProducts();
+  } catch (err) {
+    select.innerHTML = `<option value="">Error: ${escapeHtml(err.message)}</option>`;
+  }
+}
+
+async function loadImportableProducts() {
+  const providerId = el("importProviderSelect")?.value;
+  if (!providerId) return;
+  const lang = el("importLanguageSelect")?.value || "en";
+  const container = el("importProductsContainer");
+  const countSpan = el("importAvailableCount");
+  container.innerHTML = '<div class="muted" style="padding:16px;text-align:center;">Fetching live catalog from supplier…</div>';
+  countSpan.textContent = "…";
+
+  try {
+    const products = await api(`/api/v1/admin/providers/${providerId}/importable-products?lang=${lang}`);
+    currentImportableProducts = products || [];
+    countSpan.textContent = String(currentImportableProducts.length);
+
+    if (!currentImportableProducts.length) {
+      container.innerHTML = '<div class="muted" style="padding:16px;text-align:center;">No products returned by this supplier.</div>';
+      return;
+    }
+
+    const rows = currentImportableProducts
+      .slice(0, 300)
+      .map((p) => `
+        <label class="check" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #1c263c;cursor:pointer;margin:0;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="checkbox" name="importProductCheck" value="${escapeHtml(p.external_id)}" checked style="width:auto;min-height:auto;">
+            <div>
+              <strong style="font-size:13px;display:block;">${escapeHtml(p.name)}</strong>
+              ${p.description ? `<small class="muted" style="display:block;max-width:440px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.description)}</small>` : ""}
+            </div>
+          </div>
+          <div style="text-align:right;white-space:nowrap;">
+            <span style="font-weight:700;color:var(--accent);">$${escapeHtml(p.cost)} ${escapeHtml(p.currency)}</span>
+            ${p.already_imported ? `<span class="chip chip-ok" style="margin-left:6px;font-size:11px;">Already Mapped</span>` : (p.stock !== null ? `<span class="muted" style="font-size:11px;margin-left:6px;">Stock: ${escapeHtml(p.stock)}</span>` : "")}
+          </div>
+        </label>
+      `)
+      .join("");
+
+    container.innerHTML = `
+      <div style="display:flex;justify-content:space-between;padding:4px 8px 8px;border-bottom:1px solid var(--line);font-size:12px;">
+        <button type="button" class="ghost" id="importSelectAllBtn" style="padding:2px 8px;font-size:11px;">Select All</button>
+        <button type="button" class="ghost" id="importDeselectAllBtn" style="padding:2px 8px;font-size:11px;">Deselect All</button>
+      </div>
+      ${rows}
+    `;
+
+    el("importSelectAllBtn")?.addEventListener("click", () => {
+      document.querySelectorAll("input[name='importProductCheck']").forEach((cb) => (cb.checked = true));
+    });
+    el("importDeselectAllBtn")?.addEventListener("click", () => {
+      document.querySelectorAll("input[name='importProductCheck']").forEach((cb) => (cb.checked = false));
+    });
+  } catch (err) {
+    container.innerHTML = `<div class="status-msg error" style="padding:12px;">Failed to load catalog: ${escapeHtml(err.message)}</div>`;
+    countSpan.textContent = "0";
+  }
+}
+
+async function submitCatalogImport(event) {
+  event.preventDefault();
+  const providerId = el("importProviderSelect")?.value;
+  if (!providerId) return;
+
+  const btn = el("importSubmitBtn");
+  const statusEl = el("importStatusMsg");
+  btn.disabled = true;
+  statusEl.className = "muted";
+  statusEl.textContent = "Importing products, calculating markups, and creating mappings…";
+
+  const checkedBoxes = document.querySelectorAll("input[name='importProductCheck']:checked");
+  const selectedIds = Array.from(checkedBoxes).map((cb) => cb.value);
+
+  const payload = {
+    product_ids: selectedIds.length ? selectedIds : null,
+    category_name: el("importCategoryName")?.value.trim() || null,
+    markup_percent: parseFloat(el("importMarkupPercent")?.value || "20.0"),
+    markup_fixed: parseFloat(el("importMarkupFixed")?.value || "0.50"),
+    lang: el("importLanguageSelect")?.value || "en",
+    activate_products: true,
+  };
+
+  try {
+    const res = await api(`/api/v1/admin/providers/${providerId}/import-catalog`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    statusEl.className = "ok-text";
+    statusEl.textContent = `✓ Successfully imported ${res.imported_count} new products and updated ${res.updated_count} existing mappings in category "${res.category_name}"!`;
+    await Promise.all([loadCategories(), loadProducts()]);
+    setTimeout(() => {
+      el("catalogImportDialog")?.close();
+    }, 1800);
+  } catch (err) {
+    statusEl.className = "danger-text";
+    statusEl.textContent = `Import failed: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function defaultPaymentSettings(providerName){
   if(providerName==="telegram_stars")return {display_name:"Telegram Stars",topup_enabled:true,topup_min_amount:"10",topup_max_amount:"10000",topup_currencies:["XTR"],topup_whole_units_only:true,checkout_mode:"telegram_invoice",terms_required:true,terms_url:"",terms_version:"current",invoice_title:"Wallet top-up",invoice_description:"Add Stars to your wallet.",price_label:"Wallet credit",transaction_scan_pages:10,chargeback_reconciliation_enabled:true};
   if(providerName==="nowpayments")return {display_name:"NOWPayments",topup_enabled:true,topup_min_amount:"5.00",topup_max_amount:"500.00",topup_currencies:["USD"],pay_currencies:["usdttrc20"],default_pay_currency:"usdttrc20",checkout_mode:"direct_crypto",timeout_seconds:15};
@@ -1280,6 +1421,14 @@ function bind(){
   el("handoffExportDialog").addEventListener("close", () => { el("handoffExportPassphrase").value = ""; });
   document.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",async()=>{document.querySelectorAll(".nav,.view").forEach(n=>n.classList.remove("active"));b.classList.add("active");el(`view-${b.dataset.view}`).classList.add("active");el("viewTitle").textContent=b.textContent;await refreshCurrent();}));
   el("refreshButton").addEventListener("click",refreshCurrent); el("newProduct").addEventListener("click",()=>openProduct()); el("productForm").addEventListener("submit",saveProduct);
+  el("openCatalogImportBtn")?.addEventListener("click", openCatalogImport);
+  document.querySelectorAll("[data-close-catalog-import]").forEach((b) => b.addEventListener("click", () => el("catalogImportDialog")?.close()));
+  el("catalogImportForm")?.addEventListener("submit", submitCatalogImport);
+  el("importProviderSelect")?.addEventListener("change", loadImportableProducts);
+  el("importLanguageSelect")?.addEventListener("change", loadImportableProducts);
+  el("importRefreshProductsBtn")?.addEventListener("click", loadImportableProducts);
+  el("importMarkupPercent")?.addEventListener("input", updateImportFormulaPreview);
+  el("importMarkupFixed")?.addEventListener("input", updateImportFormulaPreview);
   el("billingPortal").addEventListener("click",()=>openBillingPortal().catch(err=>alert(err.message)));el("billingCatalog").addEventListener("click",e=>{const price=e.target.closest("[data-billing-checkout]")?.dataset.billingCheckout;if(price)startBillingCheckout(price).catch(err=>alert(err.message));});
   el("newBot").addEventListener("click",()=>openBotProvision().catch(err=>alert(err.message)));el("botProvisionForm").addEventListener("submit",e=>saveBotProvision(e).catch(err=>alert(err.message)));document.querySelectorAll("[data-close-bot]").forEach(b=>b.addEventListener("click",()=>el("botProvisionDialog").close()));el("botWizardNext").addEventListener("click",()=>{if(state.botWizardStep===2&&state.botWizardMode!=="edit"&&!el("botToken").value.trim()){alert("Paste the BotFather token.");return;}if(state.botWizardStep===4&&el("botRoutingStrategy").value==="MANUAL"&&!el("botPreferredProvider").value){alert("Manual routing requires a preferred provider.");return;}setWizardStep(state.botWizardStep+1);});el("botWizardBack").addEventListener("click",()=>setWizardStep(state.botWizardStep-1));el("botTemplate").addEventListener("change",()=>{applyBotTemplateDefaults(selectedBotTemplate(),{preserveIdentity:true});loadBotWizardOptions().catch(err=>alert(err.message));});el("botRoutingStrategy").addEventListener("change",()=>refreshPreferredProvider());el("botProviderChoices").addEventListener("change",()=>refreshPreferredProvider(el("botPreferredProvider").value));["botDisplayName","botStoreTagline","botBrandAccent","botLogoUrl"].forEach(id=>el(id).addEventListener("input",renderBotBrandPreview));
   el("openTemplateGuidance")?.addEventListener("click", openTemplateGuidance);

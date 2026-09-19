@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from apps.api.deps import require_admin_or_owner, require_staff_or_above
-from packages.commerce.models import Product, ProductVariant
+from packages.commerce.models import Category, Product, ProductVariant
 from packages.core.auth import AuthenticatedPrincipal
 from packages.core.database import get_db_session
 from packages.payments.models import PaymentProviderConfig
@@ -32,6 +32,7 @@ from packages.providers.models import (
     ProviderRoutingStrategy,
 )
 from packages.providers.operations import ProviderOperationsService
+from packages.providers.router import ProviderRouter
 from packages.providers.service import (
     delete_provider_credential,
     test_provider_connection,
@@ -2001,4 +2002,321 @@ async def upsert_payment_provider(
         credentials_configured=bool(config.credentials_ref),
         webhook_secret_configured=bool(config.webhook_secret_ref),
         settings=config.settings_json or {},
+    )
+
+
+class ImportableProductItem(BaseModel):
+    external_id: str
+    name: str
+    cost: Decimal
+    currency: str
+    stock: int | None = None
+    description: str | None = None
+    already_imported: bool = False
+    existing_product_id: uuid.UUID | None = None
+
+
+class ImportCatalogRequest(BaseModel):
+    product_ids: list[str] | None = None
+    category_name: str | None = Field(default=None, max_length=100)
+    markup_percent: Decimal = Field(default=Decimal("20.0"), ge=0, le=1000)
+    markup_fixed: Decimal = Field(default=Decimal("0.50"), ge=0, le=1000)
+    lang: str = Field(default="en", max_length=10)
+    activate_products: bool = True
+    limit: int = Field(default=500, ge=1, le=2000)
+
+
+class ImportCatalogResultItem(BaseModel):
+    external_id: str
+    product_id: uuid.UUID
+    variant_id: uuid.UUID
+    title: str
+    cost: Decimal
+    retail_price: Decimal
+    currency: str
+    status: str
+
+
+class ImportCatalogResponse(BaseModel):
+    provider_id: uuid.UUID
+    provider_name: str
+    total_scanned: int
+    imported_count: int
+    updated_count: int
+    skipped_count: int
+    category_id: uuid.UUID
+    category_name: str
+    items: list[ImportCatalogResultItem]
+
+
+@router.get("/providers/{provider_id}/importable-products", response_model=list[ImportableProductItem])
+async def list_importable_products(
+    provider_id: uuid.UUID,
+    lang: str = Query("en", max_length=10),
+    principal: AuthenticatedPrincipal = Depends(require_admin_or_owner),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[ImportableProductItem]:
+    stmt = (
+        select(Provider)
+        .where(Provider.id == provider_id, Provider.tenant_id == principal.tenant_id)
+        .options(selectinload(Provider.credentials))
+    )
+    provider = (await session.execute(stmt)).scalar_one_or_none()
+    if provider is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found.")
+
+    storage = get_default_secret_storage()
+    router = ProviderRouter(registry=provider_registry, secret_storage=storage)
+    config = await router.build_provider_config(provider)
+    if lang:
+        config["lang"] = lang
+
+    client = provider_registry.get_client(
+        provider_type=provider.provider_type,
+        provider_name=provider.name,
+        config=config,
+        provider_id=str(provider.id),
+    )
+
+    try:
+        import inspect
+        if hasattr(client, "list_products"):
+            sig = inspect.signature(client.list_products)
+            if "lang" in sig.parameters:
+                products = await client.list_products(lang=lang)
+            else:
+                products = await client.list_products()
+        else:
+            products = []
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to retrieve catalog from provider: {exc}",
+        ) from exc
+
+    existing_mappings = (
+        await session.execute(
+            select(ProviderProductMapping).where(
+                ProviderProductMapping.tenant_id == principal.tenant_id,
+                ProviderProductMapping.provider_id == provider.id,
+            )
+        )
+    ).scalars().all()
+    mapping_by_ext = {m.external_product_id: m for m in existing_mappings}
+
+    return [
+        ImportableProductItem(
+            external_id=p.external_id,
+            name=p.name,
+            cost=p.cost,
+            currency=p.currency,
+            stock=p.stock,
+            description=getattr(p, "description", None),
+            already_imported=p.external_id in mapping_by_ext,
+            existing_product_id=mapping_by_ext[p.external_id].product_id if p.external_id in mapping_by_ext else None,
+        )
+        for p in products
+    ]
+
+
+@router.post("/providers/{provider_id}/import-catalog", response_model=ImportCatalogResponse)
+async def import_supplier_catalog(
+    provider_id: uuid.UUID,
+    req: ImportCatalogRequest,
+    principal: AuthenticatedPrincipal = Depends(require_admin_or_owner),
+    session: AsyncSession = Depends(get_db_session),
+) -> ImportCatalogResponse:
+    import re
+
+    stmt = (
+        select(Provider)
+        .where(Provider.id == provider_id, Provider.tenant_id == principal.tenant_id)
+        .options(selectinload(Provider.credentials))
+    )
+    provider = (await session.execute(stmt)).scalar_one_or_none()
+    if provider is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found.")
+
+    storage = get_default_secret_storage()
+    router = ProviderRouter(registry=provider_registry, secret_storage=storage)
+    config = await router.build_provider_config(provider)
+    if req.lang:
+        config["lang"] = req.lang
+
+    client = provider_registry.get_client(
+        provider_type=provider.provider_type,
+        provider_name=provider.name,
+        config=config,
+        provider_id=str(provider.id),
+    )
+
+    try:
+        import inspect
+        if hasattr(client, "list_products"):
+            sig = inspect.signature(client.list_products)
+            if "lang" in sig.parameters:
+                products = await client.list_products(lang=req.lang)
+            else:
+                products = await client.list_products()
+        else:
+            products = []
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to fetch products from provider: {exc}",
+        ) from exc
+
+    if req.product_ids:
+        filter_set = set(req.product_ids)
+        products = [p for p in products if p.external_id in filter_set]
+    products = products[: req.limit]
+
+    cat_name = (req.category_name or provider.name or "Supplier Catalog").strip()[:100]
+    raw_slug = re.sub(r"[^a-zA-Z0-9]+", "-", cat_name).strip("-").lower()[:90]
+    cat_slug = raw_slug or f"cat-{uuid.uuid4().hex[:6]}"
+
+    cat_stmt = select(Category).where(
+        Category.tenant_id == principal.tenant_id,
+        Category.slug == cat_slug,
+    )
+    category = (await session.execute(cat_stmt)).scalar_one_or_none()
+    if category is None:
+        category = Category(
+            tenant_id=principal.tenant_id,
+            name=cat_name,
+            slug=cat_slug,
+            is_active=True,
+        )
+        session.add(category)
+        await session.flush()
+
+    existing_mappings = (
+        await session.execute(
+            select(ProviderProductMapping).where(
+                ProviderProductMapping.tenant_id == principal.tenant_id,
+                ProviderProductMapping.provider_id == provider.id,
+            )
+        )
+    ).scalars().all()
+    mapping_by_ext = {m.external_product_id: m for m in existing_mappings}
+
+    imported_items: list[ImportCatalogResultItem] = []
+    imported_count = 0
+    updated_count = 0
+
+    for dto in products:
+        cost = dto.cost
+        raw_price = cost * (Decimal("1.0") + (req.markup_percent / Decimal("100.0"))) + req.markup_fixed
+        retail_price = max(raw_price.quantize(Decimal("0.01")), cost + Decimal("0.01"))
+
+        if dto.external_id in mapping_by_ext:
+            mapping = mapping_by_ext[dto.external_id]
+            mapping.cost_price = cost
+            mapping.cost_currency = dto.currency
+            mapping.is_enabled = True
+
+            variant = await session.get(ProductVariant, mapping.product_variant_id) if mapping.product_variant_id else None
+            if variant is not None:
+                variant.price = retail_price
+                if dto.stock is not None:
+                    variant.stock_quantity = dto.stock
+                variant.is_active = True
+
+            product = await session.get(Product, mapping.product_id)
+            if product is not None:
+                if hasattr(dto, "description") and dto.description:
+                    product.description = dto.description
+                product.is_active = True
+
+            updated_count += 1
+            imported_items.append(
+                ImportCatalogResultItem(
+                    external_id=dto.external_id,
+                    product_id=mapping.product_id,
+                    variant_id=mapping.product_variant_id or mapping.product_id,
+                    title=dto.name,
+                    cost=cost,
+                    retail_price=retail_price,
+                    currency=dto.currency,
+                    status="UPDATED",
+                )
+            )
+        else:
+            product = Product(
+                tenant_id=principal.tenant_id,
+                category_id=category.id,
+                title=dto.name[:255],
+                description=getattr(dto, "description", None) or None,
+                is_active=req.activate_products,
+                metadata_json={"imported_from": provider.provider_type, "external_id": dto.external_id},
+            )
+            session.add(product)
+            await session.flush()
+
+            clean_sku = f"{provider.slug}-{dto.external_id}"[:100]
+            variant = ProductVariant(
+                product_id=product.id,
+                sku=clean_sku,
+                title=dto.name[:100],
+                price=retail_price,
+                currency=dto.currency,
+                stock_quantity=dto.stock if dto.stock is not None else 100,
+                is_active=True,
+            )
+            session.add(variant)
+            await session.flush()
+
+            mapping = ProviderProductMapping(
+                tenant_id=principal.tenant_id,
+                provider_id=provider.id,
+                product_id=product.id,
+                product_variant_id=variant.id,
+                external_product_id=dto.external_id,
+                is_enabled=True,
+                cost_price=cost,
+                cost_currency=dto.currency,
+                provider_metadata={"auto_imported": True},
+            )
+            session.add(mapping)
+            imported_count += 1
+            imported_items.append(
+                ImportCatalogResultItem(
+                    external_id=dto.external_id,
+                    product_id=product.id,
+                    variant_id=variant.id,
+                    title=dto.name,
+                    cost=cost,
+                    retail_price=retail_price,
+                    currency=dto.currency,
+                    status="CREATED",
+                )
+            )
+
+    await _audit(
+        session,
+        principal,
+        action="CATALOG_IMPORTED_FROM_SUPPLIER",
+        resource_type="provider",
+        resource_id=provider.id,
+        details={
+            "provider_name": provider.name,
+            "category_name": category.name,
+            "imported_count": imported_count,
+            "updated_count": updated_count,
+            "markup_percent": str(req.markup_percent),
+            "markup_fixed": str(req.markup_fixed),
+        },
+    )
+    await session.commit()
+
+    return ImportCatalogResponse(
+        provider_id=provider.id,
+        provider_name=provider.name,
+        total_scanned=len(products),
+        imported_count=imported_count,
+        updated_count=updated_count,
+        skipped_count=0,
+        category_id=category.id,
+        category_name=category.name,
+        items=imported_items,
     )
