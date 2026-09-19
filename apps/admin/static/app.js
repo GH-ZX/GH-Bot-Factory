@@ -922,11 +922,15 @@ async function platformApi(path, options = {}) {
 async function loadSales() {
   if (!state.platformToken) {
     el("salesOperatorGate")?.classList.remove("hidden");
+    el("salesTabNav")?.classList.add("hidden");
+    el("salesMetricGrid")?.classList.add("hidden");
     if (el("salesInquiryList")) el("salesInquiryList").innerHTML = "";
     if (el("salesQuotesList")) el("salesQuotesList").innerHTML = "";
+    if (el("salesHandoffsList")) el("salesHandoffsList").innerHTML = "";
     return;
   }
   el("salesOperatorGate")?.classList.add("hidden");
+  el("salesTabNav")?.classList.remove("hidden");
   try {
     const kpis = await platformApi("/api/v1/platform/sales/governance/metrics");
     renderSalesMetrics(kpis);
