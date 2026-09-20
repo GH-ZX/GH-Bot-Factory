@@ -1,291 +1,606 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#080c18">
-  <title>Build Your Bot — GH Bot Factory</title>
-  <link rel="stylesheet" href="/build/styles.css?v=20260920_01">
-  <link rel="stylesheet" href="/admin/store-setup.css?v=20260920_01">
-</head>
-<body>
-  <div class="shell">
-    <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark">GH</span>
-        <div>
-          <h1 class="brand-title">GH Bot Factory</h1>
-          <p class="brand-sub">Build &amp; Launch Telegram Bots &amp; Mini Apps</p>
-        </div>
-      </div>
-      <div class="topbar-actions">
-        <a href="/admin/" class="btn-ghost">Client Portal</a>
-      </div>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f6f7f2" />
+    <meta
+      name="description"
+      content="Shape your Telegram store. Choose your products, storefront, integrations and branding, then send your brief to GH Bot Factory."
+    />
+    <title>Your next store starts here — GH Bot Factory</title>
+    <link rel="stylesheet" href="/build/styles.css?v=20260921_02" />
+  </head>
+  <body>
+    <a class="skip-link" href="#builder">Skip to store builder</a>
+    <header class="topbar wrap">
+      <a class="brand" href="/build/" aria-label="GH Bot Factory home"
+        ><span class="brand-mark">gh<span>.</span></span
+        ><span>bot factory<small>BY GH STORE</small></span></a
+      >
+      <nav aria-label="Main navigation">
+        <a href="#delivery">How it works</a
+        ><a href="/admin/">Client portal <span aria-hidden="true">↗</span></a
+        ><a class="button small" href="#builder"
+          >Create your store <span aria-hidden="true">↗</span></a
+        >
+      </nav>
     </header>
-
-    <main class="container">
-      <div class="hero">
-        <span class="eyebrow">CUSTOM TELEGRAM BOT CONFIGURATOR</span>
-        <h2>Let’s build your store</h2>
-        <p class="hero-desc">Tell us what you sell. We’ll suggest a starting setup, show you a demo, and calculate an estimate you can review before sending a request.</p>
-      </div>
-
-      <div class="configurator-layout">
-        <!-- Main Guided Form -->
-        <div class="wizard-column">
-          <div class="setup-draft"><span id="draftStatus" role="status">Your non-contact choices are saved in this tab for 24 hours.</span><button type="button" class="btn-ghost" id="discardDraft">Start over</button></div>
-          <!-- Step 2: Template Selection -->
-          <section class="config-section" id="step-template">
-            <div class="section-head">
-              <span class="step-num">1</span>
-              <div>
-                <h3>What do you want to sell?</h3>
-                <p class="muted">Choose a business and product source. We’ll recommend a setup; you can change it at any time.</p>
-              </div>
-            </div>
-
-            <div id="templatesGrid">
-              <div class="loading">Loading available templates...</div>
-            </div>
-          </section>
-
-          <section class="config-section" id="step-appearance">
-            <div class="section-head"><span class="step-num">2</span><div><h3>Make it yours</h3><p class="muted">Try a name and color. These are preferences for your project request, not a live store.</p></div></div>
-            <div class="grid2"><label>Store name<input id="previewName" maxlength="100" placeholder="My store"></label><label>Accent color<input id="previewAccent" type="color" value="#7c6cff"></label></div>
-          </section>
-          <!-- Step 1: Format -->
-          <details class="config-section setup-details" id="step-format"><summary>Customer experience · Bot + storefront selected</summary>
-            <div class="section-head">
-              <div>
-                <h3>Where customers shop</h3>
-                <p class="muted">Native Telegram chat bot, web Mini App, or a synchronized combo bundle.</p>
-              </div>
-            </div>
-            <div class="choice-grid" id="formatChoices">
-              <label class="choice-card active" data-format="combo">
-                <input type="radio" name="format" value="combo" checked>
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>Bot + Mini App Combo</strong>
-                    <span class="price-tag">$89 setup · $49/mo</span>
-                  </div>
-                  <p class="muted">Native Telegram bot plus embedded interactive Mini App storefront. Recommended.</p>
-                </div>
-              </label>
-
-              <label class="choice-card" data-format="miniapp">
-                <input type="radio" name="format" value="miniapp">
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>Telegram Mini App</strong>
-                    <span class="price-tag">$69 setup · $39/mo</span>
-                  </div>
-                  <p class="muted">High-conversion visual storefront opened seamlessly inside Telegram.</p>
-                </div>
-              </label>
-
-              <label class="choice-card" data-format="bot">
-                <input type="radio" name="format" value="bot">
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>Telegram Bot Only</strong>
-                    <span class="price-tag">$49 setup · $29/mo</span>
-                  </div>
-                  <p class="muted">Text, inline keyboard, and command-driven bot for streamlined interactions.</p>
-                </div>
-              </label>
-            </div>
-          </details>
-
-          <!-- Step 4: Add-On Integrations -->
-          <details class="config-section setup-details" id="step-integrations"><summary>Optional connections · choose only what you need</summary>
-            <div class="section-head">
-              <div>
-                <h3>Optional supplier and payment connections</h3>
-                <p class="muted">Select connections you already know you need. You can discuss these with us later.</p>
-              </div>
-            </div>
-            <div class="integrations-grid" id="integrationsGrid">
-              <div class="loading">Loading integrations...</div>
-            </div>
-
-            <!-- Tell Us What API You Need -->
-            <div class="custom-api-box" style="margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel2);">
-              <label class="check" style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;margin:0;">
-                <input type="checkbox" id="requestCustomApiCheck" style="width:auto;min-height:auto;cursor:pointer;">
-                <span>💡 Need a supplier, bot, or API not listed here? Tell us what to add!</span>
-              </label>
-              <div id="customApiFields" class="hidden" style="margin-top:12px;">
-                <p class="muted" style="font-size:13px;margin-bottom:8px;line-height:1.4;">Tell us about the supplier, service, or API you want connected to your store bot (e.g. name, website, documentation URL, or specific goods). We will review compatibility and confirm the scope before connecting it.</p>
-                <textarea id="customApiDescription" rows="2" maxlength="1000" placeholder="e.g. Supplier name (website.com), API swagger link, or specific goods you want to wholesale..." style="width:100%;font-size:14px;border:1px solid var(--line);border-radius:10px;background:#0c1322;color:var(--text);padding:10px 12px;"></textarea>
-              </div>
-            </div>
-          </details>
-
-          <!-- Step 5: Hosting & Delivery Model -->
-          <details class="config-section setup-details" id="step-hosting"><summary>Hosting · we host it for you by default</summary>
-            <div class="section-head">
-              <div>
-                <h3>Who will host your store?</h3>
-                <p class="muted">Choose between our managed cloud or self-hosted source code delivery.</p>
-              </div>
-            </div>
-            <div class="choice-grid" id="hostingChoices">
-              <label class="choice-card active" data-hosting="managed">
-                <input type="radio" name="delivery_model" value="managed" checked>
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>☁️ Managed Cloud Hosting</strong>
-                    <span class="price-tag">Included in plan</span>
-                  </div>
-                  <p class="muted">We manage hosting for you. Hosting and support details are confirmed with your quote.</p>
-                </div>
-              </label>
-              <label class="choice-card" data-hosting="supabase_cloud">
-                <input type="radio" name="delivery_model" value="supabase_cloud">
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>⚡ Supabase Dedicated Cloud</strong>
-                    <span class="price-tag">+$150 setup · +$25/mo</span>
-                  </div>
-                  <p class="muted">Connect your own Supabase project: dedicated managed PostgreSQL, automated backups, and direct SQL access.</p>
-                </div>
-              </label>
-
-              <label class="choice-card" data-hosting="dedicated">
-                <input type="radio" name="delivery_model" value="dedicated">
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>🖥️ Dedicated Single-Tenant VPS</strong>
-                    <span class="price-tag">+$450 setup · +$50/mo</span>
-                  </div>
-                  <p class="muted">Standalone instance deployed directly to your private VPS with dedicated database.</p>
-                </div>
-              </label>
-
-              <label class="choice-card" data-hosting="source_license">
-                <input type="radio" name="delivery_model" value="source_license">
-                <div class="choice-body">
-                  <div class="choice-title-row">
-                    <strong>💻 Source Code License Buyout</strong>
-                    <span class="price-tag">+$2,000 one-time · $0/mo</span>
-                  </div>
-                  <p class="muted">Perpetual single-business source license. Full ownership and freedom to host independently.</p>
-                </div>
-              </label>
-            </div>
-          </details>
-
-          <!-- Step 6: Submit Request -->
-          <section class="config-section" id="step-submit">
-            <div class="section-head">
-              <span class="step-num">3</span>
-              <div>
-                <h3>Review and send your request</h3>
-                <p class="muted">Send your configuration to the our team for review, confirmation, and onboarding.</p>
-              </div>
-            </div>
-
-            <form id="inquiryForm" class="inquiry-form">
-              <div class="grid2">
-                <label>
-                  Preferred Contact Method
-                  <select id="contactMethod" required>
-                    <option value="TELEGRAM">Telegram</option>
-                    <option value="WHATSAPP">WhatsApp</option>
-                    <option value="EMAIL">Email</option>
-                  </select>
-                </label>
-
-                <label>
-                  Your Handle / Phone / Email
-                  <input type="text" id="contactHandle" placeholder="@your_telegram or phone" required minlength="2" maxlength="120">
-                </label>
-              </div>
-
-              <label>
-                Project Notes or Special Requirements
-                <textarea id="projectNotes" rows="3" maxlength="1750" placeholder="Describe your store goods, specific APIs, or target launch timeline..."></textarea>
-              </label>
-
-              <div class="form-actions">
-                <button type="submit" id="submitInquiryBtn" class="btn-primary">
-                  Send request
-                </button>
-                <a id="telegramChatBtn" hidden aria-disabled="true" target="_blank" rel="noopener noreferrer" class="btn-telegram">
-                  Chat on Telegram
-                </a>
-              </div>
-              <p id="inquiryStatusMsg" role="status" tabindex="-1" class="status-msg hidden"></p>
-            </form>
-          </section>
+    <main>
+      <section class="hero wrap" aria-labelledby="heroTitle">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="status-dot"></span> YOUR BUSINESS. INSIDE TELEGRAM.
+          </p>
+          <h1 id="heroTitle">
+            A little bot.<br />A whole <span>business.</span>
+          </h1>
+          <p class="hero-description">
+            Turn your products into a store people love to use. Choose the
+            experience. Make it yours. We’ll help with the technical part.
+          </p>
+          <a class="button hero-cta" href="#builder"
+            >Let’s build your store <span aria-hidden="true">↗</span></a
+          >
+          <p class="hero-note">No account needed. Start with an idea.</p>
+          <div class="hero-tags">
+            <span>Bot + Mini App</span><span>Your brand</span
+            ><span>Your infrastructure</span>
+          </div>
         </div>
-
-        <!-- Sticky Live Estimate Column -->
-        <aside class="estimate-column">
-          <section id="storeDemo" class="setup-preview" aria-label="Sample customer experience"></section>
-          <div class="estimate-card">
-            <p id="estimateError" class="setup-error" role="alert"></p>
-            <div class="estimate-head">
-              <small class="eyebrow">ESTIMATED PRICE</small>
-              <h3>Your estimate</h3>
-            </div>
-
-            <div class="estimate-totals">
-              <div class="total-box">
-                <span class="total-label">One-Time Setup</span>
-                <strong class="total-value" id="estOneTime">$89.00</strong>
-              </div>
-              <div class="total-box">
-                <span class="total-label">Monthly Hosting</span>
-                <strong class="total-value" id="estMonthly">$49.00</strong>
-              </div>
-            </div>
-
-            <div class="selected-summary">
-              <div class="summary-item">
-                <span class="muted">Format:</span>
-                <strong id="sumFormat">Combo (Bot + Mini App)</strong>
-              </div>
-              <div class="summary-item">
-                <span class="muted">Template:</span>
-                <strong id="sumTemplate">General Commerce</strong>
-              </div>
-              <div class="summary-item">
-                <span class="muted">Source:</span>
-                <strong id="sumSource">Stored Inventory</strong>
-              </div>
-              <div class="summary-item">
-                <span class="muted">Hosting:</span>
-                <strong id="sumHosting">Managed Cloud</strong>
-              </div>
-              <div class="summary-item">
-                <span class="muted">Integrations:</span>
-                <strong id="sumIntegrations">None</strong>
-              </div>
-            </div>
-
-            <div class="itemized-receipt" id="itemizedReceipt">
-              <div class="muted">Calculating line items...</div>
-            </div>
-
-            <div class="estimate-footer">
-              <p class="estimate-note" id="estimateNote">First payment includes one-time setup plus first month's hosting.</p>
-              <button type="button" class="btn-accent-full" id="jumpToSubmit">
-                Review my request
-              </button>
+        <div
+          class="hero-stage"
+          aria-label="Illustrative Telegram store preview"
+        >
+          <div class="stage-orbit" aria-hidden="true"></div>
+          <div class="floating-note">
+            <span class="note-icon" aria-hidden="true">✓</span>
+            <div>
+              Your store, your way<small
+                >From first idea to customer handoff</small
+              >
             </div>
           </div>
-        </aside>
-      </div>
+          <div class="phone">
+            <div class="phone-bar">
+              <span aria-hidden="true">‹</span
+              ><strong
+                >Studio Store<small>mini app · design example</small></strong
+              ><span aria-hidden="true">···</span>
+            </div>
+            <div class="phone-body">
+              <div class="phone-welcome">
+                <span>GOOD THINGS, ONE TAP AWAY</span>
+                <h2>Find your<br />next favorite.</h2>
+                <div class="art-shapes" aria-hidden="true">
+                  <i></i><i></i><i></i>
+                </div>
+              </div>
+              <div class="phone-category">
+                <strong>Made for you</strong><span>View all →</span>
+              </div>
+              <div class="sample-products">
+                <div>
+                  <div class="product-art card-art" aria-hidden="true">
+                    <span>PLAY<br /><b>50</b></span>
+                  </div>
+                  <strong>Game credit</strong><small>Digital delivery</small>
+                </div>
+                <div>
+                  <div class="product-art orb-art" aria-hidden="true">
+                    <span></span>
+                  </div>
+                  <strong>Digital essentials</strong
+                  ><small>Ready to explore</small>
+                </div>
+              </div>
+              <div class="phone-wallet">
+                <span>Wallet balance</span
+                ><strong>$ 120.00 <small>DEMO</small></strong
+                ><span class="sample-recharge">+ Add funds</span>
+              </div>
+            </div>
+            <div class="phone-nav" aria-hidden="true">
+              <span>⌂<small>Shop</small></span
+              ><span>▤<small>Orders</small></span
+              ><span>○<small>Profile</small></span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="journey wrap" id="delivery" aria-label="How it works">
+        <div>
+          <span>01</span>
+          <p>
+            <strong>You imagine it.</strong
+            ><small>Choose what your store needs.</small>
+          </p>
+        </div>
+        <div>
+          <span>02</span>
+          <p>
+            <strong>We shape it together.</strong
+            ><small>Review your scope and personal quote.</small>
+          </p>
+        </div>
+        <div>
+          <span>03</span>
+          <p>
+            <strong>It becomes yours.</strong
+            ><small>Plan installation, training and handoff.</small>
+          </p>
+        </div>
+      </section>
+      <section
+        class="builder-section"
+        id="builder"
+        aria-labelledby="builderTitle"
+      >
+        <div class="wrap">
+          <div class="builder-heading">
+            <div>
+              <p class="eyebrow">A FEW CHOICES. A CLEAR START.</p>
+              <h2 id="builderTitle">What will you build?</h2>
+            </div>
+            <p>
+              Start simple. You can change your choices<br />before sending your
+              request.
+            </p>
+          </div>
+          <div class="builder-layout">
+            <div class="wizard">
+              <nav class="stepper" aria-label="Store builder steps">
+                <button type="button" data-step="0" aria-current="step">
+                  <span>01</span>Your store</button
+                ><button type="button" data-step="1">
+                  <span>02</span>Features</button
+                ><button type="button" data-step="2">
+                  <span>03</span>Make it yours</button
+                ><button type="button" data-step="3">
+                  <span>04</span>Review
+                </button>
+              </nav>
+              <div id="loadError" class="notice error" role="alert" hidden>
+                <p>We couldn’t load the store options. Please try again.</p>
+                <button type="button" id="retryLoad" class="button secondary">
+                  Try again
+                </button>
+              </div>
+              <div id="builderContent" aria-busy="true">
+                <section
+                  class="step-panel"
+                  data-panel="0"
+                  aria-labelledby="storeTitle"
+                >
+                  <p class="step-kicker">STEP 01 / YOUR STORE</p>
+                  <h3 id="storeTitle" tabindex="-1">
+                    First, what do you sell?
+                  </h3>
+                  <p class="section-description">
+                    Pick the closest fit. We’ll suggest a starting setup for
+                    you.
+                  </p>
+                  <div id="templatesGrid">
+                    <p role="status">Finding your options…</p>
+                  </div>
+                  <fieldset id="formatChoices">
+                    <legend>How should customers shop?</legend>
+                    <div class="format-grid">
+                      <label class="option"
+                        ><input
+                          type="radio"
+                          name="format"
+                          value="combo"
+                          checked
+                        /><span
+                          ><strong
+                            >Bot + Mini App
+                            <small class="tag">POPULAR</small></strong
+                          ><small
+                            >A visual store with a helpful Telegram bot.</small
+                          ></span
+                        ></label
+                      ><label class="option"
+                        ><input type="radio" name="format" value="bot" /><span
+                          ><strong>Bot only</strong
+                          ><small
+                            >Simple chat menus and product buttons.</small
+                          ></span
+                        ></label
+                      ><label class="option"
+                        ><input
+                          type="radio"
+                          name="format"
+                          value="miniapp"
+                        /><span
+                          ><strong>Mini App</strong
+                          ><small
+                            >A visual storefront launched in Telegram.</small
+                          ></span
+                        ></label
+                      >
+                    </div>
+                  </fieldset>
+                </section>
+                <section
+                  class="step-panel"
+                  data-panel="1"
+                  aria-labelledby="featuresTitle"
+                  hidden
+                >
+                  <p class="step-kicker">STEP 02 / FEATURES & CONNECTIONS</p>
+                  <h3 id="featuresTitle" tabindex="-1">
+                    Choose what matters to you.
+                  </h3>
+                  <p class="section-description">
+                    Tell us what you want to manage. We’ll confirm availability,
+                    scope and pricing in your quote.
+                  </p>
+                  <div class="foundation">
+                    <span aria-hidden="true">✓</span>
+                    <div>
+                      <strong>Your starting foundation</strong>
+                      <p>
+                        Product catalog, wallet & recharge, order history,
+                        customer profiles and an owner admin panel.
+                      </p>
+                    </div>
+                  </div>
+                  <fieldset>
+                    <legend>What else should your store do?</legend>
+                    <div id="featuresGrid" class="features-grid"></div>
+                  </fieldset>
+                  <details class="connections" id="step-integrations">
+                    <summary>
+                      <span
+                        >Connect suppliers & payments<small
+                          >Optional · choose now or discuss with us</small
+                        ></span
+                      ><span aria-hidden="true">+</span>
+                    </summary>
+                    <p class="muted">
+                      Connections are reviewed for your chosen store. Supplier
+                      accounts and fees are separate.
+                    </p>
+                    <div id="integrationsGrid" class="integrations-grid"></div>
+                  </details>
+                  <div class="custom-api">
+                    <label class="check-row"
+                      ><input type="checkbox" id="requestCustomApiCheck" /><span
+                        ><strong>Need an API that isn’t listed?</strong
+                        ><small
+                          >Send the name or documentation. We’ll check what’s
+                          possible.</small
+                        ></span
+                      ></label
+                    >
+                    <div id="customApiFields" hidden>
+                      <label for="customApiDescription"
+                        >Supplier name or API documentation</label
+                      ><textarea
+                        id="customApiDescription"
+                        rows="3"
+                        maxlength="1000"
+                        placeholder="Supplier name, website, documentation link, and what you want to connect"
+                      ></textarea>
+                      <p class="field-hint">
+                        Please don’t include passwords or API keys.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+                <section
+                  class="step-panel"
+                  data-panel="2"
+                  aria-labelledby="appearanceTitle"
+                  hidden
+                >
+                  <p class="step-kicker">STEP 03 / MAKE IT YOURS</p>
+                  <h3 id="appearanceTitle" tabindex="-1">
+                    Your name. Your look. Your store.
+                  </h3>
+                  <p class="section-description">
+                    Try a little personality. These preferences will travel with
+                    your request.
+                  </p>
+                  <div class="grid2">
+                    <label
+                      >Store name<input
+                        id="previewName"
+                        maxlength="100"
+                        placeholder="e.g. Nova Store"
+                        autocomplete="off" /></label
+                    ><label
+                      >Brand color<span class="color-input"
+                        ><input
+                          id="previewAccent"
+                          type="color"
+                          value="#166b52"
+                        /><span id="accentValue">#166B52</span></span
+                      ></label
+                    >
+                  </div>
+                  <div class="grid2">
+                    <label
+                      >Store languages<select id="storeLanguage">
+                        <option value="Arabic + English">
+                          Arabic + English
+                        </option>
+                        <option value="Arabic">Arabic</option>
+                        <option value="English">English</option>
+                      </select></label
+                    ><label
+                      >Handoff guide language<select id="reportLanguage">
+                        <option value="English">English</option>
+                        <option value="Arabic">Arabic</option>
+                      </select></label
+                    >
+                  </div>
+                  <fieldset>
+                    <legend>What should the design feel like?</legend>
+                    <div class="style-grid">
+                      <label class="option"
+                        ><input
+                          type="radio"
+                          name="visual_style"
+                          value="Clean & minimal"
+                          checked
+                        /><span
+                          ><strong>Clean & minimal</strong
+                          ><small>Quiet, clear, easy to browse.</small></span
+                        ></label
+                      ><label class="option"
+                        ><input
+                          type="radio"
+                          name="visual_style"
+                          value="Bold & colorful"
+                        /><span
+                          ><strong>Bold & colorful</strong
+                          ><small
+                            >Playful details, more personality.</small
+                          ></span
+                        ></label
+                      ><label class="option"
+                        ><input
+                          type="radio"
+                          name="visual_style"
+                          value="Dark & refined"
+                        /><span
+                          ><strong>Dark & refined</strong
+                          ><small>Deep tones and focused contrast.</small></span
+                        ></label
+                      >
+                    </div>
+                  </fieldset>
+                  <fieldset id="hostingChoices">
+                    <legend>Where would you like it to run?</legend>
+                    <label class="option"
+                      ><input
+                        type="radio"
+                        name="delivery_model"
+                        value="supabase_cloud"
+                        checked
+                      /><span
+                        ><strong
+                          >My server + Supabase
+                          <small class="tag">YOUR OWN SETUP</small></strong
+                        ><small
+                          >A customer-owned deployment. We’ll review your server
+                          and database setup with you.</small
+                        ></span
+                      ></label
+                    ><label class="option"
+                      ><input
+                        type="radio"
+                        name="delivery_model"
+                        value="dedicated"
+                      /><span
+                        ><strong>My server + PostgreSQL</strong
+                        ><small
+                          >A dedicated deployment with a database on your own
+                          infrastructure.</small
+                        ></span
+                      ></label
+                    ><label class="check-row advice"
+                      ><input type="checkbox" id="hostingAdvice" /><span
+                        >I need help choosing or setting up a server.</span
+                      ></label
+                    >
+                  </fieldset>
+                  <div class="handoff-note">
+                    <strong>Your requested handoff</strong>
+                    <p>
+                      Database setup & migrations · Docker deployment · A guide
+                      in your language
+                    </p>
+                    <small
+                      >Final deliverables and installation support are confirmed
+                      with your quote.</small
+                    >
+                  </div>
+                </section>
+                <section
+                  class="step-panel"
+                  data-panel="3"
+                  aria-labelledby="reviewTitle"
+                  hidden
+                >
+                  <p class="step-kicker">STEP 04 / YOUR PROJECT BRIEF</p>
+                  <h3 id="reviewTitle" tabindex="-1">
+                    Looking good. Let’s make a plan.
+                  </h3>
+                  <p class="section-description">
+                    Review your choices, then tell us where to reach you. This
+                    is a request for a quote, with no payment today.
+                  </p>
+                  <div id="reviewSummary" class="review-summary"></div>
+                  <div class="quote-note">
+                    <strong>A quote that fits your project.</strong>
+                    <p>
+                      We’ll review your requested setup, integrations and custom
+                      work before confirming the price. Hosting and supplier
+                      costs will be explained separately.
+                    </p>
+                  </div>
+                  <form id="inquiryForm">
+                    <div class="grid2">
+                      <label
+                        >Contact me on<select id="contactMethod">
+                          <option value="TELEGRAM">Telegram</option>
+                          <option value="WHATSAPP">WhatsApp</option>
+                          <option value="EMAIL">Email</option>
+                        </select></label
+                      ><label
+                        ><span id="contactLabel">Telegram username</span
+                        ><input
+                          id="contactHandle"
+                          placeholder="@your_username"
+                          required
+                          minlength="2"
+                          maxlength="120"
+                          autocomplete="off"
+                          aria-describedby="contactHint"
+                      /></label>
+                    </div>
+                    <p id="contactHint" class="field-hint">
+                      Only used to discuss your project. Contact details aren’t
+                      saved in your browser draft.
+                    </p>
+                    <label
+                      >Anything else we should know?
+                      <span class="optional">Optional</span
+                      ><textarea
+                        id="projectNotes"
+                        rows="3"
+                        maxlength="900"
+                        placeholder="Your launch plans, products, or an idea we haven’t covered…"
+                      ></textarea>
+                    </label>
+                    <p class="field-hint">
+                      Please keep tokens, passwords and other secrets out of
+                      this form.
+                    </p>
+                    <div class="form-actions">
+                      <button
+                        type="submit"
+                        id="submitInquiryBtn"
+                        class="button"
+                      >
+                        Send my project brief <span aria-hidden="true">↗</span>
+                      </button>
+                    </div>
+                    <p
+                      id="inquiryStatusMsg"
+                      role="status"
+                      tabindex="-1"
+                      hidden
+                    ></p>
+                    <a
+                      id="telegramChatBtn"
+                      class="button secondary"
+                      hidden
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Continue on Telegram ↗</a
+                    >
+                  </form>
+                </section>
+                <div class="wizard-actions">
+                  <button
+                    type="button"
+                    id="previousStep"
+                    class="text-button"
+                    hidden
+                  >
+                    ← Back</button
+                  ><span id="stepCount">Step 1 of 4</span
+                  ><button type="button" id="nextStep" class="button" disabled>
+                    Next: features <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+              </div>
+              <div class="draft-row">
+                <span id="draftStatus" role="status"
+                  >Your choices stay in this tab for 24 hours.</span
+                ><button type="button" id="discardDraft" class="text-button">
+                  Start over
+                </button>
+              </div>
+            </div>
+            <aside class="preview-column">
+              <div class="preview-sticky">
+                <div class="preview-title">
+                  <span class="eyebrow">A LITTLE PREVIEW</span
+                  ><span class="live-dot">Interactive</span>
+                </div>
+                <section
+                  id="storeDemo"
+                  class="setup-preview"
+                  aria-label="Sample customer experience"
+                ></section>
+                <div class="project-card">
+                  <span class="eyebrow">YOUR PROJECT, SO FAR</span>
+                  <h3 id="summaryName">Your next store</h3>
+                  <dl>
+                    <div>
+                      <dt>Experience</dt>
+                      <dd id="sumFormat">Bot + Mini App</dd>
+                    </div>
+                    <div>
+                      <dt>Business</dt>
+                      <dd id="sumTemplate">General store</dd>
+                    </div>
+                    <div>
+                      <dt>Connections</dt>
+                      <dd id="sumIntegrations">Let’s discuss</dd>
+                    </div>
+                    <div>
+                      <dt>Delivery</dt>
+                      <dd id="sumHosting">Your server + Supabase</dd>
+                    </div>
+                  </dl>
+                  <button
+                    id="jumpToSubmit"
+                    class="text-button"
+                    type="button"
+                    disabled
+                  >
+                    Review your brief <span aria-hidden="true">↗</span>
+                  </button>
+                </div>
+                <p class="preview-caption">
+                  A design example, not a live store. Your final experience is
+                  tailored to the agreed scope.
+                </p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+      <section class="closing wrap">
+        <p class="eyebrow">ROOM TO GROW</p>
+        <h2>Start with what you need.<br />Add the next idea later.</h2>
+        <p>
+          New products. Another supplier. A different look.<br />Let’s build a
+          starting point that makes sense for your business.
+        </p>
+        <a href="#builder" class="text-button"
+          >Shape your store <span aria-hidden="true">↗</span></a
+        >
+      </section>
     </main>
-
-    <footer class="footer">
-      <p>GH Bot Factory &copy; 2026. Your business, ready for Telegram.</p>
+    <footer class="wrap footer">
+      <a class="brand" href="/build/"
+        ><span class="brand-mark">gh<span>.</span></span
+        ><span>bot factory</span></a
+      >
+      <p>Small beginnings. Your own business.</p>
+      <span>© 2026 GH Store</span>
     </footer>
-  </div>
-
-  <script src="/admin/store-setup.js?v=20260920_01" defer></script>
-  <script src="/build/app.js?v=20260920_01" defer></script>
-</body>
+    <script src="/admin/store-setup.js?v=20260920_01" defer></script>
+    <script src="/build/app.js?v=20260921_02" defer></script>
+  </body>
 </html>

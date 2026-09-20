@@ -1851,3 +1851,20 @@ Resumed and completed the deployment export and isolated restore repair initiate
 > ok deploy now so i can see the new  things
 
 **Scope:** Deploy verified commit `4e216ad` to the existing local Compose installation. Running schema confirmed at `e5f6a8b9c1d2`; changes since the deployed image are presentation-only. Rebuild the application image and replace only the API service, then verify readiness and live Admin/configurator assets. Deployment completed; all project services healthy, live asset hashes and Chromium checks passed through `http://10.70.5.5:8010`. Standard build encountered Docker DNS failures; static assets were layered onto the prior image without changing dependencies. Only API was recreated. Domain DNS could not be verified from this host. See CURRENT_STATE deployment entry for image provenance.
+
+
+## Customer Builder Redesign — 2026-09-21
+
+**User prompt (verbatim):**
+
+> i would from u to refine the page of customer so he can choose from it, i guess not all what i saied are there, tho u can use ur taste in web design, the design now is horrible and need re do, so yah, the 5 is my priority for now , this can make me less overwhelmed from this project if u do it better
+
+**Implementation and evidence:**
+
+- Rebuilt `/build/` (`apps/configurator/static/`) with a cream/green visual system, illustrated storefront hero, clear delivery overview, four-step brief builder, interactive example, responsive cards and reduced-motion support. Static assets use `20260921_02`.
+- Customer choices now cover 14 requested features (pricing, warranty, coupons, resellers, tickets, announcements, branding, catalog organization, users, history, purchase review, alerts, motion and custom emoji), supplier/payment connections and custom API requests, name/color/style, store/report languages, and customer-owned Supabase/PostgreSQL delivery preferences.
+- Existing inquiry configuration plus bounded project notes carry the brief to the factory sales console. These are requested scope, not implemented capabilities or entitlements. No secret entry or provisioning was added.
+- Public pricing is quote-on-review; no browser-authored prices. Existing server estimate snapshots and commercial APIs are unchanged. A one-time project preference is recorded for review; internal recurring estimates still require operator reconciliation before a final quote. See ADR-048.
+- Tab drafts exclude contact, notes and custom API text. Error/retry states preserve entries; successful submission clears drafts and locks the submitted form. Telegram follow-up uses the inquiry reference without legacy estimated-price text.
+- Verification: expanded browser regression passed, including catalog load retry, four steps, draft privacy/restoration, requested-feature persistence, maximum-length brief, failed/successful submission, existing Admin regression and 320/375px/landscape overflow checks. Desktop/mobile screenshots inspected. Canonical `make verify` passed on the current working tree: 470 fast tests, 15 PostgreSQL tests, Ruff, migration upgrade/Alembic no drift, handoff/secret/JavaScript/compile/dependency checks. The first run found an outdated page-title assertion, corrected before the passing rerun. Existing unrelated working-tree changes were present during verification; this milestone does not claim a separate clean-checkout gate or production qualification.
+- Migration head unchanged: `e5f6a8b9c1d2`. No deployment performed; existing running site remains on its prior assets. Unrelated auth/Admin/setup/report work remains outside this milestone.

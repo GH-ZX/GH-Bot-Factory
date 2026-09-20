@@ -975,3 +975,8 @@ Replaced plaintext single-tenant export with encrypted snapshots (`ghbf-tenant-e
 Shared setup presentation lives in `apps/admin/static/store-setup.js` and `store-setup.css`, loaded by Admin and `/build/`. Existing server template keys remain authoritative. Follow `docs/plans/usability-simplification.md` for the implementation checklist and final verification. Drafts never store Telegram tokens or connection credentials. No new API, schema, or trust boundary.
 
 > **2026-09-20 deployment:** UI `4e216ad` is live on the local API; deployment provenance, health checks, and hostname-resolution limitation are recorded under “Usability Deployment” in CURRENT_STATE and prompt history.
+
+
+## 2026-09-21 — Customer Builder Redesign Map
+
+Customer discovery lives in `apps/configurator/static/`, mounted at `/build/` (older `apps/build/static/` references are historical). Four-step project brief reuses public templates/integrations/inquiry APIs and shared StoreSetup helpers. Requested features/languages/design/handoff travel as bounded project notes, not entitlement or provisioning authority. Quote-on-review presentation supersedes live estimated prices; internal server estimates remain unchanged and need operator review. See ADR-048 and the matching prompt/current-state entries. No migration or deployment.

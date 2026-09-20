@@ -156,7 +156,7 @@ async def test_build_static_configurator_page_loads(public_client: dict[str, Any
     client: httpx.AsyncClient = public_client["client"]
     res = await client.get("/build/")
     assert res.status_code == 200
-    assert "Build Your Bot" in res.text
+    assert "Your next store starts here" in res.text
     assert "/build/app.js" in res.text
 
 
