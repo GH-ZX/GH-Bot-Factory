@@ -1,4 +1,7 @@
 import enum
+import hashlib
+import hmac
+import secrets
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -125,7 +128,17 @@ class AuthTokenService:
             "aud": self.audience,
         }
         if extra_claims:
-            reserved = {"sub", "tenant_id", "source", "roles", "token_version", "iat", "exp", "iss", "aud"}
+            reserved = {
+                "sub",
+                "tenant_id",
+                "source",
+                "roles",
+                "token_version",
+                "iat",
+                "exp",
+                "iss",
+                "aud",
+            }
             safe_claims = {k: v for k, v in extra_claims.items() if k not in reserved}
             payload.update(safe_claims)
 
@@ -160,3 +173,36 @@ class AuthTokenService:
             raise TokenInvalidSignatureError("Access token signature is invalid.") from exc
         except (jwt.InvalidTokenError, ValueError, KeyError) as exc:
             raise TokenMalformedError("Malformed or invalid token.") from exc
+
+
+def hash_password(password: str) -> str:
+    """Hash a plaintext password using PBKDF2-HMAC-SHA256 with a random salt."""
+    if not password:
+        raise ValueError("Password must not be empty.")
+    salt = secrets.token_hex(16)
+    iterations = 100_000
+    derived = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations
+    )
+    return f"pbkdf2:sha256:{iterations}${salt}${derived.hex()}"
+
+
+def verify_password(password: str, hashed_password: str | None) -> bool:
+    """Verify a plaintext password against a stored hashed password in constant time."""
+    if not password or not hashed_password:
+        return False
+    try:
+        algorithm_part, salt, expected_hash = hashed_password.split("$")
+        algo, sub_algo, iterations_str = algorithm_part.split(":")
+        if algo != "pbkdf2" or sub_algo != "sha256":
+            return False
+        iterations = int(iterations_str)
+        # Defense against DoS from forged or corrupted iteration counts
+        if not (1_000 <= iterations <= 500_000):
+            return False
+        derived = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations
+        )
+        return hmac.compare_digest(derived.hex(), expected_hash)
+    except (ValueError, TypeError, AttributeError):
+        return False

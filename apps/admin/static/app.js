@@ -146,12 +146,68 @@ function closeMobileDrawer() {
 }
 
 let bound = false;
+let loginMethod = "password";
 function showLogin(message = "") {
   clearSessionToken();
   el("app").classList.add("hidden");
   el("login").classList.remove("hidden");
-  el("loginError").textContent = message;
-  el("loginCode").focus();
+  el("loginPassword").value = "";
+  el("loginCode").value = "";
+  switchLoginTab(loginMethod);
+  el(loginMethod === "password" ? "passwordLoginError" : "loginError").textContent = message;
+}
+function switchLoginTab(method) {
+  loginMethod = method;
+  for (const [name, button, form] of [["password", "tabPassword", "passwordLoginForm"], ["code", "tabCode", "loginForm"]]) {
+    const active = name === method;
+    el(button).setAttribute("aria-selected", String(active));
+    el(button).tabIndex = active ? 0 : -1;
+    el(form).classList.toggle("hidden", !active);
+  }
+  el("passwordLoginError").classList.remove("signin-success");
+  el("passwordLoginError").textContent = "";
+  el("loginError").textContent = "";
+  el(method === "password" ? "loginUsername" : "loginCode").focus();
+}
+async function signInWithPassword(event) {
+  event.preventDefault();
+  const button = el("passwordLoginSubmit");
+  if(button.disabled)return;
+  button.disabled = true;
+  button.textContent = "Signing in…";
+  el("passwordLoginError").classList.remove("signin-success");
+  el("passwordLoginError").textContent = "";
+  try {
+    const result = await api("/api/v1/auth/login", {method:"POST", body:JSON.stringify({username:el("loginUsername").value.trim(), password:el("loginPassword").value, tenant_slug:el("loginStore").value.trim() || null})});
+    setSessionToken(result.access_token);
+    await openConsole();
+  } catch(error) {
+    clearSessionToken();
+    el("passwordLoginError").textContent = error.message || "We couldn’t sign you in. Please try again.";
+    if(error.message?.includes("store address"))el("loginStoreDetails").open=true;
+    el("passwordLoginError").focus();
+  } finally {
+    el("loginPassword").value = "";
+    button.disabled = false;
+    button.textContent = "Sign in ↗";
+  }
+}
+async function openAccount() {
+  el("accountError").textContent="";
+  const info=await api("/api/v1/auth/account");
+  el("accountIdentity").textContent=`Username: ${info.username || "Not set"} · Store: ${info.tenant_slug}`;
+  el("accountCurrentPassword").required=info.has_password;
+  el("currentPasswordLabel").classList.toggle("hidden",!info.has_password);
+  el("saveAccountPassword").disabled=!info.username;
+  if(!info.username)el("accountError").textContent="Ask your installation owner to configure a username before using password sign-in.";
+  el("accountDialog").showModal();
+}
+async function saveAccountPassword(event) {
+  event.preventDefault();const button=el("saveAccountPassword");button.disabled=true;
+  try {
+    await api("/api/v1/auth/account/password", {method:"PUT",body:JSON.stringify({current_password:el("accountCurrentPassword").value || null,new_password:el("accountNewPassword").value})});
+    el("accountDialog").close();switchLoginTab("password");showLogin("Password saved. Sign in with your username and new password.");el("passwordLoginError").classList.add("signin-success");
+  } catch(error) {el("accountError").textContent=error.message;} finally {button.disabled=false;el("accountCurrentPassword").value="";el("accountNewPassword").value="";}
 }
 
 async function openConsole() {
@@ -179,7 +235,7 @@ async function signIn(event) {
     showLogin(error.message || "Sign-in failed. Send /admin to your bot for a new code.");
   } finally {
     button.disabled = false;
-    button.textContent = "Sign in";
+    button.textContent = "Continue with token ↗";
   }
 }
 
@@ -1688,6 +1744,9 @@ function handleSignOut(event) {
 window.handleSignOut = handleSignOut;
 
 el("loginForm").addEventListener("submit", signIn);
+el("passwordLoginForm")?.addEventListener("submit", signInWithPassword);
+el("tabPassword")?.addEventListener("click", () => switchLoginTab("password"));
+el("tabCode")?.addEventListener("click", () => switchLoginTab("code"));
 el("signOut")?.addEventListener("click", handleSignOut);
 el("headerSignOut")?.addEventListener("click", handleSignOut);
 
@@ -1743,3 +1802,11 @@ async function initSession() {
 initSession().catch((error) => {
   showLogin(error.message || "Sign-in failed. Try a browser sign-in code below.");
 });
+
+el("useTokenLink").addEventListener("click",()=>switchLoginTab("code"));
+el("toggleLoginPassword").addEventListener("click",()=>{const visible=el("loginPassword").type==="password";el("loginPassword").type=visible?"text":"password";el("toggleLoginPassword").textContent=visible?"Hide":"Show";el("toggleLoginPassword").setAttribute("aria-label",visible?"Hide password":"Show password");el("toggleLoginPassword").setAttribute("aria-pressed",String(visible));});
+for(const id of ["tabPassword","tabCode"])el(id).addEventListener("keydown",event=>{if(["ArrowLeft","ArrowRight","Home","End"].includes(event.key)){event.preventDefault();switchLoginTab(event.key==="Home"?"password":event.key==="End"?"code":loginMethod==="password"?"code":"password");el(loginMethod==="password"?"tabPassword":"tabCode").focus();}});
+el("accountButton").addEventListener("click",()=>openAccount().catch(showHomeError));
+el("closeAccount").addEventListener("click",()=>el("accountDialog").close());
+el("accountForm").addEventListener("submit",saveAccountPassword);
+el("accountDialog").addEventListener("close",()=>{el("accountCurrentPassword").value="";el("accountNewPassword").value="";});

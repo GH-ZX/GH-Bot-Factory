@@ -21,11 +21,17 @@ const server = http.createServer((req, res) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('https://telegram.org/**', route => route.fulfill({body: ''}));
-    let loginBody;
+    let loginBody, passwordBody, passwordUpdate;
     let allowLogin = false;
     await page.route('**/api/v1/**', route => {
       const url = new URL(route.request().url());
       let body = {};
+      if (url.pathname.endsWith('/auth/login')) {
+        passwordBody=route.request().postDataJSON();
+        return route.fulfill({status:passwordBody.password==='ValidPassword123!'?200:401,json:passwordBody.password==='ValidPassword123!'?{access_token:'password-session'}:{detail:'Invalid username or password.'}});
+      }
+      if(url.pathname.endsWith('/auth/account'))return route.fulfill({json:{username:'owner',tenant_slug:'north-store',has_password:false}});
+      if(url.pathname.endsWith('/auth/account/password')){passwordUpdate=route.request().postDataJSON();return route.fulfill({status:204});}
       if (url.pathname.endsWith('/admin-code')) {
         loginBody = route.request().postDataJSON();
         return route.fulfill({status: allowLogin ? 200 : 401, json: allowLogin ? {access_token: 'browser-test-session'} : {detail: 'Code expired. Send /admin for a new code.'}});
@@ -37,6 +43,8 @@ const server = http.createServer((req, res) => {
     const base = `http://127.0.0.1:${server.address().port}`;
     await page.goto(`${base}/admin/`);
     await page.locator('#login').waitFor({state: 'visible'});
+    await page.setViewportSize({width:1440,height:1000});
+    await page.screenshot({path:'/tmp/ghbf-signin-desktop.png'});
     assert.equal(await page.locator('#fatal').isVisible(), false);
     if(await page.locator('#tabCode').count())await page.locator('#tabCode').click();
     await page.locator('#loginCode').fill('a'.repeat(32));
@@ -59,6 +67,34 @@ const server = http.createServer((req, res) => {
     await page.screenshot({path: '/tmp/ghbf-admin-login-mobile.png'});
     assert.deepEqual(errors, []);
     console.log('Admin browser checks passed: direct entry, invalid code recovery, login, reload persistence, logout, mobile layout.');
+    await page.locator('#tabPassword').click();
+    await page.locator('#loginUsername').fill('owner');
+    await page.locator('#loginPassword').fill('WrongPassword');
+    await page.locator('#passwordLoginSubmit').click();
+    await page.waitForFunction(()=>document.getElementById('passwordLoginError').textContent.includes('Invalid'));
+    assert.equal(await page.locator('#loginPassword').inputValue(),'');
+    assert.equal(await page.locator('#loginUsername').inputValue(),'owner');
+    await page.locator('#loginPassword').fill('ValidPassword123!');
+    await page.locator('#toggleLoginPassword').click();
+    assert.equal(await page.locator('#loginPassword').getAttribute('type'),'text');
+    await page.locator('#toggleLoginPassword').click();
+    await page.locator('#passwordLoginSubmit').click();
+    await page.locator('#app').waitFor({state:'visible'});
+    assert.equal(passwordBody.username,'owner');
+    assert.equal(passwordBody.tenant_slug,null);
+    await page.locator('#mobileMenuBtn').click();
+    await page.locator('#accountButton').click();
+    await page.locator('#accountDialog').waitFor({state:'visible'});
+    await page.locator('#accountNewPassword').fill('NewStrongPassword123!');
+    await page.locator('#saveAccountPassword').click();
+    await page.locator('#login').waitFor({state:'visible'});
+    assert.equal(passwordUpdate.new_password,'NewStrongPassword123!');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('ghbf_admin_token')),null);
+    await page.setViewportSize({width:375,height:812});
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.screenshot({path:'/tmp/ghbf-signin-mobile.png'});
+    assert.deepEqual(errors,[]);
+    console.log('Password browser checks passed: failed login, password visibility, successful login, account password setup, logout and mobile layout.');
     const store = await browser.newPage({viewport: {width: 390, height: 844}});
     store.on('pageerror', error => errors.push(error.message));
     await store.addInitScript(() => {

@@ -122,7 +122,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not settings.rate_limit_enabled:
             return None
         path = request.url.path
-        if path in {"/api/v1/auth/telegram-miniapp", "/api/v1/auth/admin-code"}:
+        if path in {"/api/v1/auth/telegram-miniapp", "/api/v1/auth/admin-code", "/api/v1/auth/login", "/api/v1/auth/account/password"}:
             return RatePolicy("auth", settings.rate_limit_auth_per_minute)
         if request.method == "POST" and path in {
             "/api/v1/storefront/checkout",

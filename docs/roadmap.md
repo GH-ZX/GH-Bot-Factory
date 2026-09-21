@@ -627,3 +627,9 @@ User-selected scope for 2026-09-21 (this numbering supersedes earlier advisory l
 - [ ] Step 6: production release qualification and complete release evidence — incomplete/deferred.
 
 See ADR-049 and [implementation checklist](plans/admin-operations-completion.md). Implementation does not establish a production-ready release or an externally tested customer installation.
+
+## Admin sign-in follow-up — 2026-09-22
+
+Token/password sign-in now uses the shared Admin visual identity. Account password setup/change is implemented with session revocation and tenant-safe membership selection. Canonical verification/deployment evidence belongs in CURRENT_STATE. Steps 2 and 4–6 remain pending; this does not complete customer installation or release qualification.
+
+Sign-in milestone verification: isolated-source canonical `make verify` passed (482 fast + 19 PostgreSQL), including Ruff, compilation, migration/no drift, JavaScript, secret/handoff and dependency checks. All three browser suites passed: Admin/password/MiniApp, tenant operations, and builder/setup UX. Desktop/mobile screenshots inspected. No real credentials or purchases used in these tests. Live Docker deployment is the next step.

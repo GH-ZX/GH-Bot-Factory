@@ -561,3 +561,12 @@ Saved `docs/operations/RESUME_CUSTOMER_DELIVERY.md`: requested business model an
 - Step 2 awaits an actual customer installation; steps 4/5/6 remain deferred/incomplete. No live messages, purchases, migration or deployment for this milestone.
 
 Implementation commit `1d4fcec` was pushed to `origin/main` on 2026-09-22. Canonical isolated-source gate: 474 fast + 19 PostgreSQL; browser workflows passed. Live deployment and actual customer acceptance remain pending.
+
+## Admin sign-in redesign — 2026-09-22
+
+- Rebuilt sign-in with shared identity, responsive illustrated layout, accessible token/password tabs, password visibility and inline errors.
+- Completed `/auth/login`; active membership selection fails closed on ambiguity. Added `/auth/account` and `/auth/account/password` for own-password setup/change, row locking, token-version revocation and secret-free audit.
+- Added authentication rate limiting and off-event-loop bounded password verification. No default password or platform authority is created.
+- Focused auth suite and browser flows passed; final canonical/deployment evidence follows. ADR-050; schema head unchanged (`0ce5d2c98e7f`).
+
+Sign-in milestone verification: isolated-source canonical `make verify` passed (482 fast + 19 PostgreSQL), including Ruff, compilation, migration/no drift, JavaScript, secret/handoff and dependency checks. All three browser suites passed: Admin/password/MiniApp, tenant operations, and builder/setup UX. Desktop/mobile screenshots inspected. No real credentials or purchases used in these tests. Live Docker deployment is the next step.

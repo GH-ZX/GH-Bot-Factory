@@ -102,3 +102,29 @@ Review the new Admin source/build with the owner. Plan deployment of migration `
 ## Latest implementation checkpoint
 
 Steps 1 and 3 are implemented in source with canonical/local browser verification; see [Admin operations checklist](../plans/admin-operations-completion.md). Step 2 awaits an actual customer test. Steps 4, 5 and 6 are explicitly incomplete/deferred. Migration `0ce5d2c98e7f` has been tested only on an isolated database; this milestone has not been deployed live. The prior deployment details above are historical evidence, not verification of the new admin release.
+
+
+## Cloudflare hostname guide — 2026-09-22
+
+Use one new hostname for now:
+
+- Customer builder: https://factory.gh-store.me/build/
+- Factory Admin: https://factory.gh-store.me/admin/
+- Keep the existing bot.gh-store.me route unchanged.
+
+In Cloudflare:
+
+1. Open **Networking → Tunnels** (or **Zero Trust → Networks → Connectors**, depending on your dashboard).
+2. Select the existing tunnel connected to this laptop.
+3. Open **Published application routes** (previously **Public Hostnames**) → **Add**.
+4. Enter subdomain **factory**, domain **gh-store.me**, and leave **Path empty**.
+5. Set service type **HTTP**. If cloudflared runs directly on this laptop, enter **localhost:8010**. If cloudflared runs inside Docker, use the laptop's reachable LAN IP followed by **:8010** instead; container localhost refers to that container. Keep the factory API running and ensure that address reaches it.
+6. Save. Cloudflare creates the tunnel DNS record automatically. Visitors use HTTPS even though this local service uses HTTP.
+7. Open the customer and Admin URLs above. Keep the laptop and tunnel running.
+
+Both pages and their API requests use this single hostname; separate admin/customer subdomains are unnecessary now. The bare factory.gh-store.me URL is not yet configured here to redirect to /build/, so share the complete /build/ link. Adding this route does not deploy the newer Admin code; that deployment remains a separate step. Admin retains its application sign-in.
+
+Official instructions: https://developers.cloudflare.com/tunnel/get-started/
+DNS behavior: https://developers.cloudflare.com/tunnel/concepts/routing/
+
+Documentation only: no tunnel, DNS, application configuration or Docker service was changed.

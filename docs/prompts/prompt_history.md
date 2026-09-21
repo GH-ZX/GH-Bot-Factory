@@ -1919,3 +1919,21 @@ Resume the active Admin identity/one-time quote/tenant operations milestone. Rew
 **Final verification — 2026-09-22:** The isolated milestone source excludes unrelated password/auth/setup changes. Canonical `make verify` passed: 474 fast + 19 PostgreSQL tests, migration/no drift and static/security/dependency checks. Exact-source Admin operations and Admin/Mini App browser checks passed. The earlier workspace had four additional auth tests. New concurrency evidence covers coupon limits, duplicate checkout, announcement claims and sibling quote acceptance. Live deployment and real-customer acceptance remain pending.
 
 Implementation commit `1d4fcec` was pushed to `origin/main` on 2026-09-22. Canonical isolated-source gate: 474 fast + 19 PostgreSQL; browser workflows passed. Live deployment and actual customer acceptance remain pending.
+
+## Cloudflare hostname guidance — 2026-09-22
+
+**User prompt (repeated):**
+
+> now just tell me how to make the subdomain on my cloudflare , i already have a bot in bot.gh-store.me as a tunnel to this laptop, now i need to add another subdomain , not ghfac , just like factory as a subdomain , so it be like u tell me a suggestions for what we need (for admin page and customer page that he choose what he wants) add ur answare to md file of the ones there
+
+The initial request also asked: "and please try to be simple (we dont have credits hhh)".
+
+Added a short guide to RESUME_CUSTOMER_DELIVERY.md: factory.gh-store.me/build/ and /admin/ on the existing tunnel, HTTP origin on port 8010, host-versus-container localhost distinction, and automatic DNS creation. Verified dashboard guidance against official Cloudflare documentation. No infrastructure changes; documentation only.
+
+## Admin sign-in redesign — 2026-09-22
+
+> ok done, and now the subdomains working, the admin and the build , thanks, now for the next steps that we should go to,, btw this token page needs redising too https://factory.gh-store.me/admin/ , and i need it to be token or username pass , same good design that u did, idk if u redesign the page after loging in to this admin portal , start work
+
+Scope: matching sign-in design, one-time token and password authentication, secure self-service password setup, verify and publish the current Admin implementation. Existing after-login redesign is in source but has not yet been deployed. User confirms factory hostname routing works. No Cloudflare changes required.
+
+Sign-in milestone verification: isolated-source canonical `make verify` passed (482 fast + 19 PostgreSQL), including Ruff, compilation, migration/no drift, JavaScript, secret/handoff and dependency checks. All three browser suites passed: Admin/password/MiniApp, tenant operations, and builder/setup UX. Desktop/mobile screenshots inspected. No real credentials or purchases used in these tests. Live Docker deployment is the next step.

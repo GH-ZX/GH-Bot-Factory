@@ -23,7 +23,7 @@ from apps.api.v1.payments import (
 )
 from packages.commerce.models import Order
 from packages.commerce.state_machine import OrderStatus
-from packages.core.auth import AuthSource, AuthTokenService
+from packages.core.auth import AuthSource, AuthTokenService, hash_password, verify_password
 from packages.payments.models import PaymentProviderConfig
 from packages.payments.payment_service import PaymentService
 from packages.payments.providers.mock import MockPaymentProvider
@@ -42,6 +42,7 @@ TEST_JWT_SECRET = "test-jwt-secret-key-0123456789abcdef-0123456789abcdef"
 # ---------------------------------------------------------------------------
 # Helpers & Factories
 # ---------------------------------------------------------------------------
+
 
 async def create_tenant(
     session: AsyncSession,
@@ -168,6 +169,7 @@ def make_telegram_init_data(
 # API Test Fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture
 async def api_env(db_session: AsyncSession) -> AsyncGenerator[dict[str, Any], None]:
     secret_storage = EnvSecretStorage()
@@ -205,6 +207,7 @@ async def api_env(db_session: AsyncSession) -> AsyncGenerator[dict[str, Any], No
 # ===========================================================================
 # 1. Authentication Tests
 # ===========================================================================
+
 
 async def test_auth_missing_header_returns_401(api_env: dict[str, Any]) -> None:
     """Missing Authorization header must be rejected with 401 Unauthorized."""
@@ -293,7 +296,9 @@ async def test_auth_invalid_signature_returns_401(api_env: dict[str, Any]) -> No
     user, _ = await create_user(session, tenant.id)
 
     # Issue token signed with an invalid / unknown secret key
-    forged_token_service = AuthTokenService(secret_key="attacker-forged-secret-key-at-least-256-bits-long-xyz")
+    forged_token_service = AuthTokenService(
+        secret_key="attacker-forged-secret-key-at-least-256-bits-long-xyz"
+    )
     forged_token = forged_token_service.issue_access_token(
         user_id=user.id,
         tenant_id=tenant.id,
@@ -378,6 +383,7 @@ async def test_auth_user_not_member_returns_403(api_env: dict[str, Any]) -> None
 # ===========================================================================
 # 2. Identity Spoofing Tests
 # ===========================================================================
+
 
 async def test_identity_spoofing_user_id_header_ignored(api_env: dict[str, Any]) -> None:
     """API derives user identity strictly from Bearer token, ignoring client-supplied X-User-ID."""
@@ -467,6 +473,7 @@ async def test_identity_spoofing_tenant_id_header_ignored(api_env: dict[str, Any
 # 3. Cross-Tenant Isolation Tests
 # ===========================================================================
 
+
 async def test_cross_tenant_token_cannot_access_or_mutate_other_tenant_resources(
     api_env: dict[str, Any],
 ) -> None:
@@ -535,6 +542,7 @@ async def test_cross_tenant_token_cannot_access_or_mutate_other_tenant_resources
 # 4. Customer Ownership & RBAC Tests
 # ===========================================================================
 
+
 async def test_customer_cannot_access_or_mutate_other_customer_intent_same_tenant(
     api_env: dict[str, Any],
 ) -> None:
@@ -585,7 +593,9 @@ async def test_customer_cannot_access_or_mutate_other_customer_intent_same_tenan
         headers={"Authorization": f"Bearer {token_a}"},
     )
     assert resp_reconcile.status_code == 403
-    assert "Customer cannot reconcile another user's payment intent" in resp_reconcile.json()["detail"]
+    assert (
+        "Customer cannot reconcile another user's payment intent" in resp_reconcile.json()["detail"]
+    )
 
 
 async def test_customer_cannot_create_intent_for_other_customer_order(
@@ -693,6 +703,7 @@ async def test_staff_and_admin_can_access_and_manage_all_intents_in_tenant(
 # ===========================================================================
 # 5. Mini App Authentication Tests
 # ===========================================================================
+
 
 async def test_telegram_miniapp_auth_returns_bearer_token_and_works_immediately(
     api_env: dict[str, Any],
@@ -878,6 +889,7 @@ async def test_telegram_miniapp_deactivated_user_returns_403(api_env: dict[str, 
 # 6. Token Revocation / Versioning Tests
 # ===========================================================================
 
+
 async def test_token_revocation_via_token_version(api_env: dict[str, Any]) -> None:
     """Incrementing user.token_version immediately revokes all previously issued tokens."""
     client: httpx.AsyncClient = api_env["client"]
@@ -943,6 +955,7 @@ async def test_token_revocation_via_token_version(api_env: dict[str, Any]) -> No
 # ===========================================================================
 # 7. Webhook Authentication Tests
 # ===========================================================================
+
 
 async def test_webhook_auth_does_not_use_customer_jwt(api_env: dict[str, Any]) -> None:
     """Webhooks do not use customer JWT and require provider cryptographic verification."""
@@ -1050,3 +1063,145 @@ async def test_webhook_requires_provider_specific_signature(api_env: dict[str, A
     assert resp_valid.status_code == 200
     assert resp_valid.json()["status"] == "ok"
     assert resp_valid.json()["processed"] is True
+
+
+async def test_password_hashing_and_verification() -> None:
+    raw_pass = "ComplexP@ssw0rd!123"
+    hashed = hash_password(raw_pass)
+    assert hashed.startswith("pbkdf2:sha256:100000$")
+    assert verify_password(raw_pass, hashed) is True
+    assert verify_password("WrongPassword", hashed) is False
+    assert verify_password("", hashed) is False
+    assert verify_password(raw_pass, None) is False
+    assert verify_password(raw_pass, "invalid:format") is False
+    assert verify_password(raw_pass, "pbkdf2:md5:1000$salt$hash") is False
+
+
+async def test_password_login_success(api_env: dict[str, Any]) -> None:
+    session = api_env["session"]
+    client = api_env["client"]
+
+    tenant = await create_tenant(session, name="Password Login Store")
+    user, _ = await create_user(session, tenant.id, role=Role.ADMIN, telegram_id=999888777)
+    user.username = "testadminuser"
+    user.hashed_password = hash_password("SuperSecretPass123!")
+    await session.flush()
+
+    resp = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "testadminuser", "password": "SuperSecretPass123!"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+    assert data["role"] == "ADMIN"
+    assert data["tenant_id"] == str(tenant.id)
+
+    token = data["access_token"]
+    bootstrap_resp = await client.get(
+        "/api/v1/admin/bootstrap",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert bootstrap_resp.status_code == 200
+    assert bootstrap_resp.json()["actor"]["role"] == "ADMIN"
+
+
+async def test_password_login_invalid_credentials(api_env: dict[str, Any]) -> None:
+    session = api_env["session"]
+    client = api_env["client"]
+
+    tenant = await create_tenant(session, name="Invalid Creds Store")
+    user, _ = await create_user(session, tenant.id, role=Role.OWNER, telegram_id=888777666)
+    user.username = "validowner"
+    user.hashed_password = hash_password("CorrectPassword456!")
+    await session.flush()
+
+    resp_wrong_pw = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "validowner", "password": "WrongPassword!"},
+    )
+    assert resp_wrong_pw.status_code == 401
+    assert "invalid" in resp_wrong_pw.json()["detail"].lower()
+
+    resp_no_user = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "nonexistent_user", "password": "AnyPassword!"},
+    )
+    assert resp_no_user.status_code == 401
+    assert "invalid" in resp_no_user.json()["detail"].lower()
+
+
+async def test_password_login_customer_forbidden(api_env: dict[str, Any]) -> None:
+    session = api_env["session"]
+    client = api_env["client"]
+
+    tenant = await create_tenant(session, name="Customer Login Store")
+    user, _ = await create_user(session, tenant.id, role=Role.CUSTOMER, telegram_id=777666555)
+    user.username = "regularcustomer"
+    user.hashed_password = hash_password("CustomerPass789!")
+    await session.flush()
+
+    resp = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "regularcustomer", "password": "CustomerPass789!"},
+    )
+    assert resp.status_code == 403
+    assert "admin access is not enabled" in resp.json()["detail"].lower()
+
+
+async def test_password_login_requires_store_selection_for_multiple_memberships(api_env):
+    session, client = api_env["session"], api_env["client"]
+    first = await create_tenant(session, name="First store")
+    second = await create_tenant(session, name="Second store")
+    user, _ = await create_user(session, first.id, role=Role.ADMIN)
+    user.hashed_password = hash_password("MultipleStorePassword123!")
+    session.add(Membership(user_id=user.id, tenant_id=second.id, role=Role.OWNER, is_active=True))
+    await session.flush()
+    payload = {"username":user.username,"password":"MultipleStorePassword123!"}
+    ambiguous = await client.post('/api/v1/auth/login',json=payload)
+    assert ambiguous.status_code == 409
+    selected = await client.post('/api/v1/auth/login',json={**payload,"tenant_slug":first.slug})
+    assert selected.status_code == 200
+    assert selected.json()['tenant_id'] == str(first.id)
+    assert (await client.post('/api/v1/auth/login',json={**payload,"tenant_slug":"another-store"})).status_code == 403
+
+
+async def test_staff_can_set_password_but_old_sessions_are_revoked(api_env):
+    session, client = api_env["session"], api_env["client"]
+    tenant = await create_tenant(session)
+    user, token = await create_user(session, tenant.id, role=Role.OWNER)
+    headers = {"Authorization":f"Bearer {token}"}
+    account = await client.get('/api/v1/auth/account',headers=headers)
+    assert account.status_code == 200
+    assert account.json()['has_password'] is False
+    username = user.username
+    saved = await client.put('/api/v1/auth/account/password',headers=headers,json={"new_password":"FirstPasswordForAccount123!"})
+    assert saved.status_code == 204, saved.text
+    assert saved.headers['cache-control'] == 'no-store'
+    assert (await client.get('/api/v1/auth/account',headers=headers)).status_code == 401
+    signed = await client.post('/api/v1/auth/login',json={"username":username,"password":"FirstPasswordForAccount123!"})
+    assert signed.status_code == 200
+    headers = {"Authorization":f"Bearer {signed.json()['access_token']}"}
+    rejected = await client.put('/api/v1/auth/account/password',headers=headers,json={"new_password":"ReplacementPassword123!"})
+    assert rejected.status_code == 400
+    saved = await client.put('/api/v1/auth/account/password',headers=headers,json={"current_password":"FirstPasswordForAccount123!","new_password":"ReplacementPassword123!"})
+    assert saved.status_code == 204
+    assert (await client.post('/api/v1/auth/login',json={"username":username,"password":"FirstPasswordForAccount123!"})).status_code == 401
+
+
+async def test_password_verification_rejects_unbounded_hash_work():
+    assert not verify_password('secret','pbkdf2:sha256:999999999999$salt$digest')
+    assert not verify_password('secret','pbkdf2:sha256:0$salt$digest')
+
+
+async def test_password_routes_use_auth_rate_limit(monkeypatch):
+    from starlette.requests import Request
+
+    from packages.core.config import settings
+    from packages.core.security import RateLimitMiddleware
+    monkeypatch.setattr(settings, 'rate_limit_enabled', True)
+    middleware = RateLimitMiddleware(app)
+    for path in ['/api/v1/auth/login','/api/v1/auth/account/password']:
+        policy = middleware._policy(Request({'type':'http','method':'POST','path':path,'headers':[]}))
+        assert policy.name == 'auth'
