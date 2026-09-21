@@ -985,3 +985,8 @@ Customer discovery lives in `apps/configurator/static/`, mounted at `/build/` (o
 ## 2026-09-21 — Customer Builder Deployment Map
 
 Full project Compose redeployment of clean commit `48a11be`: API/worker/bot-runtime/migrate share image manifest `sha256:9d11a29119f2cd8c7e8715b04380768706bba3472032010e6c3e0d214d017153`; database and Redis volumes preserved. New `/build/` assets verified live at `http://10.70.5.5:8010/build/`. See matching current-state and prompt-history deployment evidence; subdomain DNS remains unverified.
+
+
+## 2026-09-21 — Customer Delivery Resume Handoff
+
+Saved `docs/operations/RESUME_CUSTOMER_DELIVERY.md`: requested business model and deliverables, existing foundations versus unverified gaps, completed customer-builder changes/deployment, ordered next milestones with acceptance criteria, verification limits and dirty-worktree precautions. Immediate next milestone: review the live design and close request-to-approved-one-time-quote. The public feature choices are requests; backend pricing, full packaging, tenant/shopper polish and complete customer installation remain unfinished. Updated the delivery plan to mark only public-builder polish as delivered. Documentation only; no runtime or schema changes. Handoff consistency and whitespace checks passed; prior source/deployment verification is preserved, not rerun or relabeled.
