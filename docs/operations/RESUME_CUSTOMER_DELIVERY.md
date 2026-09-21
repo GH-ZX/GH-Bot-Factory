@@ -26,7 +26,7 @@ The customer then operates independently. Their Admin needs product/category edi
 | Delivery | Docker services, migration chain, encrypted tenant export and offline import | One complete generated Docker + database + localized-report package |
 | Storefront | Telegram runtime and Mini App browsing, recharge, profile/order foundations | Complete support/warranty/coupon/broadcast flows or a finished bilingual design |
 
-Warranty claims, promotional coupons, support tickets and announcements were not identified as complete implementations during the scoped inspection. Treat them as gaps requiring a focused audit, not as delivered because their names appear in the builder. Supabase helpers exist, but a complete customer installation still needs proof.
+Update: tenant-side warranty review, promotional coupons, support conversations and durable announcements are now implemented (ADR-049). Shopper-facing support/coupon entry remains in deferred step 4. Supabase helpers exist, but a complete customer installation still needs proof.
 
 ## What changed in this conversation
 
@@ -35,8 +35,8 @@ Warranty claims, promotional coupons, support tickets and announcements were not
 - Added 14 feature requests, supplier/payment choices, custom API requests, store/report languages, visual-style preferences and customer-owned hosting options.
 - Added private tab drafts for non-contact choices, retry/error states, review/edit navigation and an interactive simulated preview.
 - Choices reach the existing sales flow as configuration plus bounded project notes. These are requests, not entitlements or provisioning commands.
-- Changed public presentation to a reviewed quote. The backend still calculates legacy recurring estimates; one-time pricing has NOT been implemented there.
-- This was a public customer-builder redesign, not a full tenant Admin or shopper Mini App redesign. Language/style choices record preferences; they do not automatically localize or restyle a delivered bot.
+- Changed public presentation to a reviewed quote. Customer-owned backend estimates now have zero mandatory factory recurring fees, and new customer-owned quotes reject recurring lines. Managed hosting and historical accepted quotes retain their existing behavior.
+- The initial public customer-builder redesign is now followed by a matching tenant Admin redesign. The shopper Mini App redesign remains deferred. Language/style choices record preferences; they do not automatically localize or restyle a delivered bot.
 - Code commit: `48a11be`. Deployment record: `81aab61`. Both pushed to main.
 - Redeployed the complete factory Compose stack from clean commit `48a11be`. All five running services were healthy; migration job exited 0. Named data volumes preserved.
 
@@ -44,9 +44,9 @@ Live builder: http://10.70.5.5:8010/build/
 Admin: http://10.70.5.5:8010/admin/
 Subdomain `botfac.gh-store.me` could not be resolved from the deployment host. Public DNS/TLS readiness remains to be verified.
 
-## Next steps, in order
+## Workstream status and acceptance criteria
 
-### 1. Close the customer request → factory quote flow
+### 1. Customer request → factory quote — implemented in source
 
 Review the live builder with the owner first, since reducing overwhelm and improving design remain the immediate priority. Walk through one representative brief and confirm that every selection is clearly visible in the factory sales panel. Present features, languages, integrations and delivery requirements in readable groups. Keep unfinished/custom items visibly subject to review.
 
@@ -54,13 +54,13 @@ Then align the quote engine and sales UI with one-time customer-owned delivery: 
 
 **Done when:** one request can become a clear, approved one-time quote without losing any selected requirements or promising unimplemented features.
 
-### 2. Prove one complete customer installation
+### 2. Real-customer installation — pending later
 
 Use one representative supported store and integration set. Produce the database bootstrap, customer Compose configuration, immutable image, destination configuration checklist and install/health scripts. Test on an empty customer Supabase project and clean server. Keep the versioned migration chain for upgrades; a single bootstrap file must not replace it.
 
 **Done when:** the owner can install using only the package instructions; the tenant can log in; the bot and HTTPS Mini App run independently of the factory. Confirm source runtime shutdown before moving the same Telegram bot identity.
 
-### 3. Complete the tenant's everyday operations
+### 3. Tenant-side everyday operations — implemented in source
 
 Audit each requested feature against an actual Admin screen and backend operation. Finish catalog/branding/pricing/user controls and history where incomplete. Implement or complete support tickets, warranty claims, coupons and announcements; validate reseller pricing and alerts. Define permissions and auditable decisions.
 
@@ -68,19 +68,19 @@ Stuck-purchase actions must reflect provider evidence. Do not allow a button to 
 
 **Done when:** the tenant can run the advertised store without database editing or developer intervention.
 
-### 4. Finish the shopper journey and visual experience
+### 4. Shopper journey and visual experience — incomplete/deferred
 
 Complete a real path: Start → browse/search → recharge → buy → receive delivery → inspect order/history → request support or warranty assistance. Make pending/failure states understandable. Polish both the bot menus and Mini App, including Arabic RTL/English LTR, editable messages/images, accessible motion and supported custom emoji with fallbacks.
 
 **Done when:** real Telegram mobile clients pass these tasks, including interrupted/retried payments and purchases, without duplicate charges or fulfillment.
 
-### 5. Automate the proven delivery package
+### 5. Delivery-package automation — incomplete/deferred
 
 Turn the manually proven installation into a durable factory job. Add prepare/validate/ready/failed status, safe retries, checksums/version manifest and a tenant-specific report generator. Separate secrets from ordinary artifacts. Make later integration additions an approved change with versioned configuration/migrations and upgrade instructions.
 
 **Done when:** an accepted scope produces the three requested deliverables reliably, without mixing tenant data or including factory credentials.
 
-### 6. Qualify the first complete handoff
+### 6. Release qualification — incomplete/deferred
 
 Run `make verify` and the required release/staging gates. Exercise real Supabase installation, purchases, service restarts, ambiguous provider results, backup/restore and upgrades. Record what passed and what remains unsupported. Resolve the intended public hostname/TLS before public launch.
 
@@ -88,7 +88,7 @@ Run `make verify` and the required release/staging gates. Exercise real Supabase
 
 ## Tomorrow's starting task
 
-Review the deployed customer page, then trace one project brief into the factory sales panel and implement the one-time quote flow. Keep the next milestone bounded to “customer request becomes an approved, readable scope and quote.” Continue customer-install packaging after that flow is coherent. Incorporate the owner's design feedback before expanding into other interfaces.
+Review the new Admin source/build with the owner. Plan deployment of migration `0ce5d2c98e7f` together with API, worker and Admin assets; it has not been applied to the live database. Then prepare the actual customer Supabase/VPS acceptance trial when the owner is ready. Keep steps 4–6 explicitly incomplete until resumed. Consult ADR-049 for the manual warranty, coupon accounting and announcement limits.
 
 ## Verification and workspace cautions
 
@@ -98,3 +98,7 @@ Review the deployed customer page, then trace one project brief into the factory
 - Migration head: `e5f6a8b9c1d2`. Application image tags: `48a11be` and `local`; manifest `sha256:9d11a29119f2cd8c7e8715b04380768706bba3472032010e6c3e0d214d017153`. Previous API image retained as `before-builder-48a11be`.
 - Existing uncommitted Admin/auth/setup edits and report/skill/generator files belong to earlier work. Preserve and review separately. They were present in workspace tests but excluded from the clean committed deployment. Do not assume those workspace changes are live.
 - Keep tenant scoping, SecretStorage, authoritative prices, ledger-only wallet mutations, settlement/refund idempotency and ambiguous-result reconciliation intact. Never modify unrelated host services or tunnels. Port 8000 remains reserved.
+
+## Latest implementation checkpoint
+
+Steps 1 and 3 are implemented in source with canonical/local browser verification; see [Admin operations checklist](../plans/admin-operations-completion.md). Step 2 awaits an actual customer test. Steps 4, 5 and 6 are explicitly incomplete/deferred. Migration `0ce5d2c98e7f` has been tested only on an isolated database; this milestone has not been deployed live. The prior deployment details above are historical evidence, not verification of the new admin release.

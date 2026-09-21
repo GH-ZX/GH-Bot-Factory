@@ -23,7 +23,7 @@ async def render_catalog_text_and_keyboard(
             Product.deleted_at.is_(None),
         )
         .options(selectinload(Product.variants))
-        .order_by(Product.created_at.desc())
+        .order_by(Product.sort_order.asc(), Product.created_at.desc())
     )
     result = await db_session.execute(stmt)
     products = result.scalars().all()

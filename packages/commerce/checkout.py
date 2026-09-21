@@ -25,6 +25,7 @@ from packages.notifications.service import (
     NotificationPayload,
     NotificationService,
 )
+from packages.operations.service import apply_coupon
 from packages.payments.service import LedgerService
 
 logger = logging.getLogger("commerce.checkout")
@@ -63,6 +64,7 @@ class CheckoutService:
         idempotency_key: str | None = None,
         enqueue_durable: bool = False,
         bot_id: uuid.UUID | None = None,
+        coupon_code: str | None = None,
     ) -> tuple[Order, FulfillmentAttempt | None]:
         """Backward-compatible single-line checkout wrapper."""
         return await self.checkout_cart(
@@ -75,6 +77,7 @@ class CheckoutService:
             idempotency_key=idempotency_key,
             enqueue_durable=enqueue_durable,
             bot_id=bot_id,
+            coupon_code=coupon_code,
         )
 
     async def checkout_cart(
@@ -88,6 +91,7 @@ class CheckoutService:
         idempotency_key: str | None = None,
         enqueue_durable: bool = False,
         bot_id: uuid.UUID | None = None,
+        coupon_code: str | None = None,
     ) -> tuple[Order, FulfillmentAttempt | None]:
         """Checkout one or more variants using server-authoritative prices.
 
@@ -121,7 +125,10 @@ class CheckoutService:
             if len(idempotency_key) > 100:
                 raise ValueError("Idempotency key cannot exceed 100 characters.")
 
-        request_hash = self._request_hash(quantity_by_variant, normalized_recipient)
+        coupon_code = coupon_code.strip().upper() if coupon_code else None
+        if coupon_code and len(coupon_code) > 40:
+            raise ValueError("Coupon code is too long.")
+        request_hash = self._request_hash(quantity_by_variant, normalized_recipient, coupon_code)
         if idempotency_key:
             existing = await self._find_idempotent_order(
                 session=session,
@@ -212,6 +219,11 @@ class CheckoutService:
                 execute_sync=execute_sync,
             )
 
+        effective_prices = {variant.id: quoted[variant.id][1].sell_price for variant in variants}
+        if coupon_code:
+            effective_prices = await apply_coupon(session, tenant_id=tenant_id, user_id=user_id, order=order, code=coupon_code, prices=effective_prices, quantities=quantity_by_variant)
+            total_amount = order.total_amount
+
         for variant in variants:
             quantity = quantity_by_variant[variant.id]
             quote, decision = quoted[variant.id]
@@ -219,8 +231,9 @@ class CheckoutService:
                 order_id=order.id,
                 product_variant_id=variant.id,
                 quantity=quantity,
-                unit_price=decision.sell_price,
-                total_price=decision.sell_price * Decimal(quantity),
+                unit_price=effective_prices[variant.id],
+                total_price=effective_prices[variant.id] * Decimal(quantity),
+                sale_terms={"warranty_days": (variant.product.metadata_json or {}).get("warranty_days", 0), "warranty_terms": str((variant.product.metadata_json or {}).get("warranty_terms", ""))[:2000], "base_unit_price": str(decision.sell_price), "coupon_code": coupon_code},
             )
             session.add(item)
             await session.flush()
@@ -310,13 +323,15 @@ class CheckoutService:
         return order, attempt
 
     @staticmethod
-    def _request_hash(quantity_by_variant: dict[uuid.UUID, int], recipient: str) -> str:
+    def _request_hash(quantity_by_variant: dict[uuid.UUID, int], recipient: str, coupon_code: str | None = None) -> str:
         payload = {
             "items": sorted(
                 (str(variant_id), quantity) for variant_id, quantity in quantity_by_variant.items()
             ),
             "recipient": recipient,
         }
+        if coupon_code:
+            payload["coupon_code"] = coupon_code
         encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()
 

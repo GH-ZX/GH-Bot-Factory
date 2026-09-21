@@ -9,6 +9,7 @@ from packages.core.observability import configure_logging
 from packages.factory.worker import BotProvisioningWorker
 from packages.fulfillment.reconciliation_worker import ProviderReconciliationWorker
 from packages.fulfillment.worker import FulfillmentWorker
+from packages.operations.worker import AnnouncementWorker
 from packages.payments.flexible_deposit_worker import FlexibleDepositReconciliationWorker
 from packages.payments.onchain_reconciliation import OnChainPaymentReconciliationWorker
 from packages.payments.onchain_verifiers import register_configured_onchain_verifiers
@@ -42,6 +43,7 @@ async def run_worker() -> None:
     flexible_deposit_reconciliation_worker = FlexibleDepositReconciliationWorker()
     stars_reconciliation_worker = TelegramStarsReconciliationWorker()
     saas_billing_reconciliation_worker = SaaSBillingReconciliationWorker()
+    announcement_worker = AnnouncementWorker()
     started: list[str] = []
 
     await heartbeat.start()
@@ -77,6 +79,9 @@ async def run_worker() -> None:
         if saas_billing_reconciliation_worker.enabled:
             started.append("saas-billing")
 
+        await announcement_worker.start()
+        started.append("announcements")
+
         stop_event = asyncio.Event()
         loop = asyncio.get_running_loop()
         for signal_name in (signal.SIGINT, signal.SIGTERM):
@@ -86,6 +91,8 @@ async def run_worker() -> None:
                 pass
         await stop_event.wait()
     finally:
+        if "announcements" in started:
+            await announcement_worker.stop()
         if "saas-billing" in started:
             await saas_billing_reconciliation_worker.stop()
         if "provisioning" in started:

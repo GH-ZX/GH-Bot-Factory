@@ -29,6 +29,14 @@ from packages.marketplace.models import (
     QuoteStatus,
     TenantIntegrationEntitlement,
 )
+from packages.operations.models import (
+    Announcement,
+    AnnouncementDelivery,
+    Coupon,
+    CouponRedemption,
+    SupportCase,
+    SupportMessage,
+)
 from packages.payments.economics_models import (
     AssetLedgerTransaction,
     AssetLedgerTransactionType,
@@ -87,6 +95,8 @@ from packages.telegram.models import Bot, TenantTelegramUser
 from packages.tenants.models import AuditLog, Membership, Role, Tenant, User
 
 __all__ = [
+    "Announcement",
+    "AnnouncementDelivery",
     "AssetLedgerTransaction",
     "AssetLedgerTransactionType",
     "AssetWallet",
@@ -104,6 +114,8 @@ __all__ = [
     "CommercialQuote",
     "CommercialQuoteLine",
     "ContactMethod",
+    "Coupon",
+    "CouponRedemption",
     "CustomerInquiry",
     "DeploymentHandoff",
     "FinancialResolutionCase",
@@ -160,6 +172,8 @@ __all__ = [
     "SaaSPlan",
     "SaaSPlanPrice",
     "SubscriptionStatus",
+    "SupportCase",
+    "SupportMessage",
     "SystemInstallState",
     "Tenant",
     "TenantIntegrationEntitlement",

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.core.config import settings
@@ -93,7 +94,19 @@ class ConfiguratorEstimateResponse(BaseModel):
     telegram_contact_url: str | None
 
 
+class ProjectBrief(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    store_name: str = Field(default="", max_length=100)
+    accent: str = Field(default="#166b52", pattern=r"^#[0-9a-fA-F]{6}$")
+    visual_style: Literal["Clean & minimal", "Bold & colorful", "Dark & refined"] = "Clean & minimal"
+    store_language: Literal["Arabic + English", "Arabic", "English"] = "Arabic + English"
+    report_language: Literal["Arabic", "English"] = "English"
+    requested_features: list[Literal["pricing", "warranty", "coupons", "resellers", "support", "announcements", "branding", "catalog", "users", "history", "review", "alerts", "motion", "emoji"]] = Field(default_factory=list, max_length=14)
+    hosting_advice: bool = False
+
+
 class CreateInquiryRequest(BaseModel):
+    brief: ProjectBrief | None = None
     contact_method: str = Field(default="TELEGRAM", description="'TELEGRAM', 'WHATSAPP', or 'EMAIL'")
     contact_handle: str = Field(..., min_length=2, max_length=120)
     project_notes: str | None = Field(default=None, max_length=2000)
@@ -210,6 +223,7 @@ async def submit_inquiry(
             "delivery_model": payload.delivery_model,
             "integration_keys": payload.integration_keys,
             "custom_api_request": custom_api,
+            "brief": payload.brief.model_dump() if payload.brief else None,
         },
         estimated_quote=estimate.to_dict(),
         status=InquiryStatus.NEW,

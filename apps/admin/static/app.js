@@ -103,6 +103,11 @@ async function navigateTo(view){
   const button=document.querySelector(`.nav[data-view="${view}"]`);if(!button)return;
   document.querySelectorAll(".nav,.view").forEach(n=>n.classList.remove("active"));
   button.classList.add("active");el(`view-${view}`).classList.add("active");el("viewTitle").textContent=button.textContent;
+  if(el("mobileViewBadge"))el("mobileViewBadge").textContent=button.textContent;
+  document.querySelectorAll(".quicknav-pill[data-view]").forEach(p=>{
+    p.classList.toggle("active",p.dataset.view===view);
+  });
+  closeMobileDrawer();
   if(button.closest("details"))button.closest("details").open=true;
   await refreshCurrent();
 }
@@ -122,6 +127,23 @@ async function openHomePreview(){
   renderHomeDemo();el("homePreviewDialog").showModal();
 }
 function renderHomeDemo(){const b=state.previewBots?.find(b=>b.id===el("homePreviewBot").value);StoreSetup.preview(el("homeCustomerDemo"),{key:templateKeyForBot(b),name:b?.display_name||"Sample store",accent:b?.config?.branding?.brand_accent});}
+
+function toggleMobileDrawer(open) {
+  const sidebar = document.querySelector(".sidebar");
+  const backdrop = el("mobileDrawerBackdrop");
+  const menuBtn = el("mobileMenuBtn");
+  const isOpen = open !== undefined ? open : !sidebar?.classList.contains("mobile-open");
+  sidebar?.classList.toggle("mobile-open", isOpen);
+  backdrop?.classList.toggle("hidden", !isOpen);
+  if (menuBtn) {
+    menuBtn.setAttribute("aria-expanded", String(isOpen));
+    menuBtn.querySelector(".icon-menu")?.classList.toggle("hidden", isOpen);
+    menuBtn.querySelector(".icon-close")?.classList.toggle("hidden", !isOpen);
+  }
+}
+function closeMobileDrawer() {
+  toggleMobileDrawer(false);
+}
 
 let bound = false;
 function showLogin(message = "") {
@@ -168,6 +190,7 @@ function parseJson(id){try{return JSON.parse(el(id).value||"{}");}catch(_){throw
 async function loadBootstrap() {
   state.bootstrap = await api("/api/v1/admin/bootstrap");
   el("storeName").textContent = state.bootstrap.store.name;
+  if (el("mobileStoreName")) el("mobileStoreName").textContent = state.bootstrap.store.name;
   el("actorRole").textContent = state.bootstrap.actor.role;
   el("actorName").textContent = [state.bootstrap.actor.first_name,state.bootstrap.actor.last_name].filter(Boolean).join(" ") || state.bootstrap.actor.username || "Staff";
   const c = state.bootstrap.counts;
@@ -969,12 +992,14 @@ function openProduct(product=null){
   el("productId").value=product?.id||""; el("productTitle").value=product?.title||""; el("productDescription").value=product?.description||""; el("productCategory").value=product?.category_id||""; el("productEnabled").checked=product?.is_active??true;
   el("productDialogTitle").textContent=product?"Edit product":"New product"; el("variantFields").classList.toggle("hidden",!!product);
   if(!product){ el("variantSku").value=""; el("variantTitle").value="Standard"; el("variantPrice").value=""; el("variantCurrency").value="USD"; el("variantStock").value="0"; }
+  Operations.productFields(product);
   el("productDialog").showModal();
 }
 
 async function saveProduct(event){
   event.preventDefault(); const id=el("productId").value;
   const body={title:el("productTitle").value.trim(),description:el("productDescription").value.trim()||null,category_id:el("productCategory").value||null,is_active:el("productEnabled").checked};
+  Object.assign(body, Operations.productPayload(id));
   if(!id){
     const sku=el("variantSku").value.trim();
     body.variants=sku?[{sku,title:el("variantTitle").value.trim()||"Standard",price:el("variantPrice").value,currency:el("variantCurrency").value.trim().toUpperCase(),stock_quantity:Number(el("variantStock").value||0),is_active:true,attributes:{}}]:[];
@@ -1175,15 +1200,15 @@ function renderSalesQuotes() {
               </h3>
               <div class="item-meta">
                 <span>Contact: ${escapeHtml(q.customer_contact)}</span>
-                <span>One-time: $${escapeHtml(q.total_one_time)}</span>
-                <span>Monthly: $${escapeHtml(q.total_monthly)}</span>
+                <span>One-time: ${escapeHtml(q.currency)} ${escapeHtml(q.total_one_time)}</span>
+                ${Number(q.total_monthly) ? `<span>Monthly: ${escapeHtml(q.currency)} ${escapeHtml(q.total_monthly)}</span>` : `<span>One-time delivery</span>`}
                 <span>Created: ${new Date(q.created_at).toLocaleString()}</span>
                 ${q.accepted_at ? `<span>Accepted: ${new Date(q.accepted_at).toLocaleString()}</span>` : ""}
               </div>
-              <p class="muted compact">${escapeHtml(q.notes || q.terms || "Standard commercial quote.")}</p>
+              <p class="muted compact">${escapeHtml(q.terms || "Terms not specified.")}</p>${q.scope_snapshot?.configuration ? `<details><summary>Agreed project scope</summary>${renderProjectBrief(q.scope_snapshot.configuration, q.scope_snapshot.project_notes)}</details>` : ""}
             </div>
             <div class="ops-actions">
-              ${!isAccepted && q.status !== "SUPERSEDED" ? `<button type="button" class="primary" data-accept-quote="${q.id}">Accept &amp; Lock Quote</button>` : ""}
+              ${["DRAFT", "SENT"].includes(q.status) && (!q.valid_until || new Date(q.valid_until) > new Date()) ? `<button type="button" class="primary" data-accept-quote="${q.id}">Accept &amp; Lock Quote</button>` : ""}
               ${isAccepted ? `<button type="button" class="primary" data-onboard-quote="${q.id}">${q.tenant_id ? "New Owner Setup Link" : "Onboard Tenant"}</button>` : ""}
               ${q.tenant_id ? `<span class="chip chip-ok">✓ Onboarded</span>` : (isAccepted ? `<span class="chip ${bClass}">Locked</span>` : "")}
             </div>
@@ -1295,6 +1320,13 @@ async function deactivateHandoffRuntime(id) {
     alert(err.message);
   }
 }
+function customerOwned(inquiry) { return ["dedicated", "supabase_cloud", "source_license"].includes(inquiry?.configuration?.delivery_model); }
+function renderProjectBrief(conf, notes) {
+  const brief=conf.brief || {};
+  const field=(label,value)=>`<div><span class="muted">${label}</span><p>${escapeHtml(value || "Not specified")}</p></div>`;
+  return `<div class="brief-grid"><article class="brief-card"><h3>${escapeHtml(brief.store_name || "Project requirements")}</h3>${field("Experience",conf.format)}${field("Business template",conf.template_key)}${field("Product source",conf.product_source)}${field("Hosting",conf.delivery_model)}${brief.hosting_advice ? "<span class='brief-tag'>Needs hosting advice</span>" : ""}</article><article class="brief-card"><h3>Brand & languages</h3>${field("Style",brief.visual_style)}${field("Store language",brief.store_language)}${field("Handoff report",brief.report_language)}${field("Brand color",brief.accent)}</article></div><article class="brief-card"><h3>Requested features & integrations</h3><div class="brief-tags">${[...(brief.requested_features||[]),...(conf.integration_keys||[])].map(x=>`<span class="brief-tag">${escapeHtml(x.replaceAll("_"," "))}</span>`).join("") || "See project notes for legacy requests."}</div>${field("Custom API request",conf.custom_api_request)}</article>${notes ? `<article class="brief-card"><h3>Customer notes</h3><p class="ops-message">${escapeHtml(notes)}</p></article>` : ""}`;
+}
+
 async function openInquiryDetail(id) {
   try {
     const inq = await platformApi(`/api/v1/platform/sales/inquiries/${id}`);
@@ -1304,57 +1336,8 @@ async function openInquiryDetail(id) {
     el("inquiryUpdateStatus").value = inq.status;
 
     const conf = inq.configuration || {};
-
     const est = inq.estimated_quote || {};
-    const items = (est.items || [])
-      .map((it) => `<li>${escapeHtml(it.name)} (${escapeHtml(it.item_type)}): $${escapeHtml(it.amount)}</li>`)
-      .join("");
-
-    el("inquiryDetailContent").innerHTML = `
-      <article class="item">
-        <div class="item-row">
-          <div>
-            <strong>Contact Information</strong>
-            <div class="item-meta">
-              <span>Method: ${escapeHtml(inq.contact_method)}</span>
-              <span>Handle: ${escapeHtml(inq.contact_handle)}</span>
-              <span>Client IP Hash: ${escapeHtml(inq.ip_hash || "—")}</span>
-              <span>Created: ${new Date(inq.created_at).toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-      </article>
-
-      <article class="item">
-        <div class="item-row">
-          <div>
-            <strong>Requested Configuration</strong>
-            <div class="item-meta">
-              <span>Format: ${escapeHtml(conf.format || "—")}</span>
-              <span>Template: ${escapeHtml(conf.template_key || "—")}</span>
-              <span>Source: ${escapeHtml(conf.product_source || "—")}</span>
-              <span>Hosting: ${escapeHtml(conf.delivery_model || "—")}</span>
-            </div>
-            ${conf.integration_keys?.length ? `<p class="muted compact"><strong>Integrations:</strong> ${escapeHtml(conf.integration_keys.join(", "))}</p>` : ""}
-            ${conf.custom_api_request ? `<div style="margin-top:10px;padding:10px 14px;border:1px solid var(--accent);border-radius:10px;background:color-mix(in srgb,var(--accent) 12%,transparent);"><strong style="color:var(--accent);display:block;margin-bottom:4px">💡 Customer Requested Custom API:</strong> <span style="color:var(--text);font-size:13px;white-space:pre-wrap;">${escapeHtml(conf.custom_api_request)}</span></div>` : ""}
-            ${inq.project_notes ? `<p class="muted compact"><strong>Project Notes:</strong> ${escapeHtml(inq.project_notes)}</p>` : ""}
-          </div>
-        </div>
-      </article>
-
-      <article class="item">
-        <div class="item-row">
-          <div>
-            <strong>Estimated Quote Breakdown</strong>
-            <div class="item-meta">
-              <span>Total Setup: $${escapeHtml(est.total_one_time || "0.00")}</span>
-              <span>Total Monthly: $${escapeHtml(est.total_monthly || "0.00")}</span>
-            </div>
-            ${items ? `<ul style="margin:6px 0 0 16px;font-size:12px;color:var(--muted)">${items}</ul>` : ""}
-          </div>
-        </div>
-      </article>
-    `;
+    el("inquiryDetailContent").innerHTML = `<div class="scope-note">${escapeHtml(inq.contact_method)} · ${escapeHtml(inq.contact_handle)} · ${new Date(inq.created_at).toLocaleDateString()}</div>${renderProjectBrief(conf, inq.project_notes)}<article class="brief-card"><h3>Starting estimate · ${escapeHtml(est.currency || "USD")} ${escapeHtml(est.total_one_time || "0.00")}</h3><p>Review requested features and custom integrations before creating the final quote. ${customerOwned(inq) ? "Customer-owned delivery has no recurring factory fee. External service costs are separate." : "Managed hosting may include recurring charges."}</p></article>`;
 
     el("inquiryDetailDialog").showModal();
   } catch (err) {
@@ -1369,14 +1352,14 @@ function openCreateQuoteDialog(inquiry) {
   el("quoteCustomerContact").value = inquiry.contact_handle;
   el("quoteValidDays").value = 30;
   el("quoteCurrency").value = "USD";
-  el("quoteTerms").value = "Standard managed hosting agreement with 99.9% uptime SLA.";
+  el("quoteTerms").value = customerOwned(inquiry) ? "Customer-owned Docker delivery and database setup. Supplier, hosting and database charges are separate. Custom integrations and delivery dates require written agreement." : "Confirm hosting, support, external costs and delivery dates with the customer before acceptance.";
   el("quoteNotes").value = inquiry.project_notes || "";
 
   const container = el("quoteLineItemsContainer");
-  const estItems = inquiry.estimated_quote?.items || [
+  const estItems = (inquiry.estimated_quote?.items || [
     { name: "Telegram Bot Setup", category: "product_format", item_type: "one_time", amount: "89.00", description: "Base setup" },
     { name: "Monthly Cloud Hosting", category: "product_format", item_type: "recurring", amount: "49.00", description: "Hosting" },
-  ];
+  ]).filter(item => !customerOwned(inquiry) || item.item_type === "one_time");
 
   container.innerHTML = estItems
     .map(
@@ -1389,7 +1372,7 @@ function openCreateQuoteDialog(inquiry) {
         <div style="display:flex;gap:6px">
           <select class="quote-line-type">
             <option value="one_time" ${item.item_type === "one_time" ? "selected" : ""}>One-time</option>
-            <option value="recurring" ${item.item_type === "recurring" ? "selected" : ""}>Monthly</option>
+            ${customerOwned(inquiry) ? "" : `<option value="recurring" ${item.item_type === "recurring" ? "selected" : ""}>Monthly</option>`}
           </select>
           <input type="number" step="0.01" min="0" class="quote-line-amount" value="${escapeHtml(item.amount)}" style="width:100px" required>
           <button type="button" class="icon remove-quote-line" title="Remove line">×</button>
@@ -1501,7 +1484,7 @@ async function saveOnboardTenant(event) {
   }
 }
 
-async function refreshCurrent(){ const active=document.querySelector(".nav.active")?.dataset.view; if(active==="plan") await loadSaas(); else if(active==="bots") await loadBots(); else if(active==="products") await Promise.all([loadCategories(),loadProducts()]); else if(active==="orders") await loadOrders(); else if(active==="fulfillment") await loadFulfillment(); else if(active==="providers") await loadProviderOps(); else if(active==="members") await loadMembers(); else if(active==="finance") await Promise.all([loadFinancialCases(),loadPaymentOperationsHealth()]); else if(active==="analytics") await loadAnalytics(); else if(active==="audit") await loadAuditLogs(0); else if(active==="reconciliation") await loadEvents(); else if(active==="sales") await loadSales(); else await loadBootstrap(); }
+async function refreshCurrent(){ const active=document.querySelector(".nav.active")?.dataset.view; if(active==="operations") await Operations.load(); else if(active==="plan") await loadSaas(); else if(active==="bots") await loadBots(); else if(active==="products") await Promise.all([loadCategories(),loadProducts()]); else if(active==="orders") await loadOrders(); else if(active==="fulfillment") await loadFulfillment(); else if(active==="providers") await loadProviderOps(); else if(active==="members") await loadMembers(); else if(active==="finance") await Promise.all([loadFinancialCases(),loadPaymentOperationsHealth()]); else if(active==="analytics") await loadAnalytics(); else if(active==="audit") await loadAuditLogs(0); else if(active==="reconciliation") await loadEvents(); else if(active==="sales") await loadSales(); else await loadBootstrap(); }
 
 function bind(){
   el("handoffExportForm").addEventListener("submit", submitHandoffExport);
@@ -1509,6 +1492,13 @@ function bind(){
   document.querySelectorAll("[data-close-handoff-export]").forEach((b) => b.addEventListener("click", () => el("handoffExportDialog").close()));
   el("handoffExportDialog").addEventListener("close", () => { el("handoffExportPassphrase").value = ""; });
   document.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",()=>navigateTo(b.dataset.view).catch(showHomeError)));
+  el("mobileMenuBtn")?.addEventListener("click", () => toggleMobileDrawer());
+  el("quicknavMoreBtn")?.addEventListener("click", () => toggleMobileDrawer(true));
+  el("mobileDrawerBackdrop")?.addEventListener("click", () => closeMobileDrawer());
+  el("mobileRefreshBtn")?.addEventListener("click", refreshCurrent);
+  document.querySelectorAll(".quicknav-pill[data-view]").forEach(b => {
+    b.addEventListener("click", () => navigateTo(b.dataset.view).catch(showHomeError));
+  });
   el("refreshButton").addEventListener("click",refreshCurrent); el("newProduct").addEventListener("click",()=>openProduct()); el("productForm").addEventListener("submit",saveProduct);
   el("openCatalogImportBtn")?.addEventListener("click", openCatalogImport);
   document.querySelectorAll("[data-close-catalog-import]").forEach((b) => b.addEventListener("click", () => el("catalogImportDialog")?.close()));
@@ -1649,7 +1639,7 @@ function bind(){
       <div style="display:flex;gap:6px">
         <select class="quote-line-type">
           <option value="one_time">One-time</option>
-          <option value="recurring">Monthly</option>
+          ${customerOwned(state.currentInquiry) ? "" : `<option value="recurring">Monthly</option>`}
         </select>
         <input type="number" step="0.01" min="0" class="quote-line-amount" value="50.00" style="width:100px" required>
         <button type="button" class="icon remove-quote-line" title="Remove line">×</button>

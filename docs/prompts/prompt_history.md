@@ -1898,3 +1898,22 @@ Verified URL: `http://10.70.5.5:8010/build/`. Subdomain DNS lookup still fails f
 **Result:**
 
 Saved `docs/operations/RESUME_CUSTOMER_DELIVERY.md`: requested business model and deliverables, existing foundations versus unverified gaps, completed customer-builder changes/deployment, ordered next milestones with acceptance criteria, verification limits and dirty-worktree precautions. Immediate next milestone: review the live design and close request-to-approved-one-time-quote. The public feature choices are requests; backend pricing, full packaging, tenant/shopper polish and complete customer installation remain unfinished. Updated the delivery plan to mark only public-builder polish as delivered. Documentation only; no runtime or schema changes. Handoff consistency and whitespace checks passed; prior source/deployment verification is preserved, not rerun or relabeled.
+
+## Admin Identity and Tenant Operations Implementation — 2026-09-21
+
+**User prompt (verbatim):**
+
+> ok do the step 1 , should be refine the admin portal so it synced with the nice ui identity that u made for customer
+>   page, btw for 2 , in the end we will test it actually in real customer, for 3 yah do it too, for 4,5,6 make them as mot complete so we can doi them letter
+
+**Scope:** Implement steps 1 and 3; track in `docs/plans/admin-operations-completion.md`. Real-customer installation acceptance is pending. Steps 4/5/6 remain explicitly incomplete. Implementation is complete for the bounded tenant-side scope; final evidence is recorded below.
+
+### Continuation — 2026-09-21
+
+> sorry for interrupt, resume, (btw u can delete bad codes entirly and redo if better, just a little notice)
+
+Resume the active Admin identity/one-time quote/tenant operations milestone. Rewrites are authorized where useful; preserve tenant data, accounting and secret boundaries. Real-customer acceptance remains pending and steps 4–6 remain incomplete.
+
+**Implementation result:** Steps 1/3 source implementation adds matching Admin identity, structured briefs, immutable one-time delivery quotes and tenant care/promotions/catalog/pricing tools. ADR-049 documents accounting, warranty, announcement and portability boundaries. Workspace canonical verification passed: 478 fast + 18 PostgreSQL; mocked operations/setup browser checks passed. Step 2 actual customer test remains pending; steps 4–6 remain incomplete. Final isolated-source evidence and commit reference are recorded in CURRENT_STATE. No live messages, purchases or deployment.
+
+**Final verification — 2026-09-22:** The isolated milestone source excludes unrelated password/auth/setup changes. Canonical `make verify` passed: 474 fast + 19 PostgreSQL tests, migration/no drift and static/security/dependency checks. Exact-source Admin operations and Admin/Mini App browser checks passed. The earlier workspace had four additional auth tests. New concurrency evidence covers coupon limits, duplicate checkout, announcement claims and sibling quote acceptance. Live deployment and real-customer acceptance remain pending.

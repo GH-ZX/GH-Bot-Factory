@@ -229,8 +229,8 @@ async def test_supabase_cloud_estimate_and_database_helpers(public_client):
     assert data["delivery_model"] == "supabase_cloud"
     # Setup fee: $89 combo + $150 supabase_cloud + $25 supabase integration = $264.00
     assert data["total_one_time"] == "264.00"
-    # Monthly fee: $49 combo + $25 supabase_cloud + $10 supabase integration = $84.00
-    assert data["total_monthly"] == "84.00"
+    # Customer-owned delivery carries no mandatory factory subscription.
+    assert data["total_monthly"] == "0.00"
 
     # 2. Database URL detection and pooler connect_args
     direct_url = format_supabase_connection_url("myprojectref", "mypassword123", pooler=False)

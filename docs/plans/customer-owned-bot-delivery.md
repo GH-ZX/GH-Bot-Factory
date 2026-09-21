@@ -67,3 +67,7 @@ Architectural/security/accounting changes in these steps require ADRs when imple
 ## Definition of complete
 
 A factory inquiry can become an approved, reproducible delivery; the factory owner can install it on a fresh customer Supabase project and VPS using only its documented artifacts; the customer can administer and sell independently; shoppers can recharge, buy, receive fulfillment and obtain support; failure recovery, upgrades and restore are proven. Public marketing claims must match the tested release.
+
+## Implementation update — 2026-09-21
+
+The latest user-approved numbering and status are in [Admin operations completion](admin-operations-completion.md): steps 1 and 3 implemented; real-customer acceptance pending (step 2); shopper polish, automated packaging/reporting and production qualification deferred/incomplete (steps 4–6). Customer-owned server estimates now omit mandatory recurring factory charges; Admin has the matching identity and tenant-side care/promotions/pricing workflows. Historical advisory numbering above is retained only as context.

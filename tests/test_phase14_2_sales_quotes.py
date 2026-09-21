@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncGenerator
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -211,3 +212,37 @@ async def test_quote_generation_acceptance_and_immutability(
     )
     assert audit is not None
     assert audit.details["customer_name"] == "VIP Enterprise"
+
+
+async def test_customer_owned_quote_scope_and_invalid_acceptance(platform_client):
+    from datetime import UTC, datetime, timedelta
+
+    from packages.marketplace.models import CommercialQuote
+
+    session = platform_client["session"]
+    client = platform_client["client"]
+    inquiry = CustomerInquiry(contact_method=ContactMethod.TELEGRAM, contact_handle="@owned", configuration={"delivery_model":"supabase_cloud", "brief":{"store_name":"My store", "requested_features":["coupons", "warranty"]}}, project_notes="Customer server", estimated_quote={})
+    session.add(inquiry)
+    await session.commit()
+    path = f"/api/v1/platform/sales/inquiries/{inquiry.id}/quotes"
+    payload = {"customer_name":"Owner", "customer_contact":"@owned", "lines":[{"name":"Delivery", "category":"setup", "item_type":"recurring", "amount":"100"}]}
+    assert (await client.post(path, headers=platform_auth(), json=payload)).status_code == 422
+    payload["lines"][0]["item_type"] = "one_time"
+    for invalid in ["NaN", "Infinity", "-1", "1.001"]:
+        payload["lines"][0]["amount"] = invalid
+        assert (await client.post(path, headers=platform_auth(), json=payload)).status_code == 422
+    payload["lines"][0]["amount"] = "100"
+    first = await client.post(path, headers=platform_auth(), json=payload)
+    assert first.status_code == 201, first.text
+    assert first.json()["scope_snapshot"]["configuration"]["brief"]["store_name"] == "My store"
+    assert Decimal(first.json()["total_monthly"]) == 0
+    quote_id = first.json()["id"]
+    quote = await session.get(CommercialQuote, uuid.UUID(quote_id))
+    quote.valid_until = datetime.now(UTC)-timedelta(days=1)
+    await session.commit()
+    assert (await client.post(f"/api/v1/platform/sales/quotes/{quote_id}/accept", headers=platform_auth())).status_code == 409
+    second = await client.post(path, headers=platform_auth(), json=payload)
+    second_id = second.json()["id"]
+    assert (await client.post(f"/api/v1/platform/sales/quotes/{second_id}/accept", headers=platform_auth())).status_code == 200
+    assert (await client.post(f"/api/v1/platform/sales/quotes/{quote_id}/accept", headers=platform_auth())).status_code == 409
+    assert (await client.post(path, headers=platform_auth(), json=payload)).status_code == 409

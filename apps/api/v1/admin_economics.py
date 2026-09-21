@@ -24,6 +24,7 @@ from packages.commerce.models import Category, Product, ProductVariant
 from packages.core.auth import AuthenticatedPrincipal
 from packages.core.database import get_db_session
 from packages.core.exceptions import LedgerIntegrityError
+from packages.operations.service import audit
 from packages.payments.economics import FxPolicyService
 from packages.payments.economics_models import FlexibleDepositSession, FxPolicy, FxPolicyMode
 from packages.providers.models import Provider, ProviderBalanceSnapshot
@@ -256,6 +257,7 @@ async def create_pricing_tier(
             await session.flush()
     except IntegrityError as exc:
         raise HTTPException(status_code=409, detail="Pricing tier code already exists.") from exc
+    audit(session, principal.tenant_id, principal.user_id, "pricing.tier_created", item)
     return PricingTierResponse.from_model(item)
 
 
@@ -289,6 +291,8 @@ async def assign_pricing_tier(
     else:
         existing.tier_id = req.tier_id
     await session.flush()
+    assignment = await session.scalar(select(UserPricingTier).where(UserPricingTier.tenant_id == principal.tenant_id, UserPricingTier.user_id == req.user_id))
+    audit(session, principal.tenant_id, principal.user_id, "pricing.tier_assigned", assignment, {"tier_id": str(req.tier_id), "user_id": str(req.user_id)})
 
 
 @router.get("/pricing-rules", response_model=list[PricingRuleResponse])
@@ -329,6 +333,7 @@ async def create_pricing_rule(
     )
     session.add(item)
     await session.flush()
+    audit(session, principal.tenant_id, principal.user_id, "pricing.rule_created", item)
     return PricingRuleResponse.from_model(item)
 
 
@@ -427,3 +432,35 @@ async def list_flexible_deposits(
         )
         for item in items
     ]
+
+
+class PricingActiveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    is_active: bool
+
+
+@router.patch("/pricing-rules/{rule_id}", response_model=PricingRuleResponse)
+async def toggle_pricing_rule(rule_id: uuid.UUID, req: PricingActiveRequest, principal: AuthenticatedPrincipal = Depends(require_admin_or_owner), session: AsyncSession = Depends(get_db_session)):
+    item = await session.scalar(select(PricingRule).where(PricingRule.tenant_id == principal.tenant_id, PricingRule.id == rule_id).with_for_update())
+    if not item:
+        raise HTTPException(404, "Pricing rule not found.")
+    item.is_active = req.is_active
+    audit(session, principal.tenant_id, principal.user_id, "pricing.rule_status_changed", item, req.model_dump())
+    await session.flush()
+    return PricingRuleResponse.from_model(item)
+
+
+@router.patch("/pricing-tiers/{tier_id}", response_model=PricingTierResponse)
+async def toggle_pricing_tier(tier_id: uuid.UUID, req: PricingActiveRequest, principal: AuthenticatedPrincipal = Depends(require_admin_or_owner), session: AsyncSession = Depends(get_db_session)):
+    item = await session.scalar(select(PricingTier).where(PricingTier.tenant_id == principal.tenant_id, PricingTier.id == tier_id).with_for_update())
+    if not item:
+        raise HTTPException(404, "Pricing tier not found.")
+    # The unique active-default index remains authoritative if activation races.
+    item.is_active = req.is_active
+    audit(session, principal.tenant_id, principal.user_id, "pricing.tier_status_changed", item, req.model_dump())
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(409, "Another default tier is already active.") from exc
+    return PricingTierResponse.from_model(item)

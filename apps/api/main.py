@@ -18,6 +18,8 @@ from apps.api.v1.admin_finance import router as admin_finance_router
 from apps.api.v1.admin_integrations import router as admin_integrations_router
 from apps.api.v1.admin_members import router as admin_members_router
 from apps.api.v1.admin_onboarding import router as admin_onboarding_router
+from apps.api.v1.admin_operations import customer_router as support_router
+from apps.api.v1.admin_operations import router as operations_router
 from apps.api.v1.admin_payments import router as admin_payments_router
 from apps.api.v1.admin_providers import router as admin_providers_router
 from apps.api.v1.admin_saas import router as admin_saas_router
@@ -129,6 +131,8 @@ app.include_router(platform_router, prefix="/api/v1")
 app.include_router(platform_sales_router, prefix="/api/v1")
 app.include_router(saas_billing_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
+app.include_router(operations_router, prefix="/api/v1")
+app.include_router(support_router, prefix="/api/v1")
 app.include_router(admin_analytics_router, prefix="/api/v1")
 app.include_router(admin_bots_router, prefix="/api/v1")
 app.include_router(admin_members_router, prefix="/api/v1")

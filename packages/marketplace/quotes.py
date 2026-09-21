@@ -57,6 +57,7 @@ class ConfiguratorEstimate:
 
 
 class QuoteEngine:
+    CUSTOMER_OWNED: ClassVar[set[str]] = {"supabase_cloud", "dedicated", "source_license"}
     # Product Format Pricing
     FORMAT_PRICING: ClassVar[dict[str, dict[str, Any]]] = {
         "bot": {
@@ -171,7 +172,7 @@ class QuoteEngine:
                 description=f_spec["desc"],
             )
         )
-        if norm_model != "source_license":
+        if norm_model not in cls.CUSTOMER_OWNED:
             items.append(
                 QuoteLineItem(
                     name=f"{f_spec['name']} (Monthly Hosting)",
@@ -193,7 +194,7 @@ class QuoteEngine:
                     description=s_spec["desc"],
                 )
             )
-        if norm_model != "source_license" and s_spec["monthly"] > Decimal("0.00"):
+        if norm_model not in cls.CUSTOMER_OWNED and s_spec["monthly"] > Decimal("0.00"):
             items.append(
                 QuoteLineItem(
                     name=f"{s_spec['name']} (Maintenance)",
@@ -215,7 +216,7 @@ class QuoteEngine:
                     description=h_spec["desc"],
                 )
             )
-        if norm_model != "source_license" and h_spec["monthly"] > Decimal("0.00"):
+        if norm_model not in cls.CUSTOMER_OWNED and h_spec["monthly"] > Decimal("0.00"):
             items.append(
                 QuoteLineItem(
                     name=f"{h_spec['name']} (Maintenance)",
@@ -243,7 +244,7 @@ class QuoteEngine:
                         description=f"Initial configuration and testing for {offering.name}.",
                     )
                 )
-            if norm_model != "source_license" and offering.monthly_fee > Decimal("0.00"):
+            if norm_model not in cls.CUSTOMER_OWNED and offering.monthly_fee > Decimal("0.00"):
                 items.append(
                     QuoteLineItem(
                         name=f"{offering.name} License",
@@ -258,8 +259,8 @@ class QuoteEngine:
         total_monthly = sum((item.amount for item in items if item.item_type == "recurring"), start=Decimal("0.00"))
 
         notes = (
-            "Source code buyout gives you complete ownership; monthly hosting is 0. "
-            if norm_model == "source_license"
+            "One-time customer-owned delivery estimate. Hosting, database and supplier costs are paid separately. Custom work requires a reviewed quote. "
+            if norm_model in cls.CUSTOMER_OWNED
             else "First payment includes one-time setup plus first month's hosting."
         )
 

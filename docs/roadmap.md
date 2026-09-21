@@ -614,3 +614,16 @@ Verified URL: `http://10.70.5.5:8010/build/`. Subdomain DNS lookup still fails f
 ## 2026-09-21 — Customer Delivery Resume Handoff
 
 Saved `docs/operations/RESUME_CUSTOMER_DELIVERY.md`: requested business model and deliverables, existing foundations versus unverified gaps, completed customer-builder changes/deployment, ordered next milestones with acceptance criteria, verification limits and dirty-worktree precautions. Immediate next milestone: review the live design and close request-to-approved-one-time-quote. The public feature choices are requests; backend pricing, full packaging, tenant/shopper polish and complete customer installation remain unfinished. Updated the delivery plan to mark only public-builder polish as delivered. Documentation only; no runtime or schema changes. Handoff consistency and whitespace checks passed; prior source/deployment verification is preserved, not rerun or relabeled.
+
+## Phase 15 — Admin Identity and Tenant Operations
+
+User-selected scope for 2026-09-21 (this numbering supersedes earlier advisory lists):
+
+- [x] Step 1: Admin/public visual identity, structured request review, one-time customer-owned quotes and protected acceptance.
+- [x] Step 3: tenant-side support/warranty review, coupons, announcements, catalog ordering/images/warranty terms/base prices, reseller tier assignment/margins; reuse existing users/orders/history/alerts. Automated tests pass. Warranty fulfillment is manual and shopper-facing controls remain in step 4.
+- [ ] Step 2: actual customer Supabase + VPS acceptance trial — pending later.
+- [ ] Step 4: full shopper Telegram/MiniApp journey, bilingual presentation and polish — incomplete/deferred.
+- [ ] Step 5: fully automated delivery package and customer-language report — incomplete/deferred.
+- [ ] Step 6: production release qualification and complete release evidence — incomplete/deferred.
+
+See ADR-049 and [implementation checklist](plans/admin-operations-completion.md). Implementation does not establish a production-ready release or an externally tested customer installation.

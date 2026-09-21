@@ -324,6 +324,7 @@ class CheckoutLineRequest(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
+    coupon_code: str | None = Field(default=None, min_length=1, max_length=40)
     model_config = ConfigDict(extra="forbid")
 
     items: list[CheckoutLineRequest] = Field(min_length=1, max_length=50)
@@ -978,7 +979,7 @@ async def list_catalog(
             Category.is_active.is_(True),
             Category.deleted_at.is_(None),
         )
-        .order_by(Category.name.asc())
+        .order_by(Category.sort_order.asc(), Category.name.asc())
     )
     categories = list((await session.execute(category_stmt)).scalars().all())
 
@@ -1031,7 +1032,7 @@ async def list_catalog(
         select(Product)
         .where(*filters)
         .options(selectinload(Product.variants))
-        .order_by(Product.title.asc(), Product.id.asc())
+        .order_by(Product.sort_order.asc(), Product.title.asc(), Product.id.asc())
         .offset(offset)
         .limit(limit)
     )
@@ -1283,6 +1284,7 @@ async def wallet_checkout(
             execute_sync=False,
             enqueue_durable=True,
             bot_id=principal.bot_id,
+            coupon_code=req.coupon_code,
         )
         if "items" not in order.__dict__:
             await session.refresh(order, attribute_names=["items"])

@@ -94,6 +94,7 @@ class CommercialQuote(Base, UUIDMixin, TimestampMixin):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    scope_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict, nullable=False)
     customer_name: Mapped[str] = mapped_column(String(120), nullable=False)
     customer_contact: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[QuoteStatus] = mapped_column(

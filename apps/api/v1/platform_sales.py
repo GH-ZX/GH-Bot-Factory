@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -38,6 +38,7 @@ from packages.marketplace.onboarding import (
     OnboardingError,
     OnboardingUnavailableError,
 )
+from packages.marketplace.quotes import QuoteEngine
 from packages.saas.control_plane import append_platform_audit
 
 router = APIRouter(prefix="/platform/sales", tags=["platform-sales"])
@@ -96,7 +97,7 @@ class QuoteLineInput(BaseModel):
 class CreateQuoteRequest(BaseModel):
     customer_name: str = Field(..., min_length=2, max_length=120)
     customer_contact: str = Field(..., min_length=2, max_length=120)
-    lines: list[QuoteLineInput] = Field(..., min_length=1)
+    lines: list[QuoteLineInput] = Field(..., min_length=1, max_length=100)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     terms: str | None = Field(default=None, max_length=3000)
     notes: str | None = Field(default=None, max_length=2000)
@@ -113,6 +114,7 @@ class QuoteLineResponse(BaseModel):
 
 
 class QuoteResponse(BaseModel):
+    scope_snapshot: dict[str, Any] = Field(default_factory=dict)
     id: uuid.UUID
     quote_number: str
     version: int
@@ -365,9 +367,13 @@ async def create_quote_for_inquiry(
     operator: PlatformOperator = Depends(require_platform_operator),
     session: AsyncSession = Depends(get_db_session),
 ) -> QuoteResponse:
-    inquiry = await session.get(CustomerInquiry, inquiry_id)
+    inquiry = await session.scalar(select(CustomerInquiry).where(CustomerInquiry.id == inquiry_id).with_for_update())
     if not inquiry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found.")
+
+    if inquiry.status == InquiryStatus.CONVERTED:
+        raise HTTPException(status_code=409, detail="This inquiry already has an accepted quote. Create a new inquiry for additional work.")
+    customer_owned = inquiry.configuration.get("delivery_model") in QuoteEngine.CUSTOMER_OWNED
 
     # Calculate version and quote number
     existing_quotes = (
@@ -382,6 +388,8 @@ async def create_quote_for_inquiry(
         .all()
     )
 
+    if any(q.status == QuoteStatus.ACCEPTED for q in existing_quotes):
+        raise HTTPException(status_code=409, detail="This inquiry already has an accepted quote. Create a new inquiry for additional work.")
     now = datetime.now(UTC)
     if existing_quotes:
         quote_number = existing_quotes[0].quote_number
@@ -403,7 +411,13 @@ async def create_quote_for_inquiry(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid line amount: {l.amount}"
             ) from exc
 
+        if not amt.is_finite() or amt < 0 or amt > Decimal("999999999.99") or amt != amt.quantize(Decimal("0.01")):
+            raise HTTPException(status_code=422, detail="Line amounts must be non-negative finite currency amounts with at most two decimals.")
         item_type = l.item_type.strip().lower()
+        if item_type not in {"one_time", "recurring"}:
+            raise HTTPException(status_code=422, detail="Invalid quote line type.")
+        if customer_owned and item_type == "recurring":
+            raise HTTPException(status_code=422, detail="Customer-owned deliveries use one-time project prices. Describe external running costs separately in the terms.")
         if item_type == "one_time":
             total_one_time += amt
         elif item_type == "recurring":
@@ -422,11 +436,12 @@ async def create_quote_for_inquiry(
             )
         )
 
-    valid_until = now.replace(tzinfo=UTC) + datetime.timedelta(days=payload.valid_days) if hasattr(datetime, "timedelta") else None
-    from datetime import timedelta
     valid_until = now + timedelta(days=payload.valid_days)
+    if total_one_time > Decimal("9999999999.99") or total_monthly > Decimal("9999999999.99"):
+        raise HTTPException(status_code=422, detail="Quote total exceeds the supported range.")
 
     quote = CommercialQuote(
+        scope_snapshot={"configuration": inquiry.configuration, "project_notes": inquiry.project_notes, "pricing_model": "ONE_TIME_DELIVERY" if customer_owned else "MANAGED", "version": 1},
         quote_number=quote_number,
         version=version,
         inquiry_id=inquiry.id,
@@ -471,6 +486,7 @@ async def create_quote_for_inquiry(
     quote = (await session.execute(stmt)).scalar_one()
 
     return QuoteResponse(
+        scope_snapshot=quote.scope_snapshot,
         id=quote.id,
         quote_number=quote.quote_number,
         version=quote.version,
@@ -542,6 +558,7 @@ async def list_quotes(
 
     items = [
         QuoteResponse(
+            scope_snapshot=q.scope_snapshot,
             id=q.id,
             quote_number=q.quote_number,
             version=q.version,
@@ -592,6 +609,7 @@ async def get_quote(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found.")
 
     return QuoteResponse(
+        scope_snapshot=quote.scope_snapshot,
         id=quote.id,
         quote_number=quote.quote_number,
         version=quote.version,
@@ -629,9 +647,14 @@ async def accept_quote(
     operator: PlatformOperator = Depends(require_platform_operator),
     session: AsyncSession = Depends(get_db_session),
 ) -> QuoteResponse:
+    parent_id = await session.scalar(select(CommercialQuote.inquiry_id).where(CommercialQuote.id == quote_id))
+    if parent_id:
+        await session.scalar(select(CustomerInquiry).where(CustomerInquiry.id == parent_id).with_for_update())
     stmt = (
         select(CommercialQuote)
         .where(CommercialQuote.id == quote_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
         .options(selectinload(CommercialQuote.lines))
     )
     quote = (await session.execute(stmt)).scalar_one_or_none()
@@ -640,7 +663,8 @@ async def accept_quote(
 
     if quote.status == QuoteStatus.ACCEPTED:
         return QuoteResponse(
-            id=quote.id,
+            scope_snapshot=quote.scope_snapshot,
+        id=quote.id,
             quote_number=quote.quote_number,
             version=quote.version,
             inquiry_id=quote.inquiry_id,
@@ -670,6 +694,11 @@ async def accept_quote(
         )
 
     now = datetime.now(UTC)
+    expires = quote.valid_until.replace(tzinfo=UTC) if quote.valid_until and quote.valid_until.tzinfo is None else quote.valid_until
+    if quote.status not in {QuoteStatus.DRAFT, QuoteStatus.SENT} or (expires and expires <= now):
+        raise HTTPException(status_code=409, detail="Only a current unexpired draft or sent quote can be accepted.")
+    if parent_id and await session.scalar(select(CommercialQuote.id).where(CommercialQuote.inquiry_id == parent_id, CommercialQuote.status == QuoteStatus.ACCEPTED, CommercialQuote.id != quote.id)):
+        raise HTTPException(status_code=409, detail="Another quote for this inquiry is already accepted.")
     quote.status = QuoteStatus.ACCEPTED
     quote.accepted_at = now
 
@@ -722,6 +751,7 @@ async def accept_quote(
     quote = (await session.execute(stmt)).scalar_one()
 
     return QuoteResponse(
+        scope_snapshot=quote.scope_snapshot,
         id=quote.id,
         quote_number=quote.quote_number,
         version=quote.version,

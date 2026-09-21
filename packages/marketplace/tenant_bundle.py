@@ -27,7 +27,7 @@ EXCLUDED = {
     "saas_plans", "saas_plan_prices", "tenant_subscriptions", "billing_events", "system_install_state",
 }
 # Adding a new table requires an explicit portability review.
-INCLUDED = {"tenants", "users", "memberships", "audit_logs", "bots", "categories", "products", "product_variants", "orders", "order_items", "wallets", "ledger_transactions", "payment_intents", "payment_transactions", "wallet_topup_reversals", "payment_reconciliation_events", "financial_resolution_cases", "payment_method_configs", "payment_quotes", "payment_observations", "payment_provider_configs", "payment_webhook_events", "asset_wallets", "asset_ledger_transactions", "fx_policies", "flexible_deposit_sessions", "wallet_holds", "pricing_tiers", "pricing_rules", "user_pricing_tiers", "commerce_price_quotes", "order_item_economics", "providers", "provider_credentials", "provider_product_mappings", "provider_routing_policies", "provider_offer_snapshots", "provider_balance_snapshots", "tenant_telegram_users", "bot_provisioning_jobs", "fulfillment_jobs", "fulfillment_attempts"}
+INCLUDED = {"support_cases", "support_messages", "coupons", "coupon_redemptions", "announcements", "announcement_deliveries", "tenants", "users", "memberships", "audit_logs", "bots", "categories", "products", "product_variants", "orders", "order_items", "wallets", "ledger_transactions", "payment_intents", "payment_transactions", "wallet_topup_reversals", "payment_reconciliation_events", "financial_resolution_cases", "payment_method_configs", "payment_quotes", "payment_observations", "payment_provider_configs", "payment_webhook_events", "asset_wallets", "asset_ledger_transactions", "fx_policies", "flexible_deposit_sessions", "wallet_holds", "pricing_tiers", "pricing_rules", "user_pricing_tiers", "commerce_price_quotes", "order_item_economics", "providers", "provider_credentials", "provider_product_mappings", "provider_routing_policies", "provider_offer_snapshots", "provider_balance_snapshots", "tenant_telegram_users", "bot_provisioning_jobs", "fulfillment_jobs", "fulfillment_attempts"}
 SECRET_COLUMNS = {
     "bots": ("token_secret_ref",), "provider_credentials": ("secret_ref",),
     "payment_provider_configs": ("credentials_ref", "webhook_secret_ref"),
@@ -219,6 +219,14 @@ async def restore(session: AsyncSession, payload, storage: SecretStorage, *, act
         for row in data["bots"]:
             row["is_enabled"] = activate and row["is_enabled"]
             row["runtime_revision"] += 1
+        # A destination must never resume broadcasts implicitly after a restore.
+        for row in data["announcements"]:
+            if row["status"] == "QUEUED":
+                row["status"] = "CANCELLED"
+        for row in data["announcement_deliveries"]:
+            if row["status"] in {"QUEUED", "RUNNING"}:
+                row["status"] = "UNKNOWN" if row["status"] == "RUNNING" else "CANCELLED"
+                row["error_code"] = "DESTINATION_RESTORE"
         for table in tables():
             pending = list(data[table.name])
             inserted = set()

@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  const match = url.pathname.match(/^\/(admin|miniapp)\/(index.html|app.js|styles.css|store-setup.js|store-setup.css)?$/);
+  const match = url.pathname.match(/^\/(admin|miniapp)\/(index.html|app.js|styles.css|identity.css|operations.js|store-setup.js|store-setup.css)?$/);
   if (!match) { res.writeHead(404); res.end(); return; }
   const file = match[2] || 'index.html';
   res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html');
@@ -38,6 +38,7 @@ const server = http.createServer((req, res) => {
     await page.goto(`${base}/admin/`);
     await page.locator('#login').waitFor({state: 'visible'});
     assert.equal(await page.locator('#fatal').isVisible(), false);
+    if(await page.locator('#tabCode').count())await page.locator('#tabCode').click();
     await page.locator('#loginCode').fill('a'.repeat(32));
     await page.locator('#loginSubmit').click();
     await page.waitForFunction(() => document.getElementById('loginError').textContent.includes('expired'));

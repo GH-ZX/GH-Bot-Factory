@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -68,6 +68,7 @@ class AdminBootstrapResponse(BaseModel):
 
 
 class CategoryResponse(BaseModel):
+    sort_order: int = Field(default=0, ge=0, le=100000)
     id: uuid.UUID
     name: str
     slug: str
@@ -80,6 +81,7 @@ class CategoryResponse(BaseModel):
 
 
 class CategoryCreateRequest(BaseModel):
+    sort_order: int = Field(default=0, ge=0, le=100000)
     name: str = Field(min_length=1, max_length=100)
     slug: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     parent_id: uuid.UUID | None = None
@@ -87,6 +89,7 @@ class CategoryCreateRequest(BaseModel):
 
 
 class CategoryUpdateRequest(BaseModel):
+    sort_order: int = Field(default=0, ge=0, le=100000)
     name: str | None = Field(default=None, min_length=1, max_length=100)
     slug: str | None = Field(
         default=None,
@@ -131,24 +134,51 @@ class VariantResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+def validate_product_metadata(value):
+    if value is None:
+        return value
+    from urllib.parse import urlsplit
+    image = value.get("image_url")
+    if image:
+        if not isinstance(image, str) or len(image) > 2000:
+            raise ValueError("Image URL must be a valid HTTPS URL.")
+        parsed = urlsplit(image)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("Image URL must use HTTPS without embedded credentials.")
+    days = value.get("warranty_days", 0)
+    if type(days) is not int or not 0 <= days <= 3650:
+        raise ValueError("Warranty duration must be between 0 and 3650 whole days.")
+    terms = value.get("warranty_terms", "")
+    if not isinstance(terms, str) or len(terms) > 2000:
+        raise ValueError("Warranty terms must be text of at most 2000 characters.")
+    if days and not terms.strip():
+        raise ValueError("Describe the warranty terms before enabling a warranty.")
+    return value
+
+
 class ProductCreateRequest(BaseModel):
+    sort_order: int = Field(default=0, ge=0, le=100000)
     title: str = Field(min_length=1, max_length=255)
     description: str | None = None
     category_id: uuid.UUID | None = None
     is_active: bool = True
     metadata: dict[str, Any] = Field(default_factory=dict)
+    _validate_metadata = field_validator("metadata")(validate_product_metadata)
     variants: list[VariantCreateRequest] = Field(default_factory=list, max_length=50)
 
 
 class ProductUpdateRequest(BaseModel):
+    sort_order: int = Field(default=0, ge=0, le=100000)
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     category_id: uuid.UUID | None = None
     is_active: bool | None = None
     metadata: dict[str, Any] | None = None
+    _validate_metadata = field_validator("metadata")(validate_product_metadata)
 
 
 class ProductResponse(BaseModel):
+    sort_order: int = Field(default=0, ge=0, le=100000)
     id: uuid.UUID
     title: str
     description: str | None
@@ -314,6 +344,7 @@ async def _tenant_category(
 
 def _product_response(product: Product) -> ProductResponse:
     return ProductResponse(
+        sort_order=product.sort_order,
         id=product.id,
         title=product.title,
         description=product.description,
@@ -422,7 +453,7 @@ async def list_categories(
                     Category.tenant_id == principal.tenant_id,
                     Category.deleted_at.is_(None),
                 )
-                .order_by(Category.name.asc(), Category.id.asc())
+                .order_by(Category.sort_order.asc(), Category.name.asc(), Category.id.asc())
             )
         ).scalars().all()
     )
@@ -441,6 +472,7 @@ async def create_category(
         name=req.name.strip(),
         slug=req.slug.strip().lower(),
         parent_id=req.parent_id,
+        sort_order=req.sort_order,
         is_active=req.is_active,
     )
     session.add(category)
@@ -522,7 +554,7 @@ async def list_products(
         select(Product)
         .where(*filters)
         .options(selectinload(Product.variants), selectinload(Product.category))
-        .order_by(Product.created_at.desc(), Product.id.desc())
+        .order_by(Product.sort_order.asc(), Product.created_at.desc(), Product.id.desc())
         .offset(offset)
         .limit(limit)
     )
@@ -548,6 +580,7 @@ async def create_product(
     product = Product(
         tenant_id=principal.tenant_id,
         category_id=req.category_id,
+        sort_order=req.sort_order,
         title=req.title.strip(),
         description=req.description,
         is_active=req.is_active,

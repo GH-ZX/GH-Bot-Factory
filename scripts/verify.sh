@@ -27,6 +27,7 @@ run_fast() {
   fi
   python -m pytest "${pytest_args[@]}"
 
+  node --check apps/admin/static/operations.js
   node --check apps/admin/static/app.js
   node --check apps/admin/static/store-setup.js
   node --check apps/miniapp/static/app.js

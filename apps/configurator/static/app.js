@@ -428,6 +428,7 @@ function bindEvents() {
           contact_method: el("contactMethod").value,
           contact_handle: contact,
           project_notes: notes,
+          brief: {store_name: el("previewName").value.trim(), accent: el("previewAccent").value, visual_style: selectedStyle(), store_language: el("storeLanguage").value, report_language: el("reportLanguage").value, requested_features: [...state.features], hosting_advice: el("hostingAdvice").checked},
           format: state.selectedFormat,
           template_key: state.selectedTemplate,
           product_source: state.selectedSource,

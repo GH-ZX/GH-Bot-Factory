@@ -37,6 +37,7 @@ class Category(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         nullable=False,
         index=True,
     )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("categories.id", ondelete="SET NULL"),
         nullable=True,
@@ -68,6 +69,7 @@ class Product(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         nullable=True,
         index=True,
     )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -175,6 +177,7 @@ class OrderItem(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
+    sale_terms: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict, nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     total_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
