@@ -570,3 +570,6 @@ Implementation commit `1d4fcec` was pushed to `origin/main` on 2026-09-22. Canon
 - Focused auth suite and browser flows passed; final canonical/deployment evidence follows. ADR-050; schema head unchanged (`0ce5d2c98e7f`).
 
 Sign-in milestone verification: isolated-source canonical `make verify` passed (482 fast + 19 PostgreSQL), including Ruff, compilation, migration/no drift, JavaScript, secret/handoff and dependency checks. All three browser suites passed: Admin/password/MiniApp, tenant operations, and builder/setup UX. Desktop/mobile screenshots inspected. No real credentials or purchases used in these tests. Live Docker deployment is the next step.
+
+
+**2026-09-22 sign-in deployment:** Source `cbe4591` is pushed and deployed. New token/password sign-in and after-login Admin identity are live at https://factory.gh-store.me/admin/. Account supports password setup/change. All five services healthy; migration `0ce5d2c98e7f` applied after backup. Verification: 482 fast + 19 PostgreSQL, three browser suites and public live smoke checks. No actual live login/purchase/messages or production-release qualification claimed. Full image/backup evidence is in CURRENT_STATE. Steps 2 and 4–6 remain pending.

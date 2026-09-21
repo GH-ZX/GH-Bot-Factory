@@ -1002,3 +1002,6 @@ Implementation commit `1d4fcec` was pushed to `origin/main` on 2026-09-22. Canon
 ## Admin sign-in redesign — 2026-09-22
 
 ADR-050 documents tenant staff password login, explicit store disambiguation, authenticated own-password changes and token-version revocation. `/auth/login`, `/auth/account` and `/auth/account/password` live in `apps/api/v1/auth.py`; password writes use auth rate limits and salted hashes in the existing user model. Admin sign-in and post-login Account controls share the public identity. Existing platform credentials and BotFather tokens are never login tokens. User confirms factory hostname routing; deployment evidence is recorded in CURRENT_STATE.
+
+
+**2026-09-22 sign-in deployment:** Source `cbe4591` is pushed and deployed. New token/password sign-in and after-login Admin identity are live at https://factory.gh-store.me/admin/. Account supports password setup/change. All five services healthy; migration `0ce5d2c98e7f` applied after backup. Verification: 482 fast + 19 PostgreSQL, three browser suites and public live smoke checks. No actual live login/purchase/messages or production-release qualification claimed. Full image/backup evidence is in CURRENT_STATE. Steps 2 and 4–6 remain pending.

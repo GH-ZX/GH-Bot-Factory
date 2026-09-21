@@ -2,19 +2,19 @@
 
 > **Resume here:** [Customer delivery handoff](RESUME_CUSTOMER_DELIVERY.md) records the owner’s requirements, delivered work, remaining gaps and ordered next steps.
 
-> **Latest deployment — 2026-09-21:** Customer `/build/` redesign from `48a11be` is live after full factory Docker redeployment. All five running services healthy; use `http://10.70.5.5:8010/build/`. See the deployment evidence below.
+> **Latest deployment — 2026-09-22:** Token/password sign-in and after-login Admin redesign are live at https://factory.gh-store.me/admin/ (`cbe4591`). All services healthy; see latest evidence below.
 
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
 - **Last updated:** 2026-09-22
 - **Current phase:** Phase 15 — Admin Identity and Tenant Operations
-- **Implementation status:** Steps 1/3 implemented in source: matching Admin identity, one-time customer-owned quotes and tenant operations. Actual customer installation is pending (step 2); shopper polish, automatic packaging/reporting and production qualification remain incomplete (steps 4–6). Earlier phase completion statements below are historical.
+- **Implementation status:** Admin identity and tenant operations plus token/password sign-in are implemented and deployed. Actual customer installation remains pending (step 2); shopper polish, packaging/reports and production qualification remain incomplete (steps 4–6).
 - **Current migration head:** `0ce5d2c98e7f`
 - **Primary branch:** `main`
 - **Previous milestone commit:** `c98fc0c` (`fix(ui): synchronize design system dialogs and bump static cache busters`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
-- **Verification:** Exact isolated milestone source passed canonical `make verify`: 474 fast + 19 PostgreSQL tests, Ruff, compile, secret/handoff/JavaScript/dependency checks and migration/no drift. Admin operations, Admin/Mini App and setup browser regressions passed. No real customer or production-release acceptance is claimed.
-- **Deployment:** Clean source commit `48a11be` rebuilt and deployed to all application services; PostgreSQL and Redis recreated with preserved volumes. Shared application image manifest `sha256:9d11a29119f2cd8c7e8715b04380768706bba3472032010e6c3e0d214d017153`, tagged `48a11be` and `local`. Customer assets `20260921_02` and live browser flow verified at `http://10.70.5.5:8010/build/`. Subdomain DNS remains unavailable from this host.
+- **Verification:** Canonical isolated-source `make verify` passed: 482 fast + 19 PostgreSQL; all three browser suites passed. Public sign-in/builder smoke and service health checks passed. No real-customer or production-release acceptance is claimed.
+- **Deployment:** Source `cbe4591` deployed to API, worker and bot runtime; all five services healthy. Migration head `0ce5d2c98e7f`; image identity and backup recorded in the latest deployment entry. Public Admin: https://factory.gh-store.me/admin/.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
 ## Delivered Capabilities
@@ -318,3 +318,14 @@ Implementation commit `1d4fcec` was pushed to `origin/main` on 2026-09-22. Canon
 User confirms `factory.gh-store.me/build/` and `/admin/` are reachable. New sign-in design matches the existing cream/green Admin identity. Username/password and single-use Telegram admin token are supported; Account enables initial password setup and current-password-protected changes with session revocation. Password routes use auth rate limiting; ambiguous store membership requires an explicit verified store selection. Existing password work is now reviewed and included in this scope; unrelated setup/report work remains separate. ADR-050 documents the boundary. No new schema change; deployment must include the previous `0ce5d2c98e7f` operations migration. Focused tests: 28 auth tests and Admin/password/MiniApp browser regressions passed. Canonical isolated-source verification and live deployment are pending below.
 
 Sign-in milestone verification: isolated-source canonical `make verify` passed (482 fast + 19 PostgreSQL), including Ruff, compilation, migration/no drift, JavaScript, secret/handoff and dependency checks. All three browser suites passed: Admin/password/MiniApp, tenant operations, and builder/setup UX. Desktop/mobile screenshots inspected. No real credentials or purchases used in these tests. Live Docker deployment is the next step.
+
+
+## Sign-in deployment evidence — 2026-09-22
+
+Source `cbe4591` is pushed and live at https://factory.gh-store.me/admin/. Clean-archive Docker image `gh-bot-factory:cbe4591` (also `local`) has identity `sha256:677476ee5269375dd2b9af467aec858254e0d9988364c46d05601b5834105e24`; revision label matches source. Previous image retained as `before-signin-cbe4591`. Restricted database backup: `backups/pre-signin-cbe4591/ghbf-20260921T214625Z.dump` with checksum. Migration `e5f6a8b9c1d2 → 0ce5d2c98e7f` completed before API/worker/bot-runtime rollout. PostgreSQL, Redis and Cloudflare configuration were not changed.
+
+All five long-running services are healthy. Container dependency check passed. Public browser checks verified the new login identity, both tabs, 375px mobile layout, `/health/ready` HTTP 200, `/auth/account` rejecting unauthenticated access, and `/build/` rendering without page errors. Source suites passed: 482 fast + 19 PostgreSQL; all three browser regressions passed. Actual live credentials, purchases and announcements were not submitted. This is a development-installation deployment, not a production release-gate or real-customer acceptance claim.
+
+Both the sign-in page and previously completed after-login Admin redesign are deployed. Users without a password can use the existing Telegram `/admin` one-time token, then choose **Account** to set a password. Existing-password changes require the current password and revoke all sessions. Username-less accounts need owner assistance; no default credentials were created. Steps 2 and 4–6 remain pending as previously agreed.
+
+Logs/screenshots: `/tmp/ghbf-signin-verify.log`, `/tmp/ghbf-signin-build.log`, `/tmp/ghbf-signin-migrate.log`, `/tmp/ghbf-signin-live.log`, `/tmp/ghbf-signin-live-desktop.png`, `/tmp/ghbf-signin-live-mobile.png`.
