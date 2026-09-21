@@ -980,3 +980,8 @@ Shared setup presentation lives in `apps/admin/static/store-setup.js` and `store
 ## 2026-09-21 — Customer Builder Redesign Map
 
 Customer discovery lives in `apps/configurator/static/`, mounted at `/build/` (older `apps/build/static/` references are historical). Four-step project brief reuses public templates/integrations/inquiry APIs and shared StoreSetup helpers. Requested features/languages/design/handoff travel as bounded project notes, not entitlement or provisioning authority. Quote-on-review presentation supersedes live estimated prices; internal server estimates remain unchanged and need operator review. See ADR-048 and the matching prompt/current-state entries. No migration or deployment.
+
+
+## 2026-09-21 — Customer Builder Deployment Map
+
+Full project Compose redeployment of clean commit `48a11be`: API/worker/bot-runtime/migrate share image manifest `sha256:9d11a29119f2cd8c7e8715b04380768706bba3472032010e6c3e0d214d017153`; database and Redis volumes preserved. New `/build/` assets verified live at `http://10.70.5.5:8010/build/`. See matching current-state and prompt-history deployment evidence; subdomain DNS remains unverified.

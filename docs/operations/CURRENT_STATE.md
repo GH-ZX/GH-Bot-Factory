@@ -1,6 +1,6 @@
 # GH-Bot-Factory Current State
 
-> **Latest workspace milestone — 2026-09-21:** Customer `/build/` redesign implemented and verified; see the Customer Builder Redesign entry below and ADR-048. The running deployment still uses the previous page.
+> **Latest deployment — 2026-09-21:** Customer `/build/` redesign from `48a11be` is live after full factory Docker redeployment. All five running services healthy; use `http://10.70.5.5:8010/build/`. See the deployment evidence below.
 
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
@@ -12,7 +12,7 @@
 - **Previous milestone commit:** `c98fc0c` (`fix(ui): synchronize design system dialogs and bump static cache busters`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
 - **Verification:** Canonical `make verify` passed: 466 fast tests, 15 PostgreSQL tests, Ruff, migration upgrade/Alembic no drift, handoff/secret/JavaScript/compile/dependency checks clean. Existing Admin/Mini App browser regression and new setup UX browser regression passed. Desktop/mobile screenshots inspected; browser coverage includes drafts without tokens, tenant-separated draft restoration, failed submissions, simulated previews, collapsed choices, and mobile portrait/landscape layout. Final verification initially found trailing whitespace and a test synchronization issue; both were corrected, and the mobile wizard footer was improved before the passing rerun. No deployment or real Telegram/payment purchase was performed.
-- **Deployment:** UI commit `4e216ad` deployed to API on `http://10.70.5.5:8010`; Admin and configurator assets `v=20260920_01` verified live. All five project services healthy. Static-only image `gh-bot-factory:ux-4e216ad` promoted to `local`; workers retain their unchanged prior image. Domain resolution is unavailable from this host; use direct LAN links. See deployment entry below.
+- **Deployment:** Clean source commit `48a11be` rebuilt and deployed to all application services; PostgreSQL and Redis recreated with preserved volumes. Shared application image manifest `sha256:9d11a29119f2cd8c7e8715b04380768706bba3472032010e6c3e0d214d017153`, tagged `48a11be` and `local`. Customer assets `20260921_02` and live browser flow verified at `http://10.70.5.5:8010/build/`. Subdomain DNS remains unavailable from this host.
 - **Local hardening:** On 2026-09-17 the placeholder PostgreSQL credential was rotated without exposing it, Redis-backed rate limiting was enabled, a restricted backup was restored successfully into an isolated database, and the API bind was narrowed to `10.70.5.5:8010`. UDM local DNS and Nginx Proxy Manager HTTP routing are active at `http://botfac.gh-store.me`; Admin, readiness, and all five Compose services are healthy. Trusted TLS, `APP_ENV=staging`, and the Mini App HTTPS URL remain pending. The existing `bot.gh-store.me` Zero Trust route remains untouched.
 
 ## Delivered Capabilities
@@ -282,3 +282,14 @@ The deployment host could not resolve `botfac.gh-store.me`; domain reachability 
 - Tab drafts exclude contact, notes and custom API text. Error/retry states preserve entries; successful submission clears drafts and locks the submitted form. Telegram follow-up uses the inquiry reference without legacy estimated-price text.
 - Verification: expanded browser regression passed, including catalog load retry, four steps, draft privacy/restoration, requested-feature persistence, maximum-length brief, failed/successful submission, existing Admin regression and 320/375px/landscape overflow checks. Desktop/mobile screenshots inspected. Canonical `make verify` passed on the current working tree: 470 fast tests, 15 PostgreSQL tests, Ruff, migration upgrade/Alembic no drift, handoff/secret/JavaScript/compile/dependency checks. The first run found an outdated page-title assertion, corrected before the passing rerun. Existing unrelated working-tree changes were present during verification; this milestone does not claim a separate clean-checkout gate or production qualification.
 - Migration head unchanged: `e5f6a8b9c1d2`. No deployment performed; existing running site remains on its prior assets. Unrelated auth/Admin/setup/report work remains outside this milestone.
+
+
+## Customer Builder Full Docker Redeployment — 2026-09-21
+
+User authorized redeploying all factory Docker services to see the customer-page redesign. Built a clean Git archive of `48a11be9d6e4604de8c2e51a777c49e44555a5d2`; unrelated workspace edits were not included. Standard Docker build DNS failed; a build-only `network: host` override allowed the normal Dockerfile dependency install and build to finish. No host network, proxy, tunnel, or unrelated container settings were changed.
+
+Image `gh-bot-factory:48a11be` was promoted to `gh-bot-factory:local`; manifest identity `sha256:9d11a29119f2cd8c7e8715b04380768706bba3472032010e6c3e0d214d017153`. Previous API/local image retained as `gh-bot-factory:before-builder-48a11be`. API, worker, bot runtime and migration job all use the same new image. PostgreSQL and Redis were also recreated as requested, retaining all named volumes. Migration job exited 0; schema remains `e5f6a8b9c1d2`.
+
+All five long-running services healthy. `/health/live`, `/health/ready`, `/admin/` and `/build/` return HTTP 200. Served configurator HTML/CSS/JavaScript hashes match the committed source; asset version `20260921_02`. Live Chromium checked the four-step flow, five business groups, selected warranty/support features, review summary, mobile overflow and Admin loading with no page errors. No inquiry or purchase submitted. Container `pip check` passed. Build logs and live screenshot are under `/tmp/ghbf-deploy-48a11be/`.
+
+Verified URL: `http://10.70.5.5:8010/build/`. Subdomain DNS lookup still fails from this host, so public-domain reachability is unverified. Port binding remains the existing `0.0.0.0:8010`. Prior source verification was 470 fast + 15 PostgreSQL tests on the workspace, not a fresh full gate inside this newly built image; no production-release qualification claimed. Documentation consistency and diff checks passed for this deployment record.
