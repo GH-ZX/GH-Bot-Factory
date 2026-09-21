@@ -131,3 +131,12 @@ Documentation only: no tunnel, DNS, application configuration or Docker service 
 
 
 **2026-09-22 sign-in deployment:** Source `cbe4591` is pushed and deployed. New token/password sign-in and after-login Admin identity are live at https://factory.gh-store.me/admin/. Account supports password setup/change. All five services healthy; migration `0ce5d2c98e7f` applied after backup. Verification: 482 fast + 19 PostgreSQL, three browser suites and public live smoke checks. No actual live login/purchase/messages or production-release qualification claimed. Full image/backup evidence is in CURRENT_STATE. Steps 2 and 4–6 remain pending.
+
+
+## 2026-09-22 — Setup and shared branding advisory (implementation pending)
+
+User requests username `ahmedghx` and a supplied password (redacted), then a plan before further implementation. Reports `/setup/` is not working properly and needs redesign; requests shared theme variables across pages and reuse of GH Store branding/logo from sibling `gh-store-dev`. Real-customer testing is explicitly deferred. Continuation: "sorry, resume".
+
+Read-only live inspection found zero Tenant rows and zero Membership rows, an existing active `ahmedghx` User, and SystemInstallState.is_initialized=false. A password alone cannot authorize Admin login. Credentials were not changed because no initialized owner membership exists; do not silently create tenant/platform authority or claim successful login. Setup failure cause itself is not yet established. No secrets recorded.
+
+Proposed next work: diagnose and complete first-run owner/store setup, configure and verify the requested login, unify shared design tokens across build/Admin/sign-in/setup, reuse the actual GH Store logo, and verify the inquiry-to-quote/configuration flow locally. Inspect existing identities before attaching ownership. Customer install trial, shopper polish, automated packaging/reports and production qualification remain deferred. No application edits, deployment, or fresh canonical gate in this advisory.

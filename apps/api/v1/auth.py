@@ -204,7 +204,7 @@ async def login_with_password(
         source=AuthSource.SESSION,
         token_version=user.token_version,
         expires_in_seconds=3600,
-        extra_claims={"bot_id": str(bot.id)} if bot else {},
+        extra_claims={"login_method": "password", **({"bot_id": str(bot.id)} if bot else {})},
     )
 
     return LoginResponse(

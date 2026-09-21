@@ -11,6 +11,7 @@ from apps.api.deps import require_staff_or_above
 from packages.commerce.models import Product
 from packages.core.auth import AuthenticatedPrincipal
 from packages.core.database import get_db_session
+from packages.core.system_models import SystemInstallState
 from packages.factory.templates import TemplateValidationError, get_bot_template
 from packages.payments.models import PaymentMethodConfig
 from packages.providers.models import Provider
@@ -30,6 +31,7 @@ class ChecklistItem(BaseModel):
 
 class OnboardingChecklistResponse(BaseModel):
     tenant_id: uuid.UUID
+    workspace_kind: str = "store"
     progress_percent: int = Field(ge=0, le=100)
     launch_ready: bool
     next_step: str
@@ -43,6 +45,18 @@ async def get_onboarding_checklist(
     session: AsyncSession = Depends(get_db_session),
 ) -> OnboardingChecklistResponse:
     tenant_id = principal.tenant_id
+
+    install = await session.get(SystemInstallState, 1)
+    if (install and install.is_initialized and install.tenant_id == tenant_id
+            and install.operator_user_id == principal.user_id):
+        return OnboardingChecklistResponse(
+            tenant_id=tenant_id, workspace_kind="factory", progress_percent=100,
+            launch_ready=True, next_step="Open Sales & leads to review customer requests. No owner bot is required.",
+            recommended_template_key="general-commerce",
+            items=[ChecklistItem(key="factory_account", title="Factory account ready",
+                description="Your workspace is ready. Customer bots are configured separately.",
+                completed=True, action_view="sales")],
+        )
 
     # 1. Inspect Bot & Branding
     bot = (

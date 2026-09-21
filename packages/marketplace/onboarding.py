@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import re
 import uuid
 from dataclasses import dataclass
@@ -153,13 +154,22 @@ class CustomerOnboardingService:
         # The owner connects a real bot through the verified provisioning workflow.
         if not already_existed:
             inquiry = await session.get(CustomerInquiry, quote.inquiry_id) if quote.inquiry_id else None
-            conf = (inquiry.configuration if inquiry else {}) or {}
+            scope = quote.scope_snapshot or {}
+            conf = scope.get("configuration") or (inquiry.configuration if inquiry else {}) or {}
+            brief = conf.get("brief") or {}
+            branding = {"store_tagline": f"{raw_name} Official Store"}
+            if brief.get("accent"):
+                branding["brand_accent"] = brief["accent"]
             config = build_template_config(
                 template_key=conf.get("template_key", "general-commerce"),
-                currency=quote.currency, locale="en",
-                branding={"store_tagline": f"{raw_name} Official Store"},
+                currency=quote.currency, locale="ar" if brief.get("store_language") == "Arabic" else "en",
+                branding=branding,
             )
-            tenant.settings = {**(tenant.settings or {}), "onboarding_template": config}
+            tenant.settings = {
+                **(tenant.settings or {}), "onboarding_template": config,
+                # Requested features remain scope, never runtime permissions/entitlements.
+                "delivery_scope": copy.deepcopy(scope or {"configuration": conf}),
+            }
         bot = (await session.execute(select(Bot).where(
             Bot.tenant_id == tenant.id, Bot.deleted_at.is_(None),
             Bot.credential_status == "VERIFIED",

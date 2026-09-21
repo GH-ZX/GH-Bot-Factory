@@ -9,7 +9,7 @@
 - **Last updated:** 2026-09-22
 - **Current phase:** Phase 15 — Admin Identity and Tenant Operations
 - **Implementation status:** Admin identity and tenant operations plus token/password sign-in are implemented and deployed. Actual customer installation remains pending (step 2); shopper polish, packaging/reports and production qualification remain incomplete (steps 4–6).
-- **Current migration head:** `0ce5d2c98e7f`
+- **Current migration head:** `a71c9e23b840`
 - **Primary branch:** `main`
 - **Previous milestone commit:** `c98fc0c` (`fix(ui): synchronize design system dialogs and bump static cache busters`)
 - **Canonical repository:** `git@github.com:GH-ZX/GH-Bot-Factory.git`
@@ -329,3 +329,10 @@ All five long-running services are healthy. Container dependency check passed. P
 Both the sign-in page and previously completed after-login Admin redesign are deployed. Users without a password can use the existing Telegram `/admin` one-time token, then choose **Account** to set a password. Existing-password changes require the current password and revoke all sessions. Username-less accounts need owner assistance; no default credentials were created. Steps 2 and 4–6 remain pending as previously agreed.
 
 Logs/screenshots: `/tmp/ghbf-signin-verify.log`, `/tmp/ghbf-signin-build.log`, `/tmp/ghbf-signin-migrate.log`, `/tmp/ghbf-signin-live.log`, `/tmp/ghbf-signin-live-desktop.png`, `/tmp/ghbf-signin-live-mobile.png`.
+
+## Web Factory Completion — 2026-09-22 (in progress)
+
+Five-step checklist: docs/plans/web-factory-completion.md. Web-only setup and explicit installation-owner password sessions replace the owner-bot prerequisite; customer bots remain optional until verified provisioning. Shared factory theme/logo and setup redesign are implemented in the working tree. Accepted quote scope now carries through to customer configuration. ADR-051; source migration head a71c9e23b840. Live deployment is still cbe4591 / 0ce5d2c98e7f until verified rollout. Canonical gate and deployment pending; no live credentials changed yet. Real-customer tests and delivery packaging/reports remain deferred.
+
+
+**Web factory source verification — 2026-09-22:** Final isolated-source canonical `make verify` passed: 486 fast + 20 PostgreSQL, Ruff, migration/no drift, secret/handoff/JavaScript/compilation and dependency checks. All four browser suites passed; desktop/mobile setup screenshots inspected. Theme propagation tests change one brand primitive and verify primary buttons/logo across build/Admin/setup. Password sessions open Sales without a second token. Initial isolated runs exposed an eager JWT dependency on legacy platform-token routes and test reliance on local environment; both corrected before the final passing run. Auth/setup validation responses omit secret-bearing input values. Log: `/tmp/ghbf-web-canonical.log`. Source migration a71c9e23b840; live rollout and requested account initialization are next. No real-customer/production qualification claimed.

@@ -1,0 +1,40 @@
+/* GH Store factory identity. Change these primitives to theme every factory page.
+   Customer bot branding remains tenant-owned and independent. */
+:root {
+  --gh-brand: #166b52;
+  --gh-ink: #183b32;
+  --gh-background: #f6f7f2;
+  --gh-surface: #ffffff;
+  --gh-highlight: #d3eb97;
+  --gh-danger: #a33229;
+  --gh-warning: #936014;
+  --gh-muted: color-mix(in srgb, var(--gh-ink) 65%, var(--gh-background));
+  --gh-soft: color-mix(in srgb, var(--gh-brand) 7%, var(--gh-background));
+  --gh-line: color-mix(in srgb, var(--gh-brand) 18%, var(--gh-background));
+  --gh-brand-hover: color-mix(in srgb, var(--gh-brand) 80%, black);
+  --gh-font: Inter, "Segoe UI", Arial, sans-serif;
+  --gh-radius: 16px;
+  --bg: var(--gh-background);
+  --panel: var(--gh-surface);
+  --panel2: var(--gh-soft);
+  --text: var(--gh-ink);
+  --muted: var(--gh-muted);
+  --line: var(--gh-line);
+  --border: var(--gh-line);
+  --green: var(--gh-brand);
+  --accent: var(--gh-brand);
+  --lime: var(--gh-highlight);
+  --danger: var(--gh-danger);
+  --ok: var(--gh-brand);
+  --radius: var(--gh-radius);
+  color-scheme: light;
+}
+.gh-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  padding: 5px;
+  border-radius: 13px;
+  background: var(--gh-brand);
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from asyncio import to_thread
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from urllib.parse import urlsplit, urlunsplit
@@ -10,6 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from packages.core.auth import hash_password, verify_password
 from packages.core.system_models import SystemInstallState
 from packages.factory.provisioning import (
     AiogramTelegramIdentityVerifier,
@@ -218,4 +220,71 @@ async def install_first_tenant(
                 await secret_storage.delete_secret(secret_ref)
             except Exception:  # noqa: BLE001 - preserve original setup failure during vault cleanup
                 logging.getLogger(__name__).warning("Setup rollback could not remove the staged secret.")
+        raise
+
+
+@dataclass(frozen=True)
+class WebSetupResult:
+    tenant_id: uuid.UUID
+    owner_user_id: uuid.UUID
+
+
+async def install_web_factory(
+    *, session: AsyncSession, tenant_slug: str, tenant_name: str,
+    username: str, password: str, public_base_url: str | None = None,
+) -> WebSetupResult:
+    """One-time installation authority, independent of Telegram and tenant RBAC."""
+    slug = tenant_slug.strip().lower()
+    name = tenant_name.strip()
+    username = username.strip().lstrip("@")
+    if not _SLUG_RE.fullmatch(slug) or not name or len(name) > 255:
+        raise SetupError("WORKSPACE_INVALID", "Enter a workspace name and a valid lowercase address.")
+    if not _USERNAME_RE.fullmatch(username) or not 12 <= len(password) <= 255:
+        raise SetupError("ACCOUNT_INVALID", "Use a 5–32 character username and a password of at least 12 characters.")
+    public_base = normalize_public_base_url(public_base_url)
+    password_hash = await to_thread(hash_password, password)
+    try:
+        # Migrations seed this singleton. An absent row is an incomplete install, not
+        # permission to bypass the cross-process lock or race another initializer.
+        state = (await session.execute(
+            select(SystemInstallState).where(SystemInstallState.id == 1).with_for_update()
+        )).scalar_one_or_none()
+        if state is None:
+            raise SetupError("MIGRATIONS_REQUIRED", "Run database migrations before setup.", status_code=503)
+        if state.is_initialized or await session.scalar(select(func.count(Tenant.id))):
+            raise SetupError("ALREADY_INITIALIZED", "This installation has already been initialized.", status_code=409)
+        candidates = (await session.execute(select(User).where(
+            func.lower(User.username) == username.lower()
+        ).with_for_update())).scalars().all()
+        if candidates:
+            # Existing orphan identities may only be reclaimed with their password.
+            # The setup code never becomes a password-reset or account-takeover API.
+            owner = candidates[0]
+            if (len(candidates) != 1 or not owner.is_active or owner.deleted_at is not None
+                    or not owner.hashed_password
+                    or not await to_thread(verify_password, password, owner.hashed_password)):
+                raise SetupError("USERNAME_UNAVAILABLE", "This username already exists. Use its current password or another username.", status_code=409)
+            if await session.scalar(select(func.count(Membership.id)).where(Membership.user_id == owner.id)):
+                raise SetupError("ACCOUNT_IN_USE", "This account already belongs to a workspace.", status_code=409)
+            owner.token_version += 1
+        else:
+            owner = User(username=username, is_active=True)
+            session.add(owner)
+        owner.hashed_password = password_hash
+        tenant = Tenant(name=name, slug=slug, is_active=True, settings=_public_urls(public_base))
+        session.add(tenant)
+        await session.flush()
+        session.add(Membership(tenant_id=tenant.id, user_id=owner.id, role=Role.OWNER,
+                               permissions=[], is_active=True))
+        session.add(AuditLog(tenant_id=tenant.id, user_id=owner.id,
+                            action="FIRST_RUN_WEB_ACCOUNT_SETUP_COMPLETED", resource_type="USER",
+                            resource_id=str(owner.id), details={"telegram_required": False}))
+        state.is_initialized = True
+        state.initialized_at = datetime.now(UTC)
+        state.tenant_id = tenant.id
+        state.operator_user_id = owner.id
+        await session.commit()
+        return WebSetupResult(tenant_id=tenant.id, owner_user_id=owner.id)
+    except Exception:
+        await session.rollback()
         raise

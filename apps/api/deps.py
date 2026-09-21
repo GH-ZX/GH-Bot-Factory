@@ -78,7 +78,7 @@ async def get_current_principal(
 
     # 1. Verify User exists and is active
     user = await session.get(User, user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is deactivated or not found.",
@@ -95,7 +95,7 @@ async def get_current_principal(
 
     # 3. Verify Tenant exists and is active
     tenant = await session.get(Tenant, tenant_id)
-    if tenant is None or not tenant.is_active:
+    if tenant is None or not tenant.is_active or tenant.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tenant is inactive or deleted.",

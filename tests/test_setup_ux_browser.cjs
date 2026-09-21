@@ -17,6 +17,14 @@ const templates = JSON.parse(
   ),
 );
 const server = http.createServer((req, res) => {
+  const sharedName = new URL(req.url, 'http://local').pathname.match(/^\/shared\/([a-z.-]+)$/)?.[1];
+  if (sharedName) {
+    const sharedFile = path.join(root, 'apps/shared/static', sharedName);
+    if (!fs.existsSync(sharedFile)) { res.writeHead(404); return res.end(); }
+    res.setHeader('Content-Type', sharedName.endsWith('.css') ? 'text/css' : 'image/png');
+    return res.end(fs.readFileSync(sharedFile));
+  }
+
   const match = new URL(req.url, "http://localhost").pathname.match(
     /^\/(admin|build)\/([a-z.-]+)?$/,
   );

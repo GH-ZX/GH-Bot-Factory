@@ -2,6 +2,14 @@ const {chromium}=require('playwright');
 const fs=require('node:fs'), http=require('node:http'), path=require('node:path'), assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..');
 const server=http.createServer((req,res)=>{
+  const sharedName = new URL(req.url, 'http://local').pathname.match(/^\/shared\/([a-z.-]+)$/)?.[1];
+  if (sharedName) {
+    const sharedFile = path.join(root, 'apps/shared/static', sharedName);
+    if (!fs.existsSync(sharedFile)) { res.writeHead(404); return res.end(); }
+    res.setHeader('Content-Type', sharedName.endsWith('.css') ? 'text/css' : 'image/png');
+    return res.end(fs.readFileSync(sharedFile));
+  }
+
  const file=new URL(req.url,'http://local').pathname.match(/^\/admin\/([a-z.-]+)?$/)?.[1]||'index.html';
  if(!/^[a-z.-]+$/.test(file)){res.writeHead(404);return res.end();}
  res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');
@@ -20,6 +28,7 @@ const server=http.createServer((req,res)=>{
   const inquiry={id:'inquiry-a',contact_method:'TELEGRAM',contact_handle:'@merchant',status:'NEW',created_at:'2026-09-21T10:00:00Z',configuration:{format:'combo',template_key:'digital-goods',product_source:'hybrid',delivery_model:'supabase_cloud',brief:{store_name:'North Store',visual_style:'Clean & minimal',store_language:'Arabic + English',report_language:'English',accent:'#166b52',requested_features:['coupons','warranty']},custom_api_request:'Connect our supplier'},estimated_quote:{total_one_time:'264.00',items:[{name:'Setup',item_type:'one_time',amount:'264.00'},{name:'Legacy monthly',item_type:'recurring',amount:'84.00'}]},project_notes:'Customer-owned Docker delivery'};
   await page.route('**/api/v1/**',async route=>{
    const req=route.request(),p=new URL(req.url()).pathname;let body={};
+   if(p.startsWith('/api/v1/platform/')) assert.equal(req.headers().authorization,'Bearer mock-session');
    if(req.method()!=='GET')writes.push({p,body:req.postDataJSON()});
    if(p.endsWith('/admin/bootstrap'))body={store:{name:'North Store'},actor:{role:'OWNER',first_name:'Store owner'},counts:{products:12,active_products:10,orders:42,attention_orders:2,dead_letter_jobs:0,financial_open_cases:1,reconciliation_reviews:1}};
    else if(p.endsWith('/categories'))body=[];
@@ -81,7 +90,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('.nav[data-view="operations"]').click();
   await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().right <= 0);
   await page.setViewportSize({width:1440,height:1000});
-  await page.evaluate(()=>{state.platformToken='mock-platform';return navigateTo('sales');});
+  await page.evaluate(()=>{return navigateTo('sales');});
   await page.locator('[data-inspect-inquiry]').click();
   await page.locator('#inquiryDetailDialog').waitFor({state:'visible'});
   assert((await page.locator('#inquiryDetailContent').textContent()).includes('North Store'));

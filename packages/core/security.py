@@ -39,7 +39,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             )
             response.headers.setdefault("Cache-Control", "no-cache, no-store, must-revalidate")
             response.headers.setdefault("Pragma", "no-cache")
-        elif request.url.path.startswith("/setup"):
+        elif request.url.path.startswith("/setup") or request.url.path.startswith("/api/v1/setup"):
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers.setdefault("Content-Security-Policy", "default-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'")
             response.headers.setdefault("Cache-Control", "no-cache, no-store, must-revalidate")
             response.headers.setdefault("Pragma", "no-cache")
         elif request.url.path.startswith("/build"):
@@ -122,7 +124,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not settings.rate_limit_enabled:
             return None
         path = request.url.path
-        if path in {"/api/v1/auth/telegram-miniapp", "/api/v1/auth/admin-code", "/api/v1/auth/login", "/api/v1/auth/account/password"}:
+        if path in {"/api/v1/auth/telegram-miniapp", "/api/v1/auth/admin-code", "/api/v1/auth/login", "/api/v1/setup/initialize-web", "/api/v1/setup/initialize", "/api/v1/auth/account/password"}:
             return RatePolicy("auth", settings.rate_limit_auth_per_minute)
         if request.method == "POST" and path in {
             "/api/v1/storefront/checkout",

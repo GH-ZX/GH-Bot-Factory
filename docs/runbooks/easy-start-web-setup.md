@@ -1,89 +1,46 @@
-# Easy Start — First-Run Web Setup
+# Easy Start — Web-First Factory Setup
 
-This is the preferred self-hosted first-trial path from Phase 8.2A onward.
+The factory owner signs in with a username and password. A Telegram owner bot is optional; no `/admin` command is needed.
 
-## 1. Start everything
-
-From the repository root:
+## 1. Start the installation
 
 ```bash
 python3 scripts/easy_start.py
 ```
 
-The launcher:
-
-- creates `.env` if necessary;
-- generates missing PostgreSQL password, JWT signing key, and one-time setup code;
-- safely URL-encodes the database connection string;
-- builds and starts PostgreSQL, Redis, migrations, API, worker, and bot runtime;
-- waits for `/health/ready`;
-- prints a local setup URL containing the one-time setup code.
-
-It never prints PostgreSQL/JWT secrets or Telegram bot tokens.
+The launcher prepares destination-owned `.env` settings, runs database migrations and starts the factory services on port 8010. It prints a local setup URL with a setup code. Keep that URL private; it authorizes first-run initialization.
 
 ## 2. Open the printed setup URL
 
-Example shape:
+Complete `/setup/`:
 
-```text
-http://127.0.0.1:8010/setup/?code=<one-time-code>
-```
+1. Factory name and workspace address.
+2. Username (5–32 letters/numbers/underscores) and password (at least 12 characters).
+3. Setup code from the terminal; optionally confirm the public HTTPS address.
 
-Complete four sections:
+The browser removes the code from its address immediately and does not save credentials in local/session storage. It shows a retry when status is unavailable and disables initialization until the server has a setup code configured.
 
-1. store name/slug and your Telegram numeric user ID;
-2. BotFather token and optional expected username;
-3. template/display name;
-4. optional public HTTPS base URL, for example `https://factory.example.com`.
+Submitting creates the factory workspace, password identity, OWNER membership and explicit installation-operator binding in one locked transaction. No Telegram API request or Bot record is created. The installer locks itself after success. Existing installations show a sign-in link instead of an editable form.
 
-The server calls Telegram `getMe` before writing bot state.
+## 3. Sign in and review requests
 
-## 3. What success means
+Open `/admin/` and use the username/password. **Sales & leads** uses the same authenticated factory-owner session. Regular tenant OWNER/ADMIN roles cannot access factory-wide sales. Existing installations can still use their environment platform token; migrations do not silently promote an existing tenant owner.
 
-After submission the installer creates:
+Share `/build/` with prospective customers. Their brief reaches Sales & leads, where the operator reviews scope and prepares a one-time quote. After acceptance, create the customer's workspace. Its initial template and delivery scope come from the accepted quote; feature requests are not automatic integration entitlements.
 
-- first Tenant;
-- OWNER User/Membership;
-- enabled control Bot;
-- encrypted vault credential reference;
-- optional per-tenant Mini App/Admin public URLs;
-- AuditLog installation record;
-- singleton install lock.
+The factory dashboard does not require a control bot. Customer workspaces retain their separate launch checklist, including connecting the customer's actual bot through verified provisioning. Customer Telegram identity verification, bot launch, supplier/payment credentials and installation packaging are separate from factory access.
 
-The bot runtime reconciler should discover the enabled Bot within `BOT_RUNTIME_RECONCILE_SECONDS`, without container restart.
+## 4. Theme and branding
 
-## 4. Test the bot
-
-Open the verified bot and send:
-
-```text
-/whoami
-/start
-```
-
-Expected: `/whoami` reports OWNER and `/start` responds.
-
-If a public HTTPS base URL was configured, also send:
-
-```text
-/admin
-```
-
-and test the Mini App/Admin Web App buttons.
+Edit `apps/shared/static/theme.css`: `--gh-brand` controls the factory accent and derived tints; background, ink, surface and typography are defined beside it. Builder, Admin/sign-in and setup share this file. The unchanged GH Store mark is served from `/shared/gh-store-logo-mark.png`. Redeploy and update the asset cache version when publishing changes. Customer bot branding stays independent.
 
 ## 5. Diagnostics
 
 ```bash
 docker compose ps
-docker compose logs --tail=200 api worker bot-runtime
-auth_url=http://127.0.0.1:8010/health/ready
-curl -fsS "$auth_url"
+curl -fsS http://127.0.0.1:8010/health/ready
 ```
 
-`Initialized 0 Telegram bot instance(s)` is normal only before setup. After successful setup, reconciliation should start the new Bot automatically.
+Zero Telegram bot instances is normal for a web-only factory. Setup unavailable: check migrations and whether `SETUP_CODE` is configured, without printing secrets. An existing username requires its current password; setup must not reset another identity. Owner account recovery is an installation-owner operation, never an unauthenticated web endpoint.
 
-## 6. Existing/advanced installations
-
-The legacy CLI bootstrap remains available for controlled operator workflows, but it is no longer the recommended first-trial path.
-
-For production, still run the canonical release gate and prefer independent external secret custody when available.
+The legacy `/api/v1/setup/initialize` and CLI Telegram bootstrap remain available for older workflows. Real-customer Supabase/VPS testing and production release qualification are separate checks; completing web setup does not establish either.

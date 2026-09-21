@@ -6,6 +6,14 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const server = http.createServer((req, res) => {
+  const sharedName = new URL(req.url, 'http://local').pathname.match(/^\/shared\/([a-z.-]+)$/)?.[1];
+  if (sharedName) {
+    const sharedFile = path.join(root, 'apps/shared/static', sharedName);
+    if (!fs.existsSync(sharedFile)) { res.writeHead(404); return res.end(); }
+    res.setHeader('Content-Type', sharedName.endsWith('.css') ? 'text/css' : 'image/png');
+    return res.end(fs.readFileSync(sharedFile));
+  }
+
   const url = new URL(req.url, 'http://localhost');
   const match = url.pathname.match(/^\/(admin|miniapp)\/(index.html|app.js|styles.css|identity.css|operations.js|store-setup.js|store-setup.css)?$/);
   if (!match) { res.writeHead(404); res.end(); return; }

@@ -21,3 +21,7 @@ class SystemInstallState(Base):
         ForeignKey("tenants.id", ondelete="SET NULL"),
         nullable=True,
     )
+
+    operator_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+    )

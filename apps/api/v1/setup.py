@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import hmac
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, SecretStr
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.core.config import settings
 from packages.core.database import get_db_session
 from packages.factory.templates import list_bot_templates
-from packages.setup.service import SetupError, install_first_tenant, is_initialized
+from packages.setup.service import (
+    SetupError,
+    install_first_tenant,
+    install_web_factory,
+    is_initialized,
+)
 from packages.telegram.secrets import SecretStorage, get_default_secret_storage
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -66,7 +71,7 @@ async def setup_status(session: AsyncSession = Depends(get_db_session)) -> Setup
     initialized = await is_initialized(session)
     return SetupStatusResponse(
         initialized=initialized,
-        ready_for_setup=(not initialized and bool(settings.setup_code) and settings.local_secret_vault_enabled),
+        ready_for_setup=(not initialized and bool(settings.setup_code)),
         local_secret_vault_enabled=settings.local_secret_vault_enabled,
         templates=[template.public_payload() for template in list_bot_templates()],
     )
@@ -107,3 +112,32 @@ async def initialize_installation(
         telegram_username=result.telegram_username,
         runtime_reconciliation_seconds=settings.bot_runtime_reconcile_seconds,
     )
+
+
+class WebSetupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    setup_code: SecretStr
+    tenant_slug: str = Field(min_length=3, max_length=100)
+    tenant_name: str = Field(min_length=1, max_length=255)
+    username: str = Field(min_length=5, max_length=32)
+    password: SecretStr = Field(min_length=12, max_length=255)
+    public_base_url: str | None = Field(default=None, max_length=500)
+
+
+@router.post("/initialize-web")
+async def initialize_web_installation(
+    req: WebSetupRequest, response: Response,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, str]:
+    _require_setup_code(req.setup_code.get_secret_value())
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        result = await install_web_factory(
+            session=session, tenant_slug=req.tenant_slug, tenant_name=req.tenant_name,
+            username=req.username, password=req.password.get_secret_value(),
+            public_base_url=req.public_base_url,
+        )
+    except SetupError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
+    return {"status": "configured", "tenant_id": str(result.tenant_id),
+            "owner_user_id": str(result.owner_user_id)}

@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -74,6 +76,15 @@ app = FastAPI(
 app.add_middleware(MaxBodySizeMiddleware, max_bytes=settings.max_request_body_bytes)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def credential_validation_error(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith(("/api/v1/auth/", "/api/v1/setup/")):
+        # Pydantic's default `input` can echo passwords even for length/type errors.
+        errors = [{key: error[key] for key in ("type", "loc", "msg")} for error in exc.errors()]
+        return JSONResponse({"detail": errors}, status_code=422, headers={"Cache-Control": "no-store"})
+    return await request_validation_exception_handler(request, exc)
 
 
 @app.middleware("http")
@@ -176,3 +187,7 @@ app.mount(
     StaticFiles(directory=CONFIGURATOR_STATIC_DIR, html=True),
     name="public-configurator",
 )
+
+
+SHARED_STATIC_DIR = Path(__file__).resolve().parents[1] / "shared" / "static"
+app.mount("/shared", StaticFiles(directory=SHARED_STATIC_DIR), name="shared-factory-identity")

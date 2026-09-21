@@ -1,17 +1,17 @@
 /* Shared visual identity with the public store builder. */
 :root {
   color-scheme: light;
-  --bg: #f6f7f2;
-  --panel: #fff;
-  --panel2: #edf3e9;
-  --line: #dbe2d9;
-  --border: #dbe2d9;
-  --text: #183b32;
-  --muted: #637269;
-  --accent: #166b52;
-  --danger: #a33229;
-  --ok: #226b43;
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  --bg: var(--gh-background);
+  --panel: var(--gh-surface);
+  --panel2: var(--gh-soft);
+  --line: var(--gh-line);
+  --border: var(--gh-line);
+  --text: var(--gh-ink);
+  --muted: var(--gh-muted);
+  --accent: var(--gh-brand);
+  --danger: var(--gh-danger);
+  --ok: var(--gh-brand);
+  font-family: var(--gh-font);
 }
 body {
   background: var(--bg) !important;
@@ -21,8 +21,8 @@ body {
   grid-template-columns: 238px minmax(0, 1fr);
 }
 .sidebar {
-  background: #eff3e9 !important;
-  border-right: 1px solid #d7e0d2;
+  background: var(--gh-soft) !important;
+  border-right: 1px solid var(--gh-line);
   backdrop-filter: none;
   padding: 30px 18px;
   gap: 24px;
@@ -46,7 +46,7 @@ body {
   font-size: 9px;
   letter-spacing: 1.6px;
   padding-top: 19px;
-  color: #6b7b69;
+  color: var(--gh-muted);
 }
 .sidebar nav {
   gap: 4px;
@@ -62,15 +62,15 @@ body {
 }
 .nav.active {
   background: var(--accent) !important;
-  color: #fff !important;
-  box-shadow: 0 3px 9px #164b3110;
+  color: var(--gh-surface) !important;
+  box-shadow: 0 3px 9px color-mix(in srgb, var(--gh-ink) 6%, transparent);
 }
 .nav:hover:not(.active) {
-  background: #e1e9d9 !important;
+  background: var(--gh-soft) !important;
   color: var(--text);
 }
 .sidebar-foot {
-  background: #e3ebdc !important;
+  background: var(--gh-soft) !important;
   border: 0;
   border-radius: 12px;
   font-size: 12px;
@@ -180,7 +180,7 @@ select,
 textarea {
   background: white !important;
   color: var(--text) !important;
-  border-color: #bccabd !important;
+  border-color: var(--gh-line) !important;
   border-radius: 9px;
   min-height: 44px;
   font-size: 13px;
@@ -199,7 +199,7 @@ textarea {
 }
 label {
   font-size: 12px;
-  color: #536759;
+  color: var(--gh-muted);
   font-weight: 550;
   line-height: 1.5;
 }
@@ -218,13 +218,13 @@ label {
   padding: 12px 18px;
 }
 .primary:hover {
-  background: #10513e !important;
+  background: var(--gh-brand-hover) !important;
 }
 .ghost,
 .icon {
   background: white;
   color: var(--text);
-  border: 1px solid #cbd6c6;
+  border: 1px solid var(--gh-line);
 }
 .ghost:hover,
 .icon:hover {
@@ -248,7 +248,7 @@ button.danger {
   min-width: 42px;
 }
 :where(button, input, select, textarea, a, summary):focus-visible {
-  outline: 3px solid #268460 !important;
+  outline: 3px solid var(--gh-brand) !important;
   outline-offset: 3px;
 }
 button:disabled {
@@ -267,34 +267,34 @@ button:disabled {
 }
 .chip-danger,
 .fatal {
-  color: #8b3020;
+  color: var(--gh-danger);
   background: #fff0ec;
   border-color: #e2b4a6;
 }
 .chip-ok {
-  background: #e9f3e2;
-  color: #275634;
-  border-color: #b7cdab;
+  background: color-mix(in srgb, var(--gh-brand) 7%, var(--gh-background));
+  color: var(--gh-brand);
+  border-color: color-mix(in srgb, var(--gh-brand) 22%, var(--gh-background));
 }
 .chip-muted {
-  background: #f0f3eb;
-  color: #56634e;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
+  color: var(--gh-muted);
 }
 .chip-accent {
-  background: #e7f0e1;
+  background: color-mix(in srgb, var(--gh-brand) 8%, var(--gh-background));
   color: var(--accent);
 }
 dialog {
-  background: #fff !important;
+  background: var(--gh-surface) !important;
   color: var(--text);
-  border-color: #d5dfcd;
-  box-shadow: 0 25px 90px #173d3125;
+  border-color: color-mix(in srgb, var(--gh-brand) 14%, var(--gh-background));
+  box-shadow: 0 25px 90px color-mix(in srgb, var(--gh-ink) 15%, transparent);
   border-radius: 17px;
   max-height: 90vh;
   overflow: auto;
 }
 dialog::backdrop {
-  background: #19342b65;
+  background: color-mix(in srgb, var(--gh-ink) 40%, transparent);
   backdrop-filter: blur(4px);
 }
 form {
@@ -315,7 +315,7 @@ form {
   margin: 9vh auto;
   padding: 38px;
   border-radius: 22px;
-  box-shadow: 0 20px 60px #173d3108 !important;
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--gh-ink) 3%, transparent) !important;
 }
 .login-card h1 {
   font-size: 33px;
@@ -328,8 +328,8 @@ form {
   color: var(--accent);
 }
 .operation-note {
-  background: #eef3e8 !important;
-  border: 1px solid #d7e2ce;
+  background: color-mix(in srgb, var(--gh-brand) 6%, var(--gh-background)) !important;
+  border: 1px solid color-mix(in srgb, var(--gh-brand) 13%, var(--gh-background));
   font-size: 12px;
   line-height: 1.7;
 }
@@ -339,26 +339,26 @@ form {
 .empty {
   font-size: 13px;
   padding: 40px;
-  background: #fcfdf9;
+  background: var(--gh-soft);
 }
 .toolbar {
   margin-bottom: 20px;
 }
 .audit-details {
-  background: #f7f9f3 !important;
+  background: var(--gh-soft) !important;
 }
 .choice-card {
   border-color: var(--line);
-  background: #f8faf5;
+  background: var(--gh-soft);
 }
 .choice-card:has(input:checked) {
   border-color: var(--accent);
-  background: #edf4e6;
+  background: var(--gh-soft);
 }
 .badge-source {
-  background: #e8f0e0;
-  color: #385c3c;
-  border-color: #cbdabb;
+  background: color-mix(in srgb, var(--gh-brand) 8%, var(--gh-background));
+  color: var(--gh-muted);
+  border-color: color-mix(in srgb, var(--gh-brand) 18%, var(--gh-background));
 }
 .badge-complexity.medium {
   color: #81621c;
@@ -378,10 +378,10 @@ form {
   background: white;
 }
 .wizard-steps span.active {
-  background: #eaf2e1;
+  background: var(--gh-soft);
 }
 .setup-category[aria-pressed="true"] {
-  background: #edf4e6 !important;
+  background: var(--gh-soft) !important;
   border-color: var(--accent);
   box-shadow: inset 3px 0 var(--accent);
 }
@@ -390,36 +390,36 @@ form {
 }
 .setup-preview-tabs [aria-pressed="true"] {
   border-color: var(--accent);
-  background: #eaf2e1;
+  background: var(--gh-soft);
 }
 .setup-preview button {
-  background: #f2f6ec;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
   color: var(--text);
 }
 .setup-chat {
-  background: #f1f5ec;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
 }
 .setup-error {
   background: #fff0ec;
-  color: #8b3020;
+  color: var(--gh-danger);
   border-color: #e2b4a6;
 }
 .setup-details {
-  background: #fafcf7;
+  background: var(--gh-soft);
 }
 .setup-demo-next {
   border-color: var(--line);
 }
 .mobile-topbar,
 .mobile-quicknav {
-  background: #f6f7f2 !important;
+  background: var(--gh-background) !important;
   border-color: var(--line) !important;
   color: var(--text);
 }
 .quicknav-pill {
-  background: #eaf0e3 !important;
+  background: var(--gh-soft) !important;
   color: var(--text) !important;
-  border-color: #cfdbca !important;
+  border-color: color-mix(in srgb, var(--gh-brand) 15%, var(--gh-background)) !important;
 }
 .quicknav-pill.active {
   background: var(--accent) !important;
@@ -427,7 +427,7 @@ form {
 }
 .mobile-menu-btn,
 .mobile-refresh-btn {
-  background: #eaf0e3 !important;
+  background: var(--gh-soft) !important;
   color: var(--text) !important;
   border-color: var(--line) !important;
 }
@@ -436,7 +436,7 @@ form {
   justify-content: space-between;
   align-items: center;
   gap: 25px;
-  background: #e3ebd8;
+  background: color-mix(in srgb, var(--gh-brand) 10%, var(--gh-background));
   padding: 25px 28px;
   border-radius: 16px;
   margin-bottom: 23px;
@@ -449,7 +449,7 @@ form {
 .admin-welcome p {
   font-size: 12px;
   max-width: 470px;
-  color: #576a4f;
+  color: var(--gh-muted);
 }
 .admin-welcome a {
   display: inline-flex;
@@ -466,7 +466,7 @@ form {
   font:
     italic 60px Georgia,
     serif;
-  color: #8ba87b;
+  color: color-mix(in srgb, var(--gh-brand) 36%, var(--gh-background));
   padding: 0 20px;
 }
 .brief-grid {
@@ -479,7 +479,7 @@ form {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 17px;
-  background: #fafcf7;
+  background: var(--gh-soft);
 }
 .brief-section h3 {
   font-size: 12px;
@@ -556,10 +556,10 @@ form {
   border-radius: 10px;
   border: 1px solid var(--line);
   margin-bottom: 10px;
-  background: #f7f9f3;
+  background: var(--gh-soft);
 }
 .ops-message.staff {
-  background: #edf4e5;
+  background: color-mix(in srgb, var(--gh-brand) 6%, var(--gh-background));
 }
 .ops-message p {
   white-space: pre-wrap;
@@ -572,7 +572,7 @@ form {
   color: var(--muted);
 }
 .ops-error {
-  color: #8b3020;
+  color: var(--gh-danger);
   background: #fff0ec;
   border-radius: 9px;
   padding: 12px;
@@ -592,7 +592,7 @@ form {
 }
 .ops-summary span {
   padding: 8px 12px;
-  background: #edf3e8;
+  background: color-mix(in srgb, var(--gh-brand) 6%, var(--gh-background));
   border-radius: 8px;
   font-size: 11px;
 }
@@ -605,15 +605,15 @@ form {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   padding: 18px;
-  border: 1px dashed #adc39e;
-  background: #f5f8ee;
+  border: 1px dashed color-mix(in srgb, var(--gh-brand) 26%, var(--gh-background));
+  background: color-mix(in srgb, var(--gh-brand) 4%, var(--gh-background));
   border-radius: 12px;
   font-size: 13px;
   margin: 15px 0;
 }
 .variant-edit {
   padding: 14px;
-  background: #f7f9f3;
+  background: var(--gh-soft);
   border-radius: 10px;
   margin: 10px 0;
 }
@@ -651,7 +651,7 @@ form {
     padding: 20px 14px !important;
   }
   .sidebar {
-    background: #eff3e9 !important;
+    background: var(--gh-soft) !important;
   }
   .brief-grid,
   .ops-grid {
@@ -721,7 +721,7 @@ form {
   }
 }
 .brief-card {
-  background: #fff;
+  background: var(--gh-surface);
   border: 1px solid var(--line);
   padding: 22px;
   border-radius: 14px;
@@ -739,19 +739,19 @@ form {
   font-size: 12px;
 }
 .brief-tag {
-  background: #edf3e6;
-  border: 1px solid #d4e1ca;
-  color: #345e3d;
+  background: var(--gh-soft);
+  border: 1px solid color-mix(in srgb, var(--gh-brand) 14%, var(--gh-background));
+  color: var(--gh-brand);
   font-size: 11px;
   border-radius: 30px;
   padding: 7px 11px;
 }
 .scope-note {
   padding: 16px 20px;
-  background: #edf3e6;
-  border: 1px solid #d7e3cf;
+  background: var(--gh-soft);
+  border: 1px solid color-mix(in srgb, var(--gh-brand) 13%, var(--gh-background));
   border-radius: 10px;
-  color: #47633d;
+  color: var(--gh-muted);
   font-size: 12px;
   line-height: 1.8;
 }
@@ -786,7 +786,7 @@ form {
   margin-bottom: 10px;
 }
 .brief-grid .brief-card {
-  background: #f8faf5;
+  background: var(--gh-soft);
 }
 .ops-grid > button {
   grid-column: 1 / -1;
@@ -816,15 +816,15 @@ form {
   margin: 5vh auto;
   display: grid;
   grid-template-columns: 1fr 1.1fr;
-  border: 1px solid #dbe2d9;
+  border: 1px solid var(--gh-line);
   border-radius: 26px;
   overflow: hidden;
-  background: #fff;
-  box-shadow: 0 24px 80px #193b3210;
+  background: var(--gh-surface);
+  box-shadow: 0 24px 80px color-mix(in srgb, var(--gh-ink) 6%, transparent);
 }
 .signin-story {
   padding: 45px 40px;
-  background: #e5eddb;
+  background: color-mix(in srgb, var(--gh-brand) 9%, var(--gh-background));
   display: flex;
   flex-direction: column;
   position: relative;
@@ -835,7 +835,7 @@ form {
   align-items: center;
   gap: 14px;
   text-decoration: none;
-  color: #194f3e;
+  color: var(--gh-brand);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 2px;
@@ -857,13 +857,13 @@ form {
 }
 .signin-story-copy > p:last-child {
   max-width: 320px;
-  color: #536c59;
+  color: var(--gh-muted);
   font-size: 14px;
 }
 .signin-story-foot {
   margin: 40px 0 0;
   font-size: 11px;
-  color: #58705c;
+  color: var(--gh-muted);
 }
 .signin-content {
   padding: 38px 56px;
@@ -898,7 +898,7 @@ form {
   border: 1px solid var(--line);
   border-radius: 11px;
   padding: 4px;
-  background: #f2f5ed;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
   gap: 4px;
   margin-bottom: 26px;
 }
@@ -906,7 +906,7 @@ form {
   flex: 1;
   border: 0;
   background: transparent;
-  color: #617160;
+  color: var(--gh-muted);
   font-size: 12px;
   font-weight: 600;
   min-height: 44px;
@@ -914,9 +914,9 @@ form {
   cursor: pointer;
 }
 .signin-tabs button[aria-selected="true"] {
-  background: #fff;
+  background: var(--gh-surface);
   color: var(--accent);
-  box-shadow: 0 2px 6px #173b3210;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--gh-ink) 6%, transparent);
 }
 .signin-content form {
   padding: 0;
@@ -994,7 +994,7 @@ form {
 }
 .signin-footer {
   margin-top: auto;
-  color: #839080;
+  color: var(--gh-muted);
   font-size: 10px;
 }
 .signin-token-help {
@@ -1015,24 +1015,24 @@ form {
 }
 .signin-art {
   margin: 32px 0 0 14px;
-  background: #fcfdf8;
-  border: 1px solid #b8cdb2;
+  background: color-mix(in srgb, var(--gh-brand) 3%, var(--gh-background));
+  border: 1px solid color-mix(in srgb, var(--gh-brand) 21%, var(--gh-background));
   border-radius: 13px;
   transform: rotate(-4deg);
-  box-shadow: 15px 20px 0 #c9d9bd;
+  box-shadow: 15px 20px 0 color-mix(in srgb, var(--gh-brand) 17%, var(--gh-background));
   position: relative;
 }
 .signin-art-top {
   display: flex;
   gap: 5px;
   padding: 12px;
-  border-bottom: 1px solid #dbe5d4;
+  border-bottom: 1px solid color-mix(in srgb, var(--gh-brand) 11%, var(--gh-background));
 }
 .signin-art-top span {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #a7bd9f;
+  background: color-mix(in srgb, var(--gh-brand) 27%, var(--gh-background));
 }
 .signin-art-body {
   display: flex;
@@ -1040,18 +1040,18 @@ form {
 }
 .signin-art-side {
   width: 24%;
-  background: #f0f5ea;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
   padding: 18px 12px;
 }
 .signin-art-side i {
   display: block;
   height: 5px;
   border-radius: 8px;
-  background: #d4e0cc;
+  background: color-mix(in srgb, var(--gh-brand) 14%, var(--gh-background));
   margin: 0 0 14px;
 }
 .signin-art-side i:first-child {
-  background: #2d7456;
+  background: var(--gh-brand);
 }
 .signin-art-main {
   flex: 1;
@@ -1060,7 +1060,7 @@ form {
 .signin-art-heading {
   height: 7px;
   width: 62%;
-  background: #486d50;
+  background: var(--gh-muted);
   border-radius: 5px;
 }
 .signin-art-cards {
@@ -1071,14 +1071,14 @@ form {
 .signin-art-cards i {
   height: 35px;
   flex: 1;
-  border: 1px solid #d9e3d1;
+  border: 1px solid color-mix(in srgb, var(--gh-brand) 12%, var(--gh-background));
   border-radius: 6px;
-  background: #eef4e8;
+  background: color-mix(in srgb, var(--gh-brand) 6%, var(--gh-background));
 }
 .signin-art-row {
   height: 6px;
   width: 90%;
-  background: #dce6d3;
+  background: color-mix(in srgb, var(--gh-brand) 11%, var(--gh-background));
   margin-bottom: 10px;
   border-radius: 5px;
 }
@@ -1089,8 +1089,8 @@ form {
   position: absolute;
   bottom: -19px;
   right: 5px;
-  background: #1a634c;
-  color: #fff;
+  background: var(--gh-brand);
+  color: var(--gh-surface);
   padding: 11px 18px;
   border-radius: 30px;
   font-size: 11px;
@@ -1147,6 +1147,6 @@ form {
   padding: 0 !important;
 }
 .signin-error.signin-success {
-  background: #edf5e6;
-  color: #275c3b;
+  background: color-mix(in srgb, var(--gh-brand) 6%, var(--gh-background));
+  color: var(--gh-brand);
 }

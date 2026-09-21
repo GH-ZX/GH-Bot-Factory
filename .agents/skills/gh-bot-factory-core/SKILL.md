@@ -117,7 +117,9 @@ Normal new-bot creation uses the versioned template catalog in `packages/factory
 
 ## 8. Easy Start / First-Run Installer Handoff
 
-For fresh self-hosted trials, prefer `python3 scripts/easy_start.py` and `/setup/` over the legacy manual `.env` + `bootstrap_first_tenant.py` sequence. The installer is one-time, setup-code protected, and database-locked. Telegram tokens accepted by setup must be verified with `getMe` and written only through `SecretStorage`; they must never enter PostgreSQL, AuditLog details, API responses, or logs. The default self-hosted runtime resolves environment secrets first and then the shared encrypted local vault. Per-tenant `miniapp_public_url` / `admin_public_url` settings may override process defaults. See ADR-022 and `docs/runbooks/easy-start-web-setup.md`.
+Web-first factory setup (ADR-051) is now the default: `/setup/` creates a password account and explicit installation-operator binding without a Telegram bot. Never require an owner bot or `/admin` token for factory sign-in. Customer bots are connected later with verified credentials. Tenant roles do not imply installation authority.
+
+For legacy Telegram-based self-hosted trials, prefer `python3 scripts/easy_start.py` and `/setup/` over the legacy manual `.env` + `bootstrap_first_tenant.py` sequence. The installer is one-time, setup-code protected, and database-locked. Telegram tokens accepted by setup must be verified with `getMe` and written only through `SecretStorage`; they must never enter PostgreSQL, AuditLog details, API responses, or logs. The default self-hosted runtime resolves environment secrets first and then the shared encrypted local vault. Per-tenant `miniapp_public_url` / `admin_public_url` settings may override process defaults. See ADR-022 and `docs/runbooks/easy-start-web-setup.md`.
 
 
 ## 9. SaaS Plans, Platform Control Plane & Portability Handoff

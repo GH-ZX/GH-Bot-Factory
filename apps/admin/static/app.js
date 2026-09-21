@@ -14,6 +14,9 @@ function setSessionToken(token) {
 }
 
 function clearSessionToken() {
+  state.platformToken = null;
+  state.inquiries = []; state.salesQuotes = []; state.salesHandoffs = []; state.currentInquiry = null;
+  for (const id of ["salesInquiryList", "salesQuotesList", "salesHandoffsList"]) el(id)?.replaceChildren();
   setSessionToken(null);
 }
 
@@ -275,10 +278,10 @@ async function loadOnboardingChecklist() {
     const order=["bot_token","branding","catalog","payments","providers"];
     data.items.sort((a,b)=>order.indexOf(a.key)-order.indexOf(b.key));
     const next=data.items.find(it=>!it.completed);
-    el("onboardingNextStep").textContent=next?`Next: ${onboardingLabel(next.key,next.title)}.`:"Setup basics complete. Preview the customer experience, then check launch readiness below.";
+    el("onboardingNextStep").textContent=data.workspace_kind === "factory" ? data.next_step : next?`Next: ${onboardingLabel(next.key,next.title)}.`:"Setup basics complete. Preview the customer experience, then check launch readiness below.";
 
     el("onboardingItemsList").innerHTML = data.items.map((it) => `
-      <div class="item-row" style="background:#0c1322;padding:8px 12px;border-radius:10px;border:1px solid ${it.completed ? "rgba(85,211,159,0.3)" : "var(--line)"}">
+      <div class="item-row" style="background:var(--panel2);padding:8px 12px;border-radius:10px;border:1px solid ${it.completed ? "rgba(85,211,159,0.3)" : "var(--line)"}">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:16px">${it.completed ? "✓" : "○"}</span>
           <div>
@@ -1065,13 +1068,10 @@ async function saveProduct(event){
 }
 
 async function platformApi(path, options = {}) {
-  if (!state.platformToken) {
-    el("salesOperatorGate")?.classList.remove("hidden");
-    throw new Error("Platform operator token required to access sales console.");
-  }
+  if (!state.platformToken && !state.token) throw new Error("Sign in with your factory owner account.");
   const headers = {
     "Content-Type": "application/json",
-    "X-GHBF-Platform-Token": state.platformToken,
+    ...(state.platformToken ? {"X-GHBF-Platform-Token": state.platformToken} : {Authorization: `Bearer ${state.token}`}),
     ...(options.headers || {}),
   };
   const res = await fetch(path, { ...options, headers });
@@ -1087,7 +1087,7 @@ async function platformApi(path, options = {}) {
 }
 
 async function loadSales() {
-  if (!state.platformToken) {
+  if (!state.platformToken && !state.token) {
     el("salesOperatorGate")?.classList.remove("hidden");
     el("salesTabNav")?.classList.add("hidden");
     el("salesMetricGrid")?.classList.add("hidden");
@@ -1349,7 +1349,7 @@ async function submitHandoffExport(event) {
       }),
     });
     const response = await fetch(`/api/v1/platform/sales/handoffs/${id}/bundle`, {
-      headers: {"X-GHBF-Platform-Token": state.platformToken},
+      headers: state.platformToken ? {"X-GHBF-Platform-Token": state.platformToken} : {Authorization: `Bearer ${state.token}`},
     });
     if (!response.ok) throw new Error("Download failed. The encrypted artifact remains available to the operator.");
     const url = URL.createObjectURL(await response.blob());
@@ -1420,7 +1420,7 @@ function openCreateQuoteDialog(inquiry) {
   container.innerHTML = estItems
     .map(
       (item) => `
-      <div class="grid2 quote-line-row" style="background:#0c1322;padding:8px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px">
+      <div class="grid2 quote-line-row" style="background:var(--panel2);padding:8px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px">
         <div>
           <input type="text" class="quote-line-name" value="${escapeHtml(item.name)}" placeholder="Item name" required>
           <input type="text" class="quote-line-desc" value="${escapeHtml(item.description || "")}" placeholder="Description" style="margin-top:4px;font-size:12px">
@@ -1633,6 +1633,7 @@ function bind(){
       return;
     }
     state.platformToken = val;
+    el("platformTokenInput").value = "";
     await loadSales();
   });
   document.querySelectorAll("[data-sales-tab]").forEach((btn) => {
@@ -1686,7 +1687,7 @@ function bind(){
     const container = el("quoteLineItemsContainer");
     const row = document.createElement("div");
     row.className = "grid2 quote-line-row";
-    row.style = "background:#0c1322;padding:8px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px";
+    row.style = "background:var(--panel2);padding:8px;border-radius:8px;border:1px solid var(--line);margin-bottom:6px";
     row.innerHTML = `
       <div>
         <input type="text" class="quote-line-name" placeholder="Item name" required>

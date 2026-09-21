@@ -1,14 +1,14 @@
 :root {
-  --bg: #f6f7f2;
-  --panel: #fff;
-  --panel2: #edf3ec;
-  --text: #183b32;
-  --muted: #65716b;
-  --line: #dbe2d9;
-  --green: #166b52;
-  --lime: #d3eb97;
+  --bg: var(--gh-background);
+  --panel: var(--gh-surface);
+  --panel2: var(--gh-soft);
+  --text: var(--gh-ink);
+  --muted: var(--gh-muted);
+  --line: var(--gh-line);
+  --green: var(--gh-brand);
+  --lime: var(--gh-highlight);
   --radius: 16px;
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-family: var(--gh-font);
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -84,7 +84,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #268460;
+  outline: 3px solid var(--gh-brand);
   outline-offset: 4px;
 }
 input,
@@ -104,7 +104,7 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
 select,
 textarea {
   width: 100%;
-  border: 1px solid #b8c5bb;
+  border: 1px solid var(--gh-line);
   border-radius: 10px;
   background: white;
   color: var(--text);
@@ -199,7 +199,7 @@ small,
     transform 0.2s;
 }
 .button:hover {
-  background: #10513e;
+  background: var(--gh-brand-hover);
   transform: translateY(-1px);
 }
 .button.small {
@@ -308,14 +308,14 @@ small,
   position: relative;
   display: grid;
   place-items: center;
-  background: #e7eddf;
+  background: var(--gh-soft);
   border-radius: 160px 160px 26px 26px;
   isolation: isolate;
 }
 .stage-orbit {
   width: 400px;
   height: 400px;
-  border: 1px solid #cad8bd;
+  border: 1px solid var(--gh-line);
   border-radius: 50%;
   position: absolute;
   z-index: -1;
@@ -324,15 +324,15 @@ small,
   content: "";
   position: absolute;
   inset: 28px;
-  border: 1px solid #cad8bd;
+  border: 1px solid var(--gh-line);
   border-radius: 50%;
 }
 .phone {
   width: 270px;
-  background: #fff;
-  border: 6px solid #fcfdf9;
+  background: var(--gh-surface);
+  border: 6px solid var(--gh-soft);
   border-radius: 32px;
-  box-shadow: 0 25px 45px #183b3220;
+  box-shadow: 0 25px 45px color-mix(in srgb, var(--gh-ink) 13%, transparent);
   transform: rotate(5deg);
   overflow: hidden;
   animation: arrive 0.8s ease both;
@@ -342,7 +342,7 @@ small,
   align-items: center;
   justify-content: space-between;
   padding: 15px 13px;
-  border-bottom: 1px solid #e8ece5;
+  border-bottom: 1px solid var(--gh-soft);
   font-size: 18px;
 }
 .phone-bar strong {
@@ -359,7 +359,7 @@ small,
   padding: 12px;
 }
 .phone-welcome {
-  background: #d7e7c7;
+  background: var(--gh-soft);
   border-radius: 12px;
   padding: 16px;
   position: relative;
@@ -391,19 +391,19 @@ small,
   position: absolute;
   width: 49px;
   height: 66px;
-  background: #194d3f;
+  background: var(--gh-brand);
   border-radius: 9px;
   transform: rotate(25deg);
 }
 .art-shapes i:nth-child(2) {
   left: 15px;
   top: 10px;
-  background: #73976f;
+  background: var(--gh-muted);
 }
 .art-shapes i:nth-child(3) {
   left: 30px;
   top: 20px;
-  background: #acc68b;
+  background: color-mix(in srgb, var(--gh-brand) 29%, var(--gh-background));
 }
 .phone-category {
   display: flex;
@@ -466,7 +466,7 @@ small,
 }
 .phone-wallet {
   margin-top: 17px;
-  border: 1px solid #e0e8dc;
+  border: 1px solid var(--gh-soft);
   border-radius: 10px;
   padding: 12px;
   display: flex;
@@ -490,14 +490,14 @@ small,
   bottom: 15px;
   border-radius: 5px;
   padding: 6px;
-  background: #e9f1e1;
+  background: var(--gh-soft);
   font-size: 7px;
 }
 .phone-nav {
   display: flex;
   justify-content: space-around;
   padding: 10px;
-  background: #f7f9f4;
+  background: var(--gh-soft);
   font-size: 18px;
 }
 .phone-nav small {
@@ -515,11 +515,11 @@ small,
   align-items: center;
   gap: 10px;
   z-index: 2;
-  border: 1px solid #d8e1d2;
+  border: 1px solid color-mix(in srgb, var(--gh-brand) 13%, var(--gh-background));
   border-radius: 12px;
-  background: #fff;
+  background: var(--gh-surface);
   padding: 13px 18px;
-  box-shadow: 0 10px 20px #183b3209;
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--gh-ink) 4%, transparent);
   font-size: 11px;
   font-weight: 600;
   transform: rotate(-5deg);
@@ -533,7 +533,7 @@ small,
 .note-icon {
   display: grid;
   place-items: center;
-  background: #e6f0d7;
+  background: color-mix(in srgb, var(--gh-brand) 9%, var(--gh-background));
   border-radius: 50%;
   width: 29px;
   height: 29px;
@@ -568,7 +568,7 @@ small,
 .journey > div > span {
   font-family: Georgia, serif;
   font-size: 28px;
-  color: #718673;
+  color: var(--gh-muted);
 }
 .journey strong {
   font-size: 13px;
@@ -580,7 +580,7 @@ small,
   margin-top: 3px;
 }
 .builder-section {
-  background: #edf1e9;
+  background: color-mix(in srgb, var(--gh-brand) 6%, var(--gh-background));
   padding: 66px 0 60px;
   scroll-margin-top: 0;
 }
@@ -620,7 +620,7 @@ small,
   grid-template-columns: repeat(4, 1fr);
   border-bottom: 1px solid var(--line);
   padding: 0 20px;
-  background: #fafbf8;
+  background: var(--gh-soft);
 }
 .stepper button {
   background: transparent;
@@ -644,7 +644,7 @@ small,
   font-weight: 750;
 }
 .stepper button:hover {
-  background: #edf3ec;
+  background: var(--gh-soft);
 }
 .step-panel {
   padding: 30px 32px;
@@ -676,7 +676,7 @@ small,
   gap: 10px;
 }
 .setup-category {
-  background: #fff;
+  background: var(--gh-surface);
   border: 1px solid var(--line);
   border-radius: 11px;
   padding: 17px 16px;
@@ -700,11 +700,11 @@ small,
   margin-top: 7px;
 }
 .setup-category:hover {
-  border-color: #8eaa94;
-  background: #fafcf8;
+  border-color: color-mix(in srgb, var(--gh-brand) 33%, var(--gh-background));
+  background: color-mix(in srgb, var(--gh-brand) 3%, var(--gh-background));
 }
 .setup-category[aria-pressed="true"] {
-  background: #f0f6e9;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
   border-color: var(--green);
   box-shadow: 0 0 0 1px var(--green);
 }
@@ -749,7 +749,7 @@ small,
 }
 .option:has(input:checked) {
   border-color: var(--green);
-  background: #f3f7ef;
+  background: var(--gh-soft);
 }
 .option strong,
 .option small {
@@ -770,8 +770,8 @@ small,
   font-weight: 750;
   letter-spacing: 0.6px;
   margin: 0 0 0 6px;
-  background: #e2edda;
-  color: #335838;
+  background: color-mix(in srgb, var(--gh-brand) 9%, var(--gh-background));
+  color: var(--gh-brand);
   border-radius: 4px;
   padding: 3px 5px;
   vertical-align: middle;
@@ -786,7 +786,7 @@ small,
   display: flex;
   align-items: center;
   gap: 14px;
-  border: 1px solid #b8c5bb;
+  border: 1px solid var(--gh-line);
   border-radius: 10px;
   min-height: 48px;
   padding: 6px 10px;
@@ -805,7 +805,7 @@ small,
 .foundation {
   display: flex;
   gap: 12px;
-  background: #f0f5e9;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
   border-radius: 10px;
   padding: 16px;
 }
@@ -834,7 +834,7 @@ small,
   cursor: pointer;
 }
 .feature:has(input:checked) {
-  background: #f3f7ef;
+  background: var(--gh-soft);
   border-color: var(--green);
 }
 .feature strong {
@@ -921,7 +921,7 @@ small,
 }
 .custom-api {
   padding: 16px;
-  background: #f8f9f5;
+  background: color-mix(in srgb, var(--gh-brand) 3%, var(--gh-background));
   border-radius: 10px;
 }
 .custom-api textarea {
@@ -940,8 +940,8 @@ small,
   margin: 8px 0 18px;
 }
 .handoff-note {
-  border: 1px dashed #9aaa8e;
-  background: #f8faf3;
+  border: 1px dashed color-mix(in srgb, var(--gh-brand) 33%, var(--gh-background));
+  background: color-mix(in srgb, var(--gh-brand) 3%, var(--gh-background));
   border-radius: 10px;
   padding: 17px;
   margin-top: 22px;
@@ -979,7 +979,7 @@ small,
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  background: #fafbf8;
+  background: var(--gh-soft);
   padding: 12px 32px;
   color: var(--muted);
   font-size: 10px;
@@ -1023,7 +1023,7 @@ small,
   border-radius: var(--radius);
   padding: 20px;
   background: white;
-  box-shadow: 0 8px 24px #173d3105;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--gh-ink) 2%, transparent);
 }
 .setup-preview-head {
   border-bottom: 3px solid var(--preview-accent);
@@ -1051,7 +1051,7 @@ small,
 }
 .setup-preview button {
   font-size: 10px;
-  background: #f7f9f3;
+  background: var(--gh-soft);
   border: 1px solid var(--line);
   color: var(--text);
   padding: 11px;
@@ -1063,7 +1063,7 @@ small,
 }
 .setup-preview-tabs [aria-pressed="true"] {
   border-color: var(--green);
-  background: #eaf2e1;
+  background: var(--gh-soft);
 }
 .setup-demo-content {
   padding: 18px 0;
@@ -1071,7 +1071,7 @@ small,
 }
 .setup-product-art {
   height: 96px;
-  background: linear-gradient(125deg, var(--preview-accent), #234a3f);
+  background: linear-gradient(125deg, var(--preview-accent), var(--gh-brand));
   border-radius: 10px;
   display: grid;
   place-items: center;
@@ -1093,7 +1093,7 @@ small,
   font-weight: 600;
 }
 .setup-chat {
-  background: #f2f5ed;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
   padding: 16px;
   border-radius: 3px 14px 14px;
   margin: 18px 0;
@@ -1102,7 +1102,7 @@ small,
   font-size: 10px;
 }
 .project-card {
-  background: #e1e8d9;
+  background: color-mix(in srgb, var(--gh-brand) 10%, var(--gh-background));
   padding: 22px;
   border-radius: var(--radius);
   margin-top: 18px;
@@ -1123,12 +1123,12 @@ small,
   display: flex;
   justify-content: space-between;
   gap: 18px;
-  border-bottom: 1px solid #cbd6c5;
+  border-bottom: 1px solid color-mix(in srgb, var(--gh-brand) 16%, var(--gh-background));
   padding: 10px 0;
   font-size: 10px;
 }
 .project-card dt {
-  color: #56654f;
+  color: var(--gh-muted);
 }
 .project-card dd {
   margin: 0;
@@ -1179,7 +1179,7 @@ small,
 .quote-note {
   margin: 20px 0;
   padding: 16px;
-  background: #f2f5ec;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
   border-radius: 9px;
   font-size: 12px;
 }
@@ -1208,12 +1208,12 @@ small,
 .error {
   background: #fff0ec;
   border: 1px solid #e2b4a6;
-  color: #8b3020;
+  color: var(--gh-danger);
 }
 .success {
-  background: #edf6e7;
-  border: 1px solid #9fbf8c;
-  color: #24523a;
+  background: color-mix(in srgb, var(--gh-brand) 5%, var(--gh-background));
+  border: 1px solid color-mix(in srgb, var(--gh-brand) 30%, var(--gh-background));
+  color: var(--gh-brand);
 }
 #loadError {
   margin: 22px;

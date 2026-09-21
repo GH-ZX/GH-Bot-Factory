@@ -1005,3 +1005,8 @@ ADR-050 documents tenant staff password login, explicit store disambiguation, au
 
 
 **2026-09-22 sign-in deployment:** Source `cbe4591` is pushed and deployed. New token/password sign-in and after-login Admin identity are live at https://factory.gh-store.me/admin/. Account supports password setup/change. All five services healthy; migration `0ce5d2c98e7f` applied after backup. Verification: 482 fast + 19 PostgreSQL, three browser suites and public live smoke checks. No actual live login/purchase/messages or production-release qualification claimed. Full image/backup evidence is in CURRENT_STATE. Steps 2 and 4–6 remain pending.
+
+**2026-09-22 setup/branding advisory:** See RESUME_CUSTOMER_DELIVERY and prompt history. Live installation has no tenants/memberships and is uninitialized; requested credentials remain unset pending owner setup. Shared theme/logo and setup repairs are proposed only. Real-customer trial explicitly deferred.
+
+
+**Web factory completion in progress:** [Five-step checklist](docs/plans/web-factory-completion.md). Web-only first run and installation-owner password access; shared branding/setup and flow verification. Do not require an owner Telegram bot.

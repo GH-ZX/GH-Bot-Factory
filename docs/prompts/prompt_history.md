@@ -1940,3 +1940,28 @@ Sign-in milestone verification: isolated-source canonical `make verify` passed (
 
 
 **2026-09-22 sign-in deployment:** Source `cbe4591` is pushed and deployed. New token/password sign-in and after-login Admin identity are live at https://factory.gh-store.me/admin/. Account supports password setup/change. All five services healthy; migration `0ce5d2c98e7f` applied after backup. Verification: 482 fast + 19 PostgreSQL, three browser suites and public live smoke checks. No actual live login/purchase/messages or production-release qualification claimed. Full image/backup evidence is in CURRENT_STATE. Steps 2 and 4–6 remain pending.
+
+## 2026-09-22 — Setup and shared branding advisory (implementation pending)
+
+User requests username `ahmedghx` and a supplied password (redacted), then a plan before further implementation. Reports `/setup/` is not working properly and needs redesign; requests shared theme variables across pages and reuse of GH Store branding/logo from sibling `gh-store-dev`. Real-customer testing is explicitly deferred. Continuation: "sorry, resume".
+
+Read-only live inspection found zero Tenant rows and zero Membership rows, an existing active `ahmedghx` User, and SystemInstallState.is_initialized=false. A password alone cannot authorize Admin login. Credentials were not changed because no initialized owner membership exists; do not silently create tenant/platform authority or claim successful login. Setup failure cause itself is not yet established. No secrets recorded.
+
+Proposed next work: diagnose and complete first-run owner/store setup, configure and verify the requested login, unify shared design tokens across build/Admin/sign-in/setup, reuse the actual GH Store logo, and verify the inquiry-to-quote/configuration flow locally. Inspect existing identities before attaching ownership. Customer install trial, shopper polish, automated packaging/reports and production qualification remain deferred. No application edits, deployment, or fresh canonical gate in this advisory.
+
+
+## Web factory completion — 2026-09-22
+
+> yah i forgot, i deleted the bot for the owner of the factory , it was a testing bot, so i deleted it, ok ok , now start working and be sure that i dont like the idea of needing to do an owner bot , it might be helpful but not for doing a /admin in the bot so it gives a token to sign in (whatever) now i want u to work on those 5 steps and every upgrade check as done , so agents can understand where are we
+
+Authorized all five proposed steps; remove the owner-bot dependency for setup and sign-in. Track verified completion in docs/plans/web-factory-completion.md. Credentials remain redacted. Preserve customer-owned delivery and defer real-customer testing.
+
+
+### Web factory continuation — 2026-09-22
+
+> resume
+
+Continue the same five-step milestone through verification and deployment. Clean-source verification exposed an eager JWT dependency on legacy platform-token routes; resolving it before rollout.
+
+
+**Web factory source verification — 2026-09-22:** Final isolated-source canonical `make verify` passed: 486 fast + 20 PostgreSQL, Ruff, migration/no drift, secret/handoff/JavaScript/compilation and dependency checks. All four browser suites passed; desktop/mobile setup screenshots inspected. Theme propagation tests change one brand primitive and verify primary buttons/logo across build/Admin/setup. Password sessions open Sales without a second token. Initial isolated runs exposed an eager JWT dependency on legacy platform-token routes and test reliance on local environment; both corrected before the final passing run. Auth/setup validation responses omit secret-bearing input values. Log: `/tmp/ghbf-web-canonical.log`. Source migration a71c9e23b840; live rollout and requested account initialization are next. No real-customer/production qualification claimed.
