@@ -1965,3 +1965,23 @@ Continue the same five-step milestone through verification and deployment. Clean
 
 
 **Web factory source verification — 2026-09-22:** Final isolated-source canonical `make verify` passed: 486 fast + 20 PostgreSQL, Ruff, migration/no drift, secret/handoff/JavaScript/compilation and dependency checks. All four browser suites passed; desktop/mobile setup screenshots inspected. Theme propagation tests change one brand primitive and verify primary buttons/logo across build/Admin/setup. Password sessions open Sales without a second token. Initial isolated runs exposed an eager JWT dependency on legacy platform-token routes and test reliance on local environment; both corrected before the final passing run. Auth/setup validation responses omit secret-bearing input values. Log: `/tmp/ghbf-web-canonical.log`. Source migration a71c9e23b840; live rollout and requested account initialization are next. No real-customer/production qualification claimed.
+
+## Web Factory Live Completion — 2026-09-22
+
+**Continuation prompt:**
+
+> resume working, what is still didnt finish ?
+
+Continued the same milestone through successful public browser acceptance and final handoff.
+
+All five current web-factory steps are complete and checked in docs/plans/web-factory-completion.md. Source `240a106` is pushed and deployed. `/setup/` is redesigned and now shows the initialized state; `ahmedghx` is configured with the supplied password (never recorded here). The factory has zero owner bots. Browser login at https://factory.gh-store.me/admin/ succeeds; Settings & operations → Sales & leads opens using the same password session without another token. Customer tenant roles do not grant factory/platform access.
+
+Shared theme: apps/shared/static/theme.css. Builder, Admin/sign-in and setup share the brand primitive and derived colors. GH Store's logo mark is copied unchanged from sibling gh-store-dev. Customer bot branding remains independent. Customer brief → one-time quote acceptance → tenant configuration is covered through API/database integration tests; accepted scope preserves template/color/language and requested features without granting unreviewed entitlements.
+
+Final isolated-source canonical verification: 486 fast + 20 PostgreSQL tests, migration/no drift, Ruff, secret/handoff/JavaScript/compilation/dependency checks. Four browser suites passed. Live browser checks passed for actual owner password login, factory checklist, sales access without platform-token entry, logout, mobile layout and locked setup; desktop/mobile screenshots inspected. An initial browser attempt could not click Sales inside a collapsed navigation section; opening Settings & operations fixed the walkthrough without application changes.
+
+Deployment: clean-archive image gh-bot-factory:240a106, revision label 240a106, immutable image identity sha256:8be78618916743a97793107f83ed0e6282e29ea4144b44badbf170e419d1be9f. API/worker/bot-runtime use this image; all five services healthy. Local alias promoted; previous image retained as before-web-240a106. Migration 0ce5d2c98e7f → a71c9e23b840 applied after restricted backup backups/pre-web-factory/ghbf-20260921T235259Z.dump (checksum alongside). Owner initialized locally through the validated setup service in one transaction, reusing the explicitly requested orphan account; no Telegram Bot record created. No database/Redis/tunnel/other-host-container configuration was changed.
+
+The initial Compose build reported success but its tag was unavailable at validation. Its fallback build was stopped before migration/rollout. A direct build from the verified archive was validated with its revision and dependency check, then deployed with building disabled. No unreviewed fallback image was deployed.
+
+Evidence: /tmp/ghbf-web-canonical.log, /tmp/ghbf-web-build-direct.log, /tmp/ghbf-web-migrate.log, /tmp/ghbf-web-live-dashboard.png, /tmp/ghbf-web-live-setup.png. Development-installation acceptance only: real-customer Supabase/VPS testing, shopper/bilingual polish, automated Docker/migration/report packaging and production release qualification remain deferred/incomplete.

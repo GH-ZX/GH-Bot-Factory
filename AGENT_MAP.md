@@ -1010,3 +1010,6 @@ ADR-050 documents tenant staff password login, explicit store disambiguation, au
 
 
 **Web factory completion in progress:** [Five-step checklist](docs/plans/web-factory-completion.md). Web-only first run and installation-owner password access; shared branding/setup and flow verification. Do not require an owner Telegram bot.
+
+
+**Web factory live completion — 2026-09-22:** All five [current steps](docs/plans/web-factory-completion.md) checked. Source 240a106 deployed, migration a71c9e23b840, 486 fast + 20 PostgreSQL, four browser suites and live password/sales/setup acceptance. ahmedghx is initialized; no owner bot required. Explicit installation binding protects platform access (ADR-051). See CURRENT_STATE for image/backup evidence. Later customer delivery/shopper/release milestones remain deferred.
