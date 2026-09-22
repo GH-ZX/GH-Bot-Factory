@@ -64,3 +64,76 @@ Deployment: clean-archive image gh-bot-factory:240a106, revision label 240a106, 
 The initial Compose build reported success but its tag was unavailable at validation. Its fallback build was stopped before migration/rollout. A direct build from the verified archive was validated with its revision and dependency check, then deployed with building disabled. No unreviewed fallback image was deployed.
 
 Evidence: /tmp/ghbf-web-canonical.log, /tmp/ghbf-web-build-direct.log, /tmp/ghbf-web-migrate.log, /tmp/ghbf-web-live-dashboard.png, /tmp/ghbf-web-live-setup.png. Development-installation acceptance only: real-customer Supabase/VPS testing, shopper/bilingual polish, automated Docker/migration/report packaging and production release qualification remain deferred/incomplete.
+
+
+## 2026-09-22 — Completion batch deployed; verification deferred
+
+- Built and deployed `gh-bot-factory:work-20260922-completion` from uncommitted working source.
+- Applied PostgreSQL migration `b82da430c951 → c93eb541da62` successfully after the restricted
+  backup `backups/product-20260922/before-completion.dump`. No restore drill was performed.
+- Recreated only project API, worker and bot-runtime containers. Docker reports all five
+  project services healthy; PostgreSQL/Redis containers and Cloudflare tunnels were unchanged.
+- Delivery center, Store settings, Releases & fixes and the expanded MiniApp are in this image.
+  Sample design preview: https://factory.gh-store.me/miniapp/?preview=1 (sample data only).
+- Implementation and deployment boxes are checked in `docs/plans/factory-completion-next.md`.
+  No functional tests, browser runs, verification gates, real-tenant trials, commits or pushes.
+  Startup health is deployment evidence only; this source is not production-qualified.
+- Build log: `/tmp/ghbf-completion-build.log`; Compose override: `/tmp/ghbf-completion-runtime.yml`.
+  Use the override for this working image; do not assume the base Compose image tag includes it.
+- Next: await the owner's authorization for the batched verification/fix pass, then commit/push
+  after required gates pass. Real-customer delivery remains separately deferred.
+
+
+## 2026-09-22 — Hardening batch deployed, functional verification deferred
+
+Image `gh-bot-factory:work-20260922-hardening` built and deployed from uncommitted working
+source. Only API, worker and bot-runtime were recreated. Docker reports all five project
+services healthy. No migration was required or executed; schema remains `c93eb541da62`.
+PostgreSQL/Redis containers, other host containers, ports and Cloudflare tunnels were unchanged.
+Build log: `/tmp/ghbf-hardening-build.log`; working-image Compose override:
+`/tmp/ghbf-hardening-runtime.yml`. Retain/use this override for the deployed working image.
+
+Visible additions: Admin → Needs attention; Store settings → Pause new purchases and
+Installation & backup evidence; Account → Sign out all account sessions; richer Delivery
+center cards; MiniApp recovery panel when an unresolved money request exists. Generated
+packages include the new guards/receipts/backup helper. Previously exported ZIPs must be regenerated.
+
+All ten targeted coding upgrades and this deployment are checked in `docs/plans/factory-hardening.md`.
+No automated tests, lint/syntax gates, browser checks, real-customer operations, commit or push.
+Container startup is not feature acceptance or production qualification. The next authorized
+verification batch must cover the new financial retry/locking behavior, tenant/RBAC isolation,
+package lifecycle/import/backup/restore, UI/RTL and security boundaries before release claims.
+
+
+## 2026-09-22 — Customer product verification and MiniApp entry repair
+
+Owner authorized testing, fixes, commit and push after successful gates. Earlier test deferrals
+are historical. Real-customer trials remain deferred.
+
+- MiniApp entry now redirects an unconfigured bare URL to the explicitly labelled preview.
+  Bot-bearing links preserve signed-Telegram authentication and never silently become sample sessions.
+- Render-blocking neutral skeleton hides the unthemed header, content, overlays and navigation;
+  the selected theme is applied before revealing content. Errors use the current light identity
+  and offer a preview link. Browser checks delayed the theme response and inspected screenshots.
+- Fixed a PostgreSQL stale-identity-map defect: checkout refreshes the paused-sales policy under
+  its shared row lock. A two-session regression proves a previously loaded tenant cannot bypass pause.
+- Corrected restore rejection wording while preserving the empty/uninitialized destination guard.
+- Verification now syntax-checks every Admin/MiniApp/shared JS module. Browser fixtures serve the
+  real static dependency graph, including theme JSON and new modules.
+- Added tests for scope/RBAC, version conflicts, bounded/revoked diagnostic grants, update evidence,
+  alert acknowledgement, session revocation, secret-safe validation, pause/replay, package integrity,
+  lifecycle rejection, fresh PostgreSQL SQL initialization and tenant restore, and browser money recovery.
+- **Canonical `make verify` passed: 500 fast + 22 PostgreSQL**, no schema drift, Ruff, compilation,
+  handoff/secret checks, JavaScript syntax, whitespace and dependency consistency. Two existing
+  FastAPI deprecation warnings remain; they do not fail tests.
+- **Seven browser suites passed:** Admin/login/MiniApp payments, operations, setup wizard, web setup,
+  MiniApp entry/themes/RTL/skeleton, lost-response recovery, and hardening workspaces.
+- Strict installed third-party dependency audit passed after updating the isolated development
+  environment's pip to 26.2.1. `scripts/audit_dependencies.py` audits exact installed versions;
+  it excludes only this first-party editable app, whose source is covered by the repository gates.
+  pip-audit cannot query this private package from PyPI; no third-party finding is ignored.
+- Source schema remains `c93eb541da62`. Fresh package PostgreSQL bootstrap/import passed on an
+  isolated local database, not a real Supabase account or customer VPS. Remote provider acceptance,
+  actual Telegram customer trial and staging/failure-injection qualification remain separate.
+- Logs: `/tmp/ghbf-canonical-final.log`, `/tmp/ghbf-dependency-audit.log`, browser logs under
+  `/tmp/ghbf-*-final-browser.log`, `/tmp/ghbf-miniapp-browser.log`. Release artifact build pending.

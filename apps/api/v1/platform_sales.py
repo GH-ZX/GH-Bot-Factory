@@ -1081,3 +1081,55 @@ async def download_handoff_bundle(
     if hashlib.sha256(path.read_bytes()).hexdigest() != handoff.export_checksum:
         raise HTTPException(status_code=409, detail="Artifact integrity check failed; generate a new bundle.")
     return FileResponse(path, filename=f"tenant-{handoff_id}.ghbf.enc", media_type="application/octet-stream", headers={"Cache-Control": "no-store"})
+
+
+class CustomerPackageRequest(BaseModel):
+    image: str = Field(max_length=255, pattern=r"^[a-z0-9][a-z0-9./:_-]{0,175}@sha256:[a-f0-9]{64}$")
+    language: str = Field(default="en", pattern=r"^(en|ar)$")
+
+
+@router.post("/handoffs/{handoff_id}/package")
+async def download_customer_package(
+    handoff_id: uuid.UUID,
+    payload: CustomerPackageRequest,
+    request: Request,
+    operator: PlatformOperator = Depends(require_platform_operator),
+    session: AsyncSession = Depends(get_db_session),
+):
+    import asyncio
+
+    from packages.core.config import settings
+    from packages.delivery.package import build_package
+    from packages.marketplace.tenant_bundle import MAX_BYTES
+
+    handoff = await session.get(DeploymentHandoff, handoff_id)
+    if not handoff or not handoff.export_artifact_path or handoff.status == HandoffStatus.CANCELLED:
+        raise HTTPException(404, "Generate an encrypted tenant bundle first.")
+    path = Path(handoff.export_artifact_path).resolve()
+    if Path(settings.handoff_export_dir).resolve() not in path.parents or path.name != "tenant.ghbf.enc" or not path.is_file():
+        raise HTTPException(404, "Generate a new encrypted bundle.")
+    if path.stat().st_size > MAX_BYTES:
+        raise HTTPException(409, "Bundle exceeds the supported size.")
+    if (handoff.delivery_details or {}).get("image") and handoff.delivery_details["image"] != payload.image:
+        raise HTTPException(409, "Use the image recorded in the delivery plan, or update the plan first.")
+    ciphertext = await asyncio.to_thread(path.read_bytes)
+    if hashlib.sha256(ciphertext).hexdigest() != handoff.export_checksum:
+        raise HTTPException(409, "Encrypted bundle integrity check failed.")
+    try:
+        package = await asyncio.to_thread(build_package, ciphertext=ciphertext,
+            tenant_name=handoff.licensed_to, tenant_id=str(handoff.tenant_id),
+            image=payload.image, language=payload.language,
+            delivery_summary={key: (handoff.delivery_details or {}).get(key, "") for key in (
+                "release_version", "destination_label", "hosting", "release_notes", "installation_notes")})
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    checksum = hashlib.sha256(package).hexdigest()
+    await append_platform_audit(session, action="handoff.package_generated",
+        resource_type="deployment_handoff", resource_id=str(handoff.id), tenant_id=handoff.tenant_id,
+        details={"sha256": checksum, "image": payload.image, "language": payload.language},
+        actor=operator.actor, ip_address=_client_ip(request))
+    await session.commit()
+    return Response(package, media_type="application/zip", headers={
+        "Cache-Control": "no-store", "X-Content-SHA256": checksum,
+        "Content-Disposition": f'attachment; filename="customer-{handoff.id}.zip"',
+    })

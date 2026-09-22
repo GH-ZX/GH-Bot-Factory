@@ -2,14 +2,7 @@
 const { chromium } = require('playwright');
 const fs = require('node:fs'), http = require('node:http'), path = require('node:path'), assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
-const server = http.createServer((req, res) => {
-  const match = new URL(req.url, 'http://local').pathname.match(/^\/(setup|shared|admin|build)\/([a-z.-]+)?$/);
-  if (!match) { res.writeHead(404); return res.end(); }
-  const file = path.join(root, 'apps', match[1] === 'build' ? 'configurator' : match[1], 'static', match[2] || 'index.html');
-  if (!fs.existsSync(file)) { res.writeHead(404); return res.end(); }
-  res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.png') ? 'image/png' : 'text/html');
-  res.end(fs.readFileSync(file));
-});
+const server=require('./browser_static.cjs').createServer(root);
 (async () => {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const browser = await chromium.launch({headless:true, executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE});

@@ -16,43 +16,7 @@ const templates = JSON.parse(
     { cwd: root, encoding: "utf8" },
   ),
 );
-const server = http.createServer((req, res) => {
-  const sharedName = new URL(req.url, 'http://local').pathname.match(/^\/shared\/([a-z.-]+)$/)?.[1];
-  if (sharedName) {
-    const sharedFile = path.join(root, 'apps/shared/static', sharedName);
-    if (!fs.existsSync(sharedFile)) { res.writeHead(404); return res.end(); }
-    res.setHeader('Content-Type', sharedName.endsWith('.css') ? 'text/css' : 'image/png');
-    return res.end(fs.readFileSync(sharedFile));
-  }
-
-  const match = new URL(req.url, "http://localhost").pathname.match(
-    /^\/(admin|build)\/([a-z.-]+)?$/,
-  );
-  if (!match) {
-    res.writeHead(404);
-    return res.end();
-  }
-  const file = path.join(
-    root,
-    "apps",
-    match[1] === "build" ? "configurator" : "admin",
-    "static",
-    match[2] || "index.html",
-  );
-  if (!fs.existsSync(file)) {
-    res.writeHead(404);
-    return res.end();
-  }
-  res.setHeader(
-    "Content-Type",
-    file.endsWith(".js")
-      ? "text/javascript"
-      : file.endsWith(".css")
-        ? "text/css"
-        : "text/html",
-  );
-  res.end(fs.readFileSync(file));
-});
+const server=require('./browser_static.cjs').createServer(root);
 (async () => {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const browser = await chromium.launch({

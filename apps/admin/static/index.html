@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f6f7f2">
   <link rel="icon" href="/shared/gh-store-logo-mark.png">
-<link rel="stylesheet" href="/shared/theme.css?v=20260922_02">
+<link rel="stylesheet" href="/shared/theme.css?v=20260922_05">
 <title>GH Bot Factory Admin</title>
-  <link rel="stylesheet" href="/admin/styles.css?v=20260920_01">
+  <link rel="stylesheet" href="/admin/styles.css?v=20260922_05">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="/admin/store-setup.css?v=20260920_01">
-  <link rel="stylesheet" href="/admin/identity.css?v=20260922_02">
+  <link rel="stylesheet" href="/admin/identity.css?v=20260922_05">
 </head>
 <body>
   <section id="login" class="signin-shell hidden" aria-labelledby="loginTitle">
@@ -105,15 +105,18 @@
         <button class="nav" data-view="operations">Customers &amp; growth</button>
         <button class="nav" data-view="analytics">Reports</button>
         <small class="nav-heading">Store setup</small>
+        <button class="nav" data-view="attention">Needs attention</button>
+        <button class="nav" data-view="store-settings">Store settings</button>
         <button class="nav" data-view="bots">Store &amp; bots</button>
         <button class="nav" data-view="providers">Suppliers &amp; payments</button>
-        <details class="nav-more"><summary>Settings &amp; operations</summary>
+        <details class="nav-more"><summary>Settings &amp; operations</summary><button id="openReleases" type="button" class="nav">Releases &amp; fixes</button><button id="openMaintenance" type="button" class="nav">Bot care &amp; updates</button>
           <button class="nav" data-view="plan">Plan &amp; billing</button>
           <button class="nav" data-view="members" data-admin-only>Team</button>
           <button class="nav" data-view="fulfillment">Delivery issues</button>
           <button class="nav" data-view="finance">Payment issues</button>
           <button class="nav" data-view="audit">Activity log</button>
           <button class="nav" data-view="reconciliation">Payment evidence</button>
+          <button class="nav" data-view="delivery" data-admin-only>Delivery center</button>
           <button class="nav" data-view="sales" data-admin-only>Sales &amp; leads</button>
         </details>
       </nav>
@@ -151,6 +154,8 @@
         <div class="panel"><div class="panel-head"><div><small class="eyebrow">ENTITLEMENTS</small><h2>Feature flags</h2></div></div><div id="saasFeatureList" class="stack compact-stack"></div></div>
       </section>
 
+      <section id="view-attention" class="view"><div id="attentionContent"></div></section>
+      <section id="view-store-settings" class="view"><div id="storeSettingsContent"></div></section>
       <section id="view-bots" class="view">
         <div class="toolbar"><div></div><button id="newBot" class="primary" data-admin-only>Create bot</button></div>
         <div class="panel operation-note"><strong>Connect your store to Telegram.</strong><span class="muted"> Create a bot with BotFather, then follow the setup steps here. You can save your progress and return later.</span></div>
@@ -229,6 +234,7 @@
         <div id="reconciliationList" class="stack"></div>
       </section>
 
+      <section id="view-delivery" class="view"><div id="deliveryContent"></div></section>
       <section id="view-sales" class="view">
         <div class="toolbar">
           <input id="salesSearch" placeholder="Search inquiries or contact handle">
@@ -301,6 +307,7 @@
 
       <section class="wizard-step hidden" data-wizard-step="3">
         <div class="grid2"><label>Display name<input id="botDisplayName" required maxlength="100" placeholder="My Store"></label><label>Accent color<input id="botBrandAccent" type="color" value="#7c6cff"></label></div>
+        <label>MiniApp theme<select id="botMiniappTheme" aria-describedby="botThemeHelp"><option value="midnight">Midnight</option><option value="emerald">Emerald</option><option value="pearl">Pearl</option><option value="ocean">Ocean</option><option value="rose">Rose</option></select></label><p id="botThemeHelp" class="muted">Choose a starting palette. Your accent color can be customized separately.</p><div id="botThemePreview" class="tenant-theme-preview" aria-live="polite"></div>
         <label>Store tagline<input id="botStoreTagline" maxlength="240" placeholder="Fast checkout. Secure delivery."></label>
         <details class="setup-details"><summary>More appearance options · welcome message, logo, and support</summary><label>Welcome message<textarea id="botWelcomeText" rows="3" maxlength="500" placeholder="Welcome to our store!"></textarea></label>
         <div class="grid2"><label>Logo URL (HTTPS)<input id="botLogoUrl" type="url" maxlength="500" placeholder="https://example.com/logo.png"></label><label>Support @handle<input id="botSupportContact" maxlength="64" placeholder="@support"></label></div>
@@ -596,6 +603,7 @@ orders:read"></textarea></label>
       </div>
       <p class="muted" style="margin-top:10px;line-height:1.5;">Pause source traffic and workers first. The encrypted bundle includes customer records and credentials.</p>
       <input id="handoffExportId" type="hidden">
+      <label>Published release image (optional)<input id="handoffPackageImage" maxlength="255" placeholder="registry/repository@sha256:…"></label><p class="muted">Supply the matching immutable image to download a full installation ZIP. Leave blank for encrypted data only.</p><label>Customer report language<select id="handoffReportLanguage"><option value="en">English</option><option value="ar">Arabic</option></select></label>
       <label>
         Export Passphrase
         <input id="handoffExportPassphrase" type="password" minlength="16" maxlength="1024" autocomplete="new-password" placeholder="Min 16 characters" required>
@@ -678,10 +686,18 @@ orders:read"></textarea></label>
     </form>
   </dialog>
   <dialog id="homePreviewDialog" aria-labelledby="homePreviewTitle"><div class="dialog-head"><h2 id="homePreviewTitle">Preview and launch checks</h2><button type="button" class="ghost" id="closeHomePreview">Close</button></div><label>Choose a bot<select id="homePreviewBot"></select></label><div id="homeCustomerDemo" class="setup-preview"></div><p class="muted">This demo does not test a real payment. Use launch checks to review the selected bot’s configuration.</p><button type="button" class="primary" id="previewLaunchCheck" data-admin-only>Check this bot</button><p id="previewLaunchError" class="setup-error" role="alert"></p></dialog>
+  <script src="/shared/store-themes.js?v=20260922_05" defer></script>
   <script src="/admin/store-setup.js?v=20260920_01" defer></script>
-  <script src="/admin/app.js?v=20260922_02" defer></script>
+  <script src="/admin/app.js?v=20260922_05" defer></script>
 <dialog id="operationsDialog" class="ops-dialog"><form id="operationsForm"><div class="dialog-head"><h2 id="operationsTitle">Store operation</h2><button type="button" class="icon" id="closeOperations" aria-label="Close">×</button></div><div id="operationsFields"></div><p id="operationsError" class="ops-error" role="alert"></p><div class="dialog-actions"><button type="button" id="cancelOperations" class="ghost">Cancel</button><button type="submit" id="saveOperations" class="primary">Save</button></div></form></dialog>
-  <script src="/admin/operations.js?v=20260922_02" defer></script>
-<dialog id="accountDialog" aria-labelledby="accountTitle"><form id="accountForm"><div class="dialog-head"><h2 id="accountTitle">Your sign-in details</h2><button id="closeAccount" type="button" class="icon" aria-label="Close">×</button></div><p id="accountIdentity" class="muted"></p><label id="currentPasswordLabel">Current password<input id="accountCurrentPassword" type="password" autocomplete="current-password" maxlength="255"></label><label>New password<input id="accountNewPassword" type="password" autocomplete="new-password" minlength="12" maxlength="255" required></label><p class="muted">Use at least 12 characters. Saving signs you out on all devices.</p><p id="accountError" class="signin-error" role="alert"></p><button id="saveAccountPassword" type="submit" class="primary">Save password</button></form></dialog>
+  <script src="/admin/operations.js?v=20260922_05" defer></script>
+<dialog id="accountDialog" aria-labelledby="accountTitle"><form id="accountForm"><div class="dialog-head"><h2 id="accountTitle">Your sign-in details</h2><button id="closeAccount" type="button" class="icon" aria-label="Close">×</button></div><p id="accountIdentity" class="muted"></p><label id="currentPasswordLabel">Current password<input id="accountCurrentPassword" type="password" autocomplete="current-password" maxlength="255"></label><label>New password<input id="accountNewPassword" type="password" autocomplete="new-password" minlength="12" maxlength="255" required></label><p class="muted">Use at least 12 characters. Saving signs you out on all devices.</p><p id="accountError" class="signin-error" role="alert"></p><button id="revokeAccountSessions" type="button" class="ghost">Sign out all account sessions</button><button id="saveAccountPassword" type="submit" class="primary">Save password</button></form></dialog>
+<dialog id="maintenanceDialog" class="ops-dialog" aria-labelledby="maintenanceTitle"><div class="dialog-head"><h2 id="maintenanceTitle">Bot care &amp; updates</h2><button id="closeMaintenance" type="button" class="icon" aria-label="Close">×</button></div><div id="maintenanceContent"></div></dialog>
+<script src="/admin/maintenance.js?v=20260922_05" defer></script>
+<script src="/admin/installation.js?v=20260922_05" defer></script>
+<script src="/admin/attention.js?v=20260922_05" defer></script>
+<script src="/admin/store-settings.js?v=20260922_05" defer></script>
+<script src="/admin/delivery-center.js?v=20260922_05" defer></script>
+<dialog id="releasesDialog" class="ops-dialog" aria-labelledby="releasesTitle"><div class="dialog-head"><h2 id="releasesTitle">Releases &amp; fixes</h2><button id="closeReleases" class="icon" type="button" aria-label="Close">×</button></div><div id="releaseContent"></div></dialog><script src="/admin/releases.js?v=20260922_05" defer></script>
 </body>
 </html>

@@ -228,6 +228,7 @@ const Operations = (() => {
             }),
       "Save reply",
     );
+    if(state.bootstrap?.actor?.role==="OWNER"){const escalate=document.createElement("button");escalate.type="button";escalate.className="ghost";escalate.textContent="Link this case to a bot issue";escalate.onclick=()=>Maintenance.reportFromCase(id);el("operationsFields").append(escalate);}
   }
   async function newCase() {
     const [members, orders] = await Promise.all([

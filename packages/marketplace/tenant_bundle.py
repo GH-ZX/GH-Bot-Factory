@@ -13,7 +13,7 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-from sqlalchemy import Date, DateTime, Numeric, Uuid, func, insert, select
+from sqlalchemy import Date, DateTime, Numeric, Uuid, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.core.models import Base
@@ -22,12 +22,13 @@ from packages.telegram.secrets import SecretNotFoundError, SecretStorage
 FORMAT = "ghbf-tenant-encrypted-v2"
 MAX_BYTES = 64 * 1024 * 1024
 EXCLUDED = {
+    "diagnostic_grants",
     "customer_inquiries", "commercial_quotes", "commercial_quote_lines", "deployment_handoffs",
     "platform_audit_logs", "integration_offerings", "tenant_integration_entitlements",
     "saas_plans", "saas_plan_prices", "tenant_subscriptions", "billing_events", "system_install_state",
 }
 # Adding a new table requires an explicit portability review.
-INCLUDED = {"support_cases", "support_messages", "coupons", "coupon_redemptions", "announcements", "announcement_deliveries", "tenants", "users", "memberships", "audit_logs", "bots", "categories", "products", "product_variants", "orders", "order_items", "wallets", "ledger_transactions", "payment_intents", "payment_transactions", "wallet_topup_reversals", "payment_reconciliation_events", "financial_resolution_cases", "payment_method_configs", "payment_quotes", "payment_observations", "payment_provider_configs", "payment_webhook_events", "asset_wallets", "asset_ledger_transactions", "fx_policies", "flexible_deposit_sessions", "wallet_holds", "pricing_tiers", "pricing_rules", "user_pricing_tiers", "commerce_price_quotes", "order_item_economics", "providers", "provider_credentials", "provider_product_mappings", "provider_routing_policies", "provider_offer_snapshots", "provider_balance_snapshots", "tenant_telegram_users", "bot_provisioning_jobs", "fulfillment_jobs", "fulfillment_attempts"}
+INCLUDED = {"customer_releases", "release_issues", "maintenance_issues", "maintenance_events", "customer_updates", "support_cases", "support_messages", "coupons", "coupon_redemptions", "announcements", "announcement_deliveries", "tenants", "users", "memberships", "audit_logs", "bots", "categories", "products", "product_variants", "orders", "order_items", "wallets", "ledger_transactions", "payment_intents", "payment_transactions", "wallet_topup_reversals", "payment_reconciliation_events", "financial_resolution_cases", "payment_method_configs", "payment_quotes", "payment_observations", "payment_provider_configs", "payment_webhook_events", "asset_wallets", "asset_ledger_transactions", "fx_policies", "flexible_deposit_sessions", "wallet_holds", "pricing_tiers", "pricing_rules", "user_pricing_tiers", "commerce_price_quotes", "order_item_economics", "providers", "provider_credentials", "provider_product_mappings", "provider_routing_policies", "provider_offer_snapshots", "provider_balance_snapshots", "tenant_telegram_users", "bot_provisioning_jobs", "fulfillment_jobs", "fulfillment_attempts"}
 SECRET_COLUMNS = {
     "bots": ("token_secret_ref",), "provider_credentials": ("secret_ref",),
     "payment_provider_configs": ("credentials_ref", "webhook_secret_ref"),
@@ -195,7 +196,15 @@ def _typed(table, row):
 async def restore(session: AsyncSession, payload, storage: SecretStorage, *, activate: bool = False):
     """Restore only to an empty, offline destination. Caller controls commit/startup."""
     validate(payload)
+    install = Base.metadata.tables["system_install_state"]
+    install_rows = (await session.execute(select(install).with_for_update())).mappings().all()
+    if install_rows and (len(install_rows) != 1 or install_rows[0]["id"] != 1
+                         or install_rows[0]["is_initialized"] or install_rows[0]["tenant_id"]
+                         or install_rows[0]["operator_user_id"]):
+        raise BundleError("Restore requires an empty, uninitialized destination installation.")
     for table in Base.metadata.sorted_tables:
+        if table.name == "system_install_state":
+            continue
         if await session.scalar(select(func.count()).select_from(table)):
             raise BundleError("Restore requires an empty migrated database; existing installations are never overwritten.")
     data = json.loads(json.dumps(payload["tables"]))
@@ -214,11 +223,17 @@ async def restore(session: AsyncSession, payload, storage: SecretStorage, *, act
         # Public URLs, source sessions, and polling ownership do not carry over implicitly.
         for row in data["tenants"]:
             row["is_active"] = activate and row["is_active"]
-            for key in ("admin_public_url", "miniapp_public_url"):
+            for key in ("admin_public_url", "miniapp_public_url", "_installation_evidence", "_attention_acknowledgements"):
                 row["settings"].pop(key, None)
         for row in data["bots"]:
             row["is_enabled"] = activate and row["is_enabled"]
             row["runtime_revision"] += 1
+        # Approval at the source never authorizes an update on a different destination.
+        for row in data["customer_updates"]:
+            if row["status"] in {"PROPOSED", "APPROVED", "BACKED_UP"}:
+                row["status"] = "CANCELLED"
+                row["version"] += 1
+                row["evidence"] = "Cancelled during destination restore; request fresh local approval."
         # A destination must never resume broadcasts implicitly after a restore.
         for row in data["announcements"]:
             if row["status"] == "QUEUED":
@@ -238,9 +253,12 @@ async def restore(session: AsyncSession, payload, storage: SecretStorage, *, act
                 await session.execute(insert(table), [_typed(table, row) for row in ready])
                 inserted.update(r["id"] for r in ready)
                 pending = [r for r in pending if r["id"] not in inserted]
-        install = Base.metadata.tables["system_install_state"]
-        await session.execute(insert(install).values(id=1, is_initialized=True,
-            initialized_at=datetime.now(UTC), tenant_id=uuid.UUID(payload["tenant_id"])))
+        values = {"is_initialized": True, "initialized_at": datetime.now(UTC),
+                  "tenant_id": uuid.UUID(payload["tenant_id"]), "operator_user_id": None}
+        if install_rows:
+            await session.execute(update(install).where(install.c.id == 1).values(**values))
+        else:
+            await session.execute(insert(install).values(id=1, **values))
         await session.commit()
     except Exception:
         await session.rollback()

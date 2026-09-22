@@ -1,5 +1,11 @@
 # Resume: Customer-Owned Telegram Store Delivery
 
+> **Current coding milestone:** [Ten-area hardening](../plans/factory-hardening.md), ADR-054. All ten targeted implementation areas are checked; canonical verification now passes with 500 fast + 22 PostgreSQL tests and seven browser suites. Owner authorized commit/push. Read CURRENT_STATE for the latest actual Docker rollout.
+
+> **Newest checkpoint:** Steps 3/4/5 and the MiniApp coding batch are tracked in [factory-completion-next.md](../plans/factory-completion-next.md). Coding and project-only deployment are complete; tests, real-tenant trials, commit and push must wait for the owner. See CURRENT_STATE for the actual final running image.
+
+> **Latest source checkpoint (2026-09-22):** The five customer-product implementation steps are now checked in [customer-product-completion.md](../plans/customer-product-completion.md). This is unverified working-tree code, now included in the live completion image. Read that checklist before the older proposed steps below. No tests or push-triggered CI until requested.
+
 Checkpoint: 2026-09-21. Read this with CURRENT_STATE.md and the project laws in AGENT_MAP.md.
 
 ## What the owner wants
@@ -154,3 +160,17 @@ Deployment: clean-archive image gh-bot-factory:240a106, revision label 240a106, 
 The initial Compose build reported success but its tag was unavailable at validation. Its fallback build was stopped before migration/rollout. A direct build from the verified archive was validated with its revision and dependency check, then deployed with building disabled. No unreviewed fallback image was deployed.
 
 Evidence: /tmp/ghbf-web-canonical.log, /tmp/ghbf-web-build-direct.log, /tmp/ghbf-web-migrate.log, /tmp/ghbf-web-live-dashboard.png, /tmp/ghbf-web-live-setup.png. Development-installation acceptance only: real-customer Supabase/VPS testing, shopper/bilingual polish, automated Docker/migration/report packaging and production release qualification remain deferred/incomplete.
+
+
+## Next product work and post-handoff support — 2026-09-22 (proposal)
+
+The five completed web-factory steps are a foundation, not completion of the delivered customer product. Preserve one-time sales with separately quoted extra API/customization work; no mandatory subscription or permanent factory connection.
+
+Proposed order:
+1. Close the actual customer bot/Mini App journeys: browsing, recharge, purchase/delivery, profile/history and support; finish Arabic/English presentation and connect tenant controls to the customer-facing experience. Existing admin/API foundations must not be mistaken for complete shopper workflows.
+2. Generate a reproducible customer delivery: versioned Docker image and Compose/config files, fresh-install database migration/setup plus future upgrade migrations, required-token/config checklist, installation instructions and a tenant-language report. Target customer-owned VPS + Supabase.
+3. Add optional customer-authorized support access: redacted diagnostics, version/health information, and temporary scoped access when intervention is needed. Access must be revocable and audited; the installed bot remains usable without a permanent factory connection. Do not centrally collect raw customer secrets, all order data, or unrestricted server access by default. Exact remote mechanism is not yet selected.
+4. Track tenant-reported issues and changes: report → issue linked to customer/release → diagnosis → core fix or tenant-specific customization → changelog/release → customer-approved update → resolution record. Record symptoms, cause, affected versions, fix, verification status and deployment outcome. Reusable fixes improve the shared bot core; customer secrets/data and bespoke settings do not get copied to other tenants.
+5. Support safe maintenance: release history per customer, upgrade migrations, backup/rollback instructions and clear owner/customer responsibilities. Reliability acceptance and real-customer installation testing remain pending until explicitly requested.
+
+**Testing preference (latest user instruction):** Do not run tests, browser test suites, or verification gates unless the user explicitly asks. Do not test after every edit. Batch implementation into reviewable milestones and label untested changes accurately. This supersedes earlier automatic-test workflow instructions; it does not make unverified work release-qualified. No tests were run for this advisory.

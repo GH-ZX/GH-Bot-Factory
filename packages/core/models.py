@@ -13,6 +13,14 @@ from packages.commerce.models import Category, Order, OrderItem, Product, Produc
 from packages.commerce.state_machine import OrderStatus
 from packages.core.database import Base
 from packages.core.system_models import SystemInstallState
+from packages.delivery.models import (
+    CustomerRelease,
+    CustomerUpdate,
+    DiagnosticGrant,
+    MaintenanceEvent,
+    MaintenanceIssue,
+    ReleaseIssue,
+)
 from packages.factory.models import BotProvisioningJob, BotProvisioningStatus
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
 from packages.marketplace.models import (
@@ -117,7 +125,10 @@ __all__ = [
     "Coupon",
     "CouponRedemption",
     "CustomerInquiry",
+    "CustomerRelease",
+    "CustomerUpdate",
     "DeploymentHandoff",
+    "DiagnosticGrant",
     "FinancialResolutionCase",
     "FinancialResolutionCaseStatus",
     "FlexibleDepositSession",
@@ -132,6 +143,8 @@ __all__ = [
     "IntegrationOfferingModel",
     "LedgerTransaction",
     "LicenseType",
+    "MaintenanceEvent",
+    "MaintenanceIssue",
     "MarkupMode",
     "Membership",
     "Order",
@@ -168,6 +181,7 @@ __all__ = [
     "ProviderRoutingPolicy",
     "ProviderRoutingStrategy",
     "QuoteStatus",
+    "ReleaseIssue",
     "Role",
     "SaaSPlan",
     "SaaSPlanPrice",

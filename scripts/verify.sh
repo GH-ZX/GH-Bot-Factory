@@ -27,10 +27,9 @@ run_fast() {
   fi
   python -m pytest "${pytest_args[@]}"
 
-  node --check apps/admin/static/operations.js
-  node --check apps/admin/static/app.js
-  node --check apps/admin/static/store-setup.js
-  node --check apps/miniapp/static/app.js
+  while IFS= read -r file; do
+    node --check "$file"
+  done < <(find apps/admin/static apps/miniapp/static apps/shared/static -name '*.js' -type f | sort)
   node --check apps/configurator/static/app.js
   node --check apps/setup/static/app.js
   git diff --check

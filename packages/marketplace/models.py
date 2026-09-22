@@ -246,6 +246,7 @@ class DeploymentHandoff(Base, UUIDMixin, TimestampMixin):
     export_artifact_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     handoff_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     handed_off_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivery_details: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict, server_default="{}", nullable=False)
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     quote: Mapped[CommercialQuote | None] = relationship("CommercialQuote")

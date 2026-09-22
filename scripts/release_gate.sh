@@ -19,7 +19,8 @@ HEAD_REV="$HEADS"
 
 APP_ENV=test RATE_LIMIT_ENABLED=false ./scripts/verify.sh all
 python scripts/security_scan.py
-python -m pip_audit --strict
+# The local application is not a PyPI distribution; its source is verified above.
+python scripts/audit_dependencies.py
 
 tmp_env="$(mktemp)"
 trap 'rm -f "$tmp_env"' EXIT

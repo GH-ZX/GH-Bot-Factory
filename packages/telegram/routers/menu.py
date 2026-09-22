@@ -12,7 +12,7 @@ from aiogram.types import (
 
 from packages.core.config import settings
 from packages.telegram.context import TenantContext
-from packages.telegram.launch import build_miniapp_url
+from packages.telegram.launch import build_miniapp_url, resolve_tenant_public_url
 
 router = Router(name="menu_router")
 
@@ -23,14 +23,16 @@ def build_main_menu(
     allow_web_app: bool = True,
 ) -> InlineKeyboardMarkup:
     buttons = []
-    if allow_web_app and settings.miniapp_public_url:
+    arabic = str(tenant_context.locale).startswith("ar")
+    public_url = resolve_tenant_public_url(tenant_context.tenant_settings, kind="miniapp", fallback=settings.miniapp_public_url)
+    if allow_web_app and public_url:
         buttons.append(
             [
                 InlineKeyboardButton(
                     text=tenant_context.get_branding("store_button_text", "🚀 Open Store"),
                     web_app=WebAppInfo(
                         url=build_miniapp_url(
-                            settings.miniapp_public_url,
+                            public_url,
                             tenant_context.bot_id,
                         )
                     ),
@@ -38,16 +40,22 @@ def build_main_menu(
             ]
         )
     elif tenant_context.is_module_enabled("catalog"):
-        buttons.append([InlineKeyboardButton(text="🛍️ Catalog", callback_data="nav:catalog")])
+        buttons.append([InlineKeyboardButton(text="🛍️ المنتجات" if arabic else "🛍️ Catalog", callback_data="nav:catalog")])
 
     row = []
     if tenant_context.is_module_enabled("orders"):
-        row.append(InlineKeyboardButton(text="📦 My Orders", callback_data="nav:orders"))
+        row.append(InlineKeyboardButton(text="📦 طلباتي" if arabic else "📦 My Orders", callback_data="nav:orders"))
     if tenant_context.is_module_enabled("account"):
-        row.append(InlineKeyboardButton(text="💳 Wallet & Account", callback_data="nav:account"))
+        row.append(InlineKeyboardButton(text="💳 المحفظة والحساب" if arabic else "💳 Wallet & Account", callback_data="nav:account"))
     if row:
         buttons.append(row)
 
+    if allow_web_app and public_url:
+        launch = build_miniapp_url(public_url, tenant_context.bot_id)
+        buttons.append([
+            InlineKeyboardButton(text="➕ شحن الرصيد" if arabic else "➕ Recharge", web_app=WebAppInfo(url=launch + "&view=recharge")),
+            InlineKeyboardButton(text="💬 الدعم" if arabic else "💬 Support", web_app=WebAppInfo(url=launch + "&view=support")),
+        ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

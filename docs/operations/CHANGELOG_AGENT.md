@@ -524,6 +524,33 @@ All five project services are healthy. `/health/ready`, `/admin/`, and `/build/`
 The deployment host could not resolve `botfac.gh-store.me`; domain reachability from user devices is not verified. Direct LAN links are `http://10.70.5.5:8010/build/` and `http://10.70.5.5:8010/admin/`. No public-production release qualification is claimed.
 
 
+## 2026-09-21 — Open Code Review Integration & Site Hardening
+
+- Installed `@alibaba-group/open-code-review` and created Antigravity delegation skill `.agents/skills/open-code-review-delegate/SKILL.md`.
+- Implemented deterministic review pass on modified files using OCR rule sets without requiring external LLM API keys.
+- Hardened PBKDF2 iteration count validation in `packages/core/auth.py` (`1_000 <= iterations <= 500_000`) to mitigate hash iteration tampering and CPU DoS.
+- Mitigated username enumeration side-channels in `apps/api/v1/auth.py` using dummy password verification and multiple-candidate handling.
+- Enhanced Admin login UI tab accessibility and active styling in `apps/admin/static/styles.css` and `index.html`.
+- Verification: 470 fast tests passed, auth tests 24/24 passed, Ruff clean, no broken dependencies.
+
+
+## 2026-09-21 — Arabic Executive Flows Reporting & Visual Diagrams
+
+- Installed `.agents/skills/diagram-generator/` and `.agents/skills/arabic-document-reporting/`.
+- Generated 3 high-resolution 300 DPI architecture and workflow diagrams in `docs/reports/assets/`:
+  1. `diagram1_system_architecture.png`: 3-tier system architecture and security vault boundaries.
+  2. `diagram2_sales_onboarding_flow.png`: Complete sales funnel and tenant provisioning lifecycle.
+  3. `diagram3_order_fulfillment_flow.png`: Mini App checkout, double-entry ledger debit, and automated self-healing refund guarantee.
+- Created `scripts/generate_report_diagrams.py` and `scripts/generate_arabic_flows_docx.py` with `arabic_reshaper` and `python-bidi` support.
+- Delivered executive Arabic Word report `docs/reports/GH_Bot_Factory_Full_Flows_AR.docx` (480 KB) with native RTL formatting and embedded diagrams, mirrored in `docs/reports/GH_Bot_Factory_Full_Flows_AR.md`.
+- Fast suite passed (470 passed, 0 failed), Ruff clean, secret scan passed.
+
+
+## 2026-09-21 — Customer-Owned Delivery Completion Advisory
+
+Requested primary product: one-time configured bot/Mini App delivery to customer Supabase + VPS, with paid integration additions and localized installation/admin reports. The inspected quote engine still adds recurring charges; encrypted tenant export is not a complete installable release. See [completion plan](../plans/customer-owned-bot-delivery.md) for ordered work, artifact contract and acceptance criteria. Implementation pending; no schema/runtime changes or fresh canonical/release verification claimed. Existing implementation checkpoint above is preserved as historical baseline.
+
+
 ## 2026-09-21 — Customer Builder Redesign
 
 - Rebuilt `/build/` (`apps/configurator/static/`) with a cream/green visual system, illustrated storefront hero, clear delivery overview, four-step brief builder, interactive example, responsive cards and reduced-motion support. Static assets use `20260921_02`.
@@ -574,12 +601,14 @@ Sign-in milestone verification: isolated-source canonical `make verify` passed (
 
 **2026-09-22 sign-in deployment:** Source `cbe4591` is pushed and deployed. New token/password sign-in and after-login Admin identity are live at https://factory.gh-store.me/admin/. Account supports password setup/change. All five services healthy; migration `0ce5d2c98e7f` applied after backup. Verification: 482 fast + 19 PostgreSQL, three browser suites and public live smoke checks. No actual live login/purchase/messages or production-release qualification claimed. Full image/backup evidence is in CURRENT_STATE. Steps 2 and 4–6 remain pending.
 
+
 ## Web Factory Completion — 2026-09-22 (in progress)
 
 Five-step checklist: docs/plans/web-factory-completion.md. Web-only setup and explicit installation-owner password sessions replace the owner-bot prerequisite; customer bots remain optional until verified provisioning. Shared factory theme/logo and setup redesign are implemented in the working tree. Accepted quote scope now carries through to customer configuration. ADR-051; source migration head a71c9e23b840. Live deployment is still cbe4591 / 0ce5d2c98e7f until verified rollout. Canonical gate and deployment pending; no live credentials changed yet. Real-customer tests and delivery packaging/reports remain deferred.
 
 
 **Web factory source verification — 2026-09-22:** Final isolated-source canonical `make verify` passed: 486 fast + 20 PostgreSQL, Ruff, migration/no drift, secret/handoff/JavaScript/compilation and dependency checks. All four browser suites passed; desktop/mobile setup screenshots inspected. Theme propagation tests change one brand primitive and verify primary buttons/logo across build/Admin/setup. Password sessions open Sales without a second token. Initial isolated runs exposed an eager JWT dependency on legacy platform-token routes and test reliance on local environment; both corrected before the final passing run. Auth/setup validation responses omit secret-bearing input values. Log: `/tmp/ghbf-web-canonical.log`. Source migration a71c9e23b840; live rollout and requested account initialization are next. No real-customer/production qualification claimed.
+
 
 ## Web Factory Live Completion — 2026-09-22
 
@@ -594,3 +623,153 @@ Deployment: clean-archive image gh-bot-factory:240a106, revision label 240a106, 
 The initial Compose build reported success but its tag was unavailable at validation. Its fallback build was stopped before migration/rollout. A direct build from the verified archive was validated with its revision and dependency check, then deployed with building disabled. No unreviewed fallback image was deployed.
 
 Evidence: /tmp/ghbf-web-canonical.log, /tmp/ghbf-web-build-direct.log, /tmp/ghbf-web-migrate.log, /tmp/ghbf-web-live-dashboard.png, /tmp/ghbf-web-live-setup.png. Development-installation acceptance only: real-customer Supabase/VPS testing, shopper/bilingual polish, automated Docker/migration/report packaging and production release qualification remain deferred/incomplete.
+
+
+## 2026-09-22 — Customer product source implementation (unverified)
+
+- Five tenant palettes share tokens between Admin previews and MiniApp. Shopper additions:
+  English/Arabic UI/RTL, coupons, paginated personal orders and spending-wallet history,
+  support conversations, sale-snapshot warranty requests, explicit cart access and bot shortcuts.
+- Added `packages/delivery`, four tenant maintenance tables, and migration `b82da430c951`
+  after `a71c9e23b840`. Admin Bot care & updates records issues, fix scope/version,
+  temporary read-only diagnostic grants and owner-reported update approval/backup/rollback.
+- Diagnostic capabilities are digest-only, expiring/revocable, header-only and audited;
+  they never provide platform authority, credentials, customer records or remote command access.
+- Platform handoff exporter can wrap encrypted state in a SQL/Compose/scripts/report ZIP.
+  Image publication remains separate. Import now accepts the pristine installer seed,
+  excludes diagnostic grants and cancels pending source update approvals on destination restore.
+- Source checkboxes are updated in `docs/plans/customer-product-completion.md`; ADR-052
+  records security, SQL-bootstrap and portability decisions. Existing exports need regeneration.
+- **No tests, browser/static verification, migration execution, image build or deployment.**
+  Owner requested coding without checks. Do not reuse old green counts. No push because main
+  triggers CI tests. Source remains in the working tree; unrelated report/skill work is preserved.
+- Live remains source `240a106`, migration `a71c9e23b840`. Next authorized batch must cover
+  PostgreSQL/schema/import/concurrency and shopper/maintenance UI before any release claim.
+
+Customer release scripts validate the destination immutable image reference before pulling, with a second in-image check before migrations. No script was executed.
+
+
+## 2026-09-22 — Delivery/settings/releases/MiniApp completion (untested source)
+
+Owner authorized simple Docker deployment and coding steps 3/4/5 plus MiniApp completion.
+Tests, real-tenant trials, commits and pushes remain postponed until explicit instruction.
+
+- Delivery center: platform-only versioned handoff plans, configuration/missing-requirement
+  checklist, saved release/destination/report choices, package actions, history and
+  explicitly operator-reported final acceptance/receipt references. Safe plan notes are
+  included in the ZIP and localized report; no infrastructure passwords belong in this UI.
+- Store settings: bounded tenant public profile, notice, FAQ, support/policy URLs and recipient
+  guidance with optimistic concurrency. Existing bot/theme/language, warranty, pricing,
+  reseller, coupons, announcements and financial operations are linked from one workspace.
+- Support-to-release: affected version and owned support-case links; immutable tenant release
+  catalog and release/issue associations; proposals validate the selected release and image.
+  Linked issues become FIX_AVAILABLE, never automatically resolved or installed.
+- MiniApp: product detail dialog; Help/FAQ/policies; four history types (spending ledger,
+  asset ledger, funding, deposits); existing-payment review; keyboard/inert sheet handling;
+  sample-only preview at `/miniapp/?preview=1`. Protocol payment statuses are no longer
+  translated inside state comparisons. Normal signed Telegram authentication is unchanged.
+- New migration `c93eb541da62` follows `b82da430c951`; release history is included in encrypted
+  portability and old snapshots require regeneration. See ADR-053 and active checklist
+  `docs/plans/factory-completion-next.md`.
+- Initial Docker rollout of prior customer-product code completed: `work-20260922-product`,
+  schema `b82da430c951`, services reported healthy. Final completion image deployed; see the deployment checkpoint below.
+- No automated/manual functional tests or browser runs. Docker startup observation alone
+  does not establish feature correctness or production readiness. No commit/push.
+
+
+## 2026-09-22 — Completion batch deployed; verification deferred
+
+- Built and deployed `gh-bot-factory:work-20260922-completion` from uncommitted working source.
+- Applied PostgreSQL migration `b82da430c951 → c93eb541da62` successfully after the restricted
+  backup `backups/product-20260922/before-completion.dump`. No restore drill was performed.
+- Recreated only project API, worker and bot-runtime containers. Docker reports all five
+  project services healthy; PostgreSQL/Redis containers and Cloudflare tunnels were unchanged.
+- Delivery center, Store settings, Releases & fixes and the expanded MiniApp are in this image.
+  Sample design preview: https://factory.gh-store.me/miniapp/?preview=1 (sample data only).
+- Implementation and deployment boxes are checked in `docs/plans/factory-completion-next.md`.
+  No functional tests, browser runs, verification gates, real-tenant trials, commits or pushes.
+  Startup health is deployment evidence only; this source is not production-qualified.
+- Build log: `/tmp/ghbf-completion-build.log`; Compose override: `/tmp/ghbf-completion-runtime.yml`.
+  Use the override for this working image; do not assume the base Compose image tag includes it.
+- Next: await the owner's authorization for the batched verification/fix pass, then commit/push
+  after required gates pass. Real-customer delivery remains separately deferred.
+
+
+## 2026-09-22 — Ten-area hardening source implementation
+
+All ten targeted coding areas are checked in `docs/plans/factory-hardening.md`; ADR-054
+records the authority, safety and evidence boundaries. Added guarded customer package
+operations/backup scripts, scoped operational attention, pause-new-sales policy, session-based
+MiniApp request recovery, installation evidence/sanitized reports, stricter maintenance steps,
+API/session/rate-limit hardening and platform delivery progress. Existing commerce/admin
+features are reused; no direct ledger mutation or remote support execution was introduced.
+
+New routes: `/api/v1/admin/attention`, `/api/v1/admin/installation`,
+`/api/v1/auth/account/revoke-sessions`, `/api/v1/platform/delivery/workspace/overview`.
+Client modules: `attention.js`, `installation.js`, `pending-operations.js`.
+Service: `packages/operations/attention.py`. Package helpers: `preflight.py`, `lifecycle.py`,
+`backup.sh`, `update-approval.example.json`. Regenerate old customer packages.
+
+No new migration (head `c93eb541da62`). Source review only, no tests or functional/browser
+checks. No real tenant, commit or push. Final project-only Docker rollout pending; live
+remains `work-20260922-completion` until the deployment checkpoint below is recorded.
+
+
+## 2026-09-22 — Hardening batch deployed, functional verification deferred
+
+Image `gh-bot-factory:work-20260922-hardening` built and deployed from uncommitted working
+source. Only API, worker and bot-runtime were recreated. Docker reports all five project
+services healthy. No migration was required or executed; schema remains `c93eb541da62`.
+PostgreSQL/Redis containers, other host containers, ports and Cloudflare tunnels were unchanged.
+Build log: `/tmp/ghbf-hardening-build.log`; working-image Compose override:
+`/tmp/ghbf-hardening-runtime.yml`. Retain/use this override for the deployed working image.
+
+Visible additions: Admin → Needs attention; Store settings → Pause new purchases and
+Installation & backup evidence; Account → Sign out all account sessions; richer Delivery
+center cards; MiniApp recovery panel when an unresolved money request exists. Generated
+packages include the new guards/receipts/backup helper. Previously exported ZIPs must be regenerated.
+
+All ten targeted coding upgrades and this deployment are checked in `docs/plans/factory-hardening.md`.
+No automated tests, lint/syntax gates, browser checks, real-customer operations, commit or push.
+Container startup is not feature acceptance or production qualification. The next authorized
+verification batch must cover the new financial retry/locking behavior, tenant/RBAC isolation,
+package lifecycle/import/backup/restore, UI/RTL and security boundaries before release claims.
+
+
+## Customer product verification and MiniApp entry repair
+
+Owner authorized isolated verification, fixes, commit and push. MiniApp skeleton and preview entry repaired; verification in progress. No real customer trial.
+
+
+## 2026-09-22 — Customer product verification and MiniApp entry repair
+
+Owner authorized testing, fixes, commit and push after successful gates. Earlier test deferrals
+are historical. Real-customer trials remain deferred.
+
+- MiniApp entry now redirects an unconfigured bare URL to the explicitly labelled preview.
+  Bot-bearing links preserve signed-Telegram authentication and never silently become sample sessions.
+- Render-blocking neutral skeleton hides the unthemed header, content, overlays and navigation;
+  the selected theme is applied before revealing content. Errors use the current light identity
+  and offer a preview link. Browser checks delayed the theme response and inspected screenshots.
+- Fixed a PostgreSQL stale-identity-map defect: checkout refreshes the paused-sales policy under
+  its shared row lock. A two-session regression proves a previously loaded tenant cannot bypass pause.
+- Corrected restore rejection wording while preserving the empty/uninitialized destination guard.
+- Verification now syntax-checks every Admin/MiniApp/shared JS module. Browser fixtures serve the
+  real static dependency graph, including theme JSON and new modules.
+- Added tests for scope/RBAC, version conflicts, bounded/revoked diagnostic grants, update evidence,
+  alert acknowledgement, session revocation, secret-safe validation, pause/replay, package integrity,
+  lifecycle rejection, fresh PostgreSQL SQL initialization and tenant restore, and browser money recovery.
+- **Canonical `make verify` passed: 500 fast + 22 PostgreSQL**, no schema drift, Ruff, compilation,
+  handoff/secret checks, JavaScript syntax, whitespace and dependency consistency. Two existing
+  FastAPI deprecation warnings remain; they do not fail tests.
+- **Seven browser suites passed:** Admin/login/MiniApp payments, operations, setup wizard, web setup,
+  MiniApp entry/themes/RTL/skeleton, lost-response recovery, and hardening workspaces.
+- Strict installed third-party dependency audit passed after updating the isolated development
+  environment's pip to 26.2.1. `scripts/audit_dependencies.py` audits exact installed versions;
+  it excludes only this first-party editable app, whose source is covered by the repository gates.
+  pip-audit cannot query this private package from PyPI; no third-party finding is ignored.
+- Source schema remains `c93eb541da62`. Fresh package PostgreSQL bootstrap/import passed on an
+  isolated local database, not a real Supabase account or customer VPS. Remote provider acceptance,
+  actual Telegram customer trial and staging/failure-injection qualification remain separate.
+- Logs: `/tmp/ghbf-canonical-final.log`, `/tmp/ghbf-dependency-audit.log`, browser logs under
+  `/tmp/ghbf-*-final-browser.log`, `/tmp/ghbf-miniapp-browser.log`. Release artifact build pending.

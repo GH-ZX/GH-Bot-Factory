@@ -1,3 +1,9 @@
+import {pendingOperations} from "./pending-operations.js?v=20260922_06";
+import {previewMode,previewAPI,bindPreview} from "./preview.js?v=20260922_06";
+import {bindExperience,bindSheetAccess} from "./experience.js?v=20260922_06";
+import {bindCustomerCare} from "./customer-care.js?v=20260922_06";
+import {t, format, setLanguage, localizeStatic} from "./locale.js?v=20260922_06";
+let experience=null,customerCare=null,pending=null;
 const tg = window.Telegram?.WebApp ?? null;
 const state = {
   token: null,
@@ -10,10 +16,13 @@ const state = {
   catalogRequestId: 0,
   variantCache: new Map(),
   orders: [],
+  ordersRevision: 0,
+  ordersMore: false,
   selectedCategory: null,
   cart: new Map(),
   checkoutKey: null,
   checkoutBusy: false,
+
   topupOptions: [],
   topupKey: null,
   topupBusy: false,
@@ -61,7 +70,7 @@ function safeImageUrl(value) {
   if (!value) return null;
   try {
     const url = new URL(value, window.location.origin);
-    return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+    return url.protocol === "https:" && !url.username && !url.password ? url.href : null;
   } catch (_) {
     return null;
   }
@@ -81,7 +90,7 @@ function money(value, currency) {
   const amount = Number(value ?? 0);
   if (currency === "XTR") return `⭐ ${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
   try {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat(document.documentElement.lang, {
       style: "currency",
       currency,
       minimumFractionDigits: 2,
@@ -110,12 +119,14 @@ function setFatalError(title, message) {
   authenticatedApp.classList.add("hidden");
   bottomNav.classList.add("hidden");
   errorView.classList.remove("hidden");
+  document.documentElement.classList.remove("booting");
   el("errorTitle").textContent = title;
   el("errorMessage").textContent = message;
   document.getElementById("app").setAttribute("aria-busy", "false");
 }
 
 async function api(path, options = {}) {
+  if(previewMode)return previewAPI(path,options);
   const headers = new Headers(options.headers ?? {});
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (state.token) headers.set("Authorization", `Bearer ${state.token}`);
@@ -124,12 +135,15 @@ async function api(path, options = {}) {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = body?.detail;
-    throw new Error(typeof detail === "string" ? detail : `Request failed (${response.status}).`);
+    const error = new Error(typeof detail === "string" ? detail : `Request failed (${response.status}).`);
+    error.status=response.status;
+    throw error;
   }
   return body;
 }
 
 async function authenticate() {
+  if(previewMode){bindPreview();return;}
   const params = new URLSearchParams(window.location.search);
   state.botId = params.get("bot_id");
   if (!state.botId) throw new Error("This Mini App URL is missing the required bot_id configuration.");
@@ -204,8 +218,8 @@ async function loadCatalog(categoryId = state.selectedCategory, { append = false
     if (requestId !== state.catalogRequestId) return;
     renderProducts();
     el("catalogErrorMessage").textContent = navigator.onLine === false
-      ? "You appear to be offline. Reconnect and retry."
-      : (error.message || "Check your connection and try again.");
+      ? t("You appear to be offline. Reconnect and retry.")
+      : (error.message || t("Check your connection and try again."));
     el("catalogError").classList.remove("hidden");
     throw error;
   } finally {
@@ -217,9 +231,17 @@ async function loadCatalog(categoryId = state.selectedCategory, { append = false
   }
 }
 
-async function loadOrders() {
-  state.orders = await api("/api/v1/storefront/orders?limit=30");
-  renderOrders();
+async function loadOrders(append=false) {
+  const revision=++state.ordersRevision;
+  el("ordersMore").disabled=true;
+  try {
+    const rows=await api(`/api/v1/storefront/orders?limit=30&offset=${append?state.orders.length:0}`);
+    if(revision!==state.ordersRevision)return;
+    state.orders=append?[...state.orders,...rows.filter(row=>!state.orders.some(previous=>previous.id===row.id))]:rows;
+    state.ordersMore=rows.length===30;
+    el("ordersMore").classList.toggle("hidden",!state.ordersMore);
+    renderOrders();
+  }finally{if(revision===state.ordersRevision)el("ordersMore").disabled=false;}
 }
 
 async function loadTopupOptions() {
@@ -236,6 +258,10 @@ async function loadTopupOptions() {
 
 function renderBootstrap() {
   const { store, user, wallets } = state.bootstrap;
+  StoreThemes.ready.then(catalog=>StoreThemes.apply(document.documentElement,catalog,store.settings?.miniapp_theme,store.settings?.brand_accent)).catch(()=>{});
+  setLanguage(store.settings?.locale || "en", store.id);
+  pending?.render();
+  el("customerIdentity").textContent = `${t("Account ID")}: ${user.id}`;
   const firstName = user.first_name || user.username || "there";
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "Telegram User";
   const initial = fullName.trim().charAt(0).toUpperCase() || "U";
@@ -248,11 +274,11 @@ function renderBootstrap() {
   brandMark.style.backgroundImage = logoUrl ? `url("${logoUrl.replaceAll('"', '%22')}")` : "";
   brandMark.classList.toggle("has-logo", Boolean(logoUrl));
   el("profileInitial").textContent = initial;
-  el("heroGreeting").textContent = `Hi ${firstName}. Find your next purchase.`;
-  el("storeTagline").textContent = store.settings?.store_tagline || store.settings?.store_description || "Fast checkout. Secure delivery. Built for Telegram.";
+  el("heroGreeting").textContent = t("greeting").replace("{name}", firstName);
+  el("storeTagline").textContent = store.settings?.store_tagline || store.settings?.store_description || t("Fast checkout. Secure delivery. Built for Telegram.");
   el("accountAvatar").textContent = initial;
   el("accountName").textContent = fullName;
-  el("accountUsername").textContent = user.username ? `@${user.username}` : "Secure Mini App session";
+  el("accountUsername").textContent = user.username ? `@${user.username}` : t("Secure Mini App session");
 
   const bType = store.business_type || "GENERAL";
   const tKey = store.template_key || "general-commerce";
@@ -268,20 +294,20 @@ function renderBootstrap() {
     HYBRID: { eyebrow: "✨ HYBRID DIGITAL STORE", badge: "⭐ Unified Products & Services", search: "Search catalog…" },
   };
 
-  const vertical = verticalLabels[bType] || { eyebrow: "TELEGRAM STORE", badge: "", search: "Search products, plans, or SKU" };
+  const vertical = verticalLabels[bType] || { eyebrow: t("TELEGRAM STORE"), badge: "", search: t("Search products, plans, or SKU") };
   const storeEyebrow = el("storeEyebrow");
-  if (storeEyebrow) storeEyebrow.textContent = vertical.eyebrow;
+  if (storeEyebrow) storeEyebrow.textContent = t(vertical.eyebrow);
   const verticalBadge = el("verticalBadge");
   if (verticalBadge) {
     if (vertical.badge) {
-      verticalBadge.textContent = vertical.badge;
+      verticalBadge.textContent = t(vertical.badge);
       verticalBadge.classList.remove("hidden");
     } else {
       verticalBadge.classList.add("hidden");
     }
   }
   if (catalogSearchInput && vertical.search) {
-    catalogSearchInput.placeholder = vertical.search;
+    catalogSearchInput.placeholder = t(vertical.search);
   }
 
   const enabledModules = Array.isArray(store.enabled_modules) ? store.enabled_modules : ["catalog", "orders", "account"];
@@ -296,11 +322,11 @@ function renderBootstrap() {
   const walletGrid = el("walletGrid");
   walletGrid.innerHTML = wallets.map((wallet) => `
     <article class="wallet-card">
-      <span class="wallet-currency">${escapeHtml(wallet.currency)} WALLET</span>
+      <span class="wallet-currency">${escapeHtml(wallet.currency)} · ${t("WALLET")}</span>
       <strong class="wallet-balance">${escapeHtml(money(wallet.balance, wallet.currency))}</strong>
       <div class="wallet-actions">
-        <span class="field-help">Provider-confirmed balance</span>
-        ${state.topupOptions.length ? `<button class="wallet-fund-button" data-fund-currency="${escapeHtml(wallet.currency)}" type="button">Add funds</button>` : ""}
+        <span class="field-help">${t("Provider-confirmed balance")}</span>
+        ${state.topupOptions.length ? `<button class="wallet-fund-button" data-fund-currency="${escapeHtml(wallet.currency)}" type="button">${t("Add funds")}</button>` : ""}
       </div>
     </article>
   `).join("");
@@ -308,15 +334,17 @@ function renderBootstrap() {
   walletGrid.innerHTML += assets.map(wallet => `<article class="wallet-card">
     <span class="wallet-currency">${escapeHtml(wallet.asset)} · ${escapeHtml(wallet.network)}</span>
     <strong class="wallet-balance">${escapeHtml(wallet.balance)}</strong>
-    <span class="field-help">Asset balance · separate from your spending wallet</span>
+    <span class="field-help">${t("Asset balance · separate from your spending wallet")}</span>
   </article>`).join("");
+  experience?.renderHelp();
+  el("shopRecharge").classList.toggle("hidden",state.topupOptions.length===0);
   el("emptyWallets").classList.toggle("hidden", wallets.length + assets.length > 0);
   el("fundWalletButton").classList.toggle("hidden", state.topupOptions.length === 0);
 }
 
 function renderCategories() {
   const categories = state.catalog.categories ?? [];
-  const buttons = [{ id: null, name: "All" }, ...categories.map((category) => ({ id: category.id, name: category.name }))];
+  const buttons = [{ id: null, name: t("All") }, ...categories.map((category) => ({ id: category.id, name: category.name }))];
   categoryRail.innerHTML = buttons.map((category) => `
     <button class="category-pill ${state.selectedCategory === category.id ? "active" : ""}" data-category-id="${category.id ?? ""}" type="button">
       ${escapeHtml(category.name)}
@@ -327,10 +355,10 @@ function renderCategories() {
 function renderCatalogMeta() {
   const loaded = state.catalog.products?.length ?? 0;
   const total = state.catalog.total ?? loaded;
-  const suffix = state.catalogQuery ? ` for “${state.catalogQuery}”` : "";
+  const suffix = state.catalogQuery ? ` · “${state.catalogQuery}”` : "";
   el("catalogMeta").textContent = total
-    ? `${loaded} of ${total} product${total === 1 ? "" : "s"}${suffix}`
-    : (state.catalogBusy ? "Loading products…" : `0 products${suffix}`);
+    ? format("products_count",{loaded,total})+suffix
+    : (state.catalogBusy ? t("Loading products…") : format("products_count",{loaded:0,total:0})+suffix);
   loadMoreProductsButton.classList.toggle("hidden", !state.catalog.has_more || loaded === 0);
   loadMoreProductsButton.disabled = state.catalogBusy;
 }
@@ -339,7 +367,7 @@ function renderProducts() {
   const products = state.catalog.products ?? [];
   productGrid.innerHTML = products.map((product) => {
     const imageUrl = safeImageUrl(product.metadata?.image_url || product.metadata?.thumbnail_url);
-    const badge = product.metadata?.badge || (product.metadata?.featured ? "FEATURED" : "");
+    const badge = product.metadata?.badge || (product.metadata?.featured ? t("FEATURED") : "");
     const deliveryEta = product.metadata?.delivery_eta;
     const visual = imageUrl
       ? `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
@@ -347,8 +375,8 @@ function renderProducts() {
     const variants = product.variants.map((variant) => {
       const inStock = Number(variant.stock_quantity) > 0;
       const stockLabel = inStock
-        ? `${variant.stock_quantity} available`
-        : "Sold out";
+        ? format("available_count",{count:variant.stock_quantity})
+        : t("Sold out");
       return `
         <div class="variant-row">
           <div class="variant-info">
@@ -356,7 +384,7 @@ function renderProducts() {
             <strong class="variant-price">${escapeHtml(money(variant.price, variant.currency))}</strong>
             <span class="variant-meta"><span class="stock-dot ${inStock ? "" : "sold-out"}"></span>${escapeHtml(stockLabel)} · ${escapeHtml(variant.sku)}</span>
           </div>
-          <button class="add-button" data-add-variant="${variant.id}" type="button" ${inStock ? "" : "disabled"} aria-label="${inStock ? "Add" : "Sold out:"} ${escapeHtml(product.title)} ${escapeHtml(variant.title)}">${inStock ? "+" : "×"}</button>
+          <button class="add-button" data-add-variant="${variant.id}" type="button" ${inStock ? "" : "disabled"} aria-label="${inStock ? t("Add") : t("Sold out:")} ${escapeHtml(product.title)} ${escapeHtml(variant.title)}">${inStock ? "+" : "×"}</button>
         </div>
       `;
     }).join("");
@@ -367,9 +395,10 @@ function renderProducts() {
           ${badge ? `<span class="product-badge">${escapeHtml(badge)}</span>` : ""}
         </div>
         <div class="product-body">
-          <h3 class="product-title">${escapeHtml(product.title)}</h3>
-          <p class="product-description">${escapeHtml(product.description || "Ready for instant checkout.")}</p>
-          ${deliveryEta ? `<span class="delivery-chip">Delivery · ${escapeHtml(deliveryEta)}</span>` : ""}
+          <h3 class="product-title"><button type="button" class="product-title-button" data-product-detail="${escapeHtml(product.id)}">${escapeHtml(product.title)}</button></h3>
+          <p class="product-description">${escapeHtml(product.description || t("Ready for instant checkout."))}</p>
+          ${deliveryEta ? `<span class="delivery-chip">${t("Delivery")} · ${escapeHtml(deliveryEta)}</span>` : ""}
+          <button type="button" class="text-button product-details-link" data-product-detail="${escapeHtml(product.id)}">${t("View details")}</button>
           <div class="variant-list">${variants}</div>
         </div>
       </article>
@@ -379,10 +408,10 @@ function renderProducts() {
   const empty = !state.catalogBusy && products.length === 0;
   el("emptyCatalog").classList.toggle("hidden", !empty);
   if (empty) {
-    el("emptyCatalogTitle").textContent = state.catalogQuery ? "No matching products" : "No products available";
+    el("emptyCatalogTitle").textContent = state.catalogQuery ? t("No matching products") : t("No products available");
     el("emptyCatalogMessage").textContent = state.catalogQuery
-      ? "Try a different search phrase, category, or stock filter."
-      : "This store has no active products for the selected filters.";
+      ? t("Try a different search phrase, category, or stock filter.")
+      : t("This store has no active products for the selected filters.");
   }
   renderCatalogMeta();
 }
@@ -397,7 +426,7 @@ function renderOrders() {
   const orders = state.orders ?? [];
   el("ordersList").innerHTML = orders.map((order) => {
     const date = new Date(order.created_at);
-    const label = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+    const label = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "medium", timeStyle: "short" }).format(date);
     const units = order.items.reduce((sum, item) => sum + item.quantity, 0);
     const fulfillment = order.fulfillment;
     let deliveryHtml = "";
@@ -405,7 +434,7 @@ function renderOrders() {
       deliveryHtml = `
         <div class="delivery-box">
           <div class="delivery-header">
-            <span class="delivery-title">📦 Delivered Items</span>
+            <span class="delivery-title">${t("📦 Delivered Items")}</span>
           </div>
           <div class="delivery-items">
             ${fulfillment.delivery.map(art => {
@@ -419,7 +448,7 @@ function renderOrders() {
                 <div class="delivery-item">
                   <div class="delivery-item-top">
                     <span class="delivery-kind-badge kind-${kind.toLowerCase()}">${kind}</span>
-                    <button class="copy-artifact-btn" data-copy-val="${val}" type="button">Copy</button>
+                    <button class="copy-artifact-btn" data-copy-val="${val}" type="button">${t("Copy")}</button>
                   </div>
                   <div class="delivery-val-row">
                     <code class="delivery-code">${val}</code>
@@ -434,21 +463,23 @@ function renderOrders() {
     } else if (order.status === "PAID" && (!fulfillment || fulfillment.status === "PROCESSING" || fulfillment.status === "PENDING")) {
       deliveryHtml = `
         <div class="delivery-status-box processing">
-          <span class="delivery-badge-chip">⏳ FULFILLMENT IN PROGRESS</span>
-          <p class="muted">Automated fulfillment is in progress. Check back shortly.</p>
+          <span class="delivery-badge-chip">${t("⏳ FULFILLMENT IN PROGRESS")}</span>
+          <p class="muted">${t("Automated fulfillment is in progress. Check back shortly.")}</p>
         </div>
       `;
     }
     return `
       <article class="order-card">
+        <button class="text-button" data-order-support="${escapeHtml(order.id)}">${t("Get help with this order")}</button>
         <div class="order-top">
           <div><span class="order-number">${escapeHtml(order.order_number)}</span><span class="order-date">${escapeHtml(label)}</span></div>
-          <span class="status-chip ${orderStatusClass(order.status)}">${escapeHtml(order.status)}</span>
+          <span class="status-chip ${orderStatusClass(order.status)}">${escapeHtml(t(order.status))}</span>
         </div>
         ${deliveryHtml}
+        ${order.items.filter(item=>item.warranty_days>0).map(item=>`<details class="warranty-terms"><summary>${t("Warranty")} · ${item.warranty_days} ${t("days")}</summary><p>${escapeHtml(item.warranty_terms)}</p>${order.status==="FULFILLED"?`<button class="text-button" data-order-support="${escapeHtml(order.id)}" data-warranty-item="${escapeHtml(item.id)}">${t("Request warranty review")}</button>`:""}</details>`).join("")}
         <div class="order-divider"></div>
         <div class="order-bottom">
-          <span class="order-items-count">${units} item${units === 1 ? "" : "s"}</span>
+          <span class="order-items-count">${format("items_count",{count:units})}</span>
           <strong class="order-total">${escapeHtml(money(order.total_amount, order.currency))}</strong>
         </div>
       </article>
@@ -462,6 +493,7 @@ function findVariant(variantId) {
 }
 
 function addToCart(variantId) {
+  if(state.checkoutBusy)return;
   const variant = findVariant(variantId);
   if (!variant) return;
   if (Number(variant.stock_quantity) <= 0) {
@@ -474,10 +506,11 @@ function addToCart(variantId) {
   state.checkoutKey = null;
   renderCart();
   haptic("light");
-  showToast(`${variant.productTitle} added to cart.`);
+  showToast(format("added_to_cart",{name:variant.productTitle}));
 }
 
 function changeQuantity(variantId, delta) {
+  if(state.checkoutBusy)return;
   const item = state.cart.get(variantId);
   if (!item) return;
   const next = item.quantity + delta;
@@ -514,16 +547,20 @@ function renderCart() {
         <div class="cart-item-sub">${escapeHtml(item.variant.title)} · ${escapeHtml(money(item.variant.price, item.variant.currency))}</div>
       </div>
       <div class="quantity-control">
-        <button class="quantity-button" data-quantity="-1" data-variant-id="${variantId}" type="button" aria-label="Decrease quantity">−</button>
+        <button class="quantity-button" data-quantity="-1" data-variant-id="${variantId}" type="button" aria-label=t("Decrease quantity")>−</button>
         <span class="quantity-value">${item.quantity}</span>
-        <button class="quantity-button" data-quantity="1" data-variant-id="${variantId}" type="button" aria-label="Increase quantity">+</button>
+        <button class="quantity-button" data-quantity="1" data-variant-id="${variantId}" type="button" aria-label=t("Increase quantity")>+</button>
       </div>
     </div>
   `).join("");
 
   const totals = cartTotals();
-  el("cartTotal").textContent = totals.mixedCurrency ? "Multiple currencies" : money(totals.amount, totals.currency || "USD");
+  el("cartTotal").textContent = totals.mixedCurrency ? t("Multiple currencies") : money(totals.amount, totals.currency || "USD");
   el("checkoutButton").disabled = entries.length === 0 || state.checkoutBusy || totals.mixedCurrency;
+  el("couponInput").disabled=state.checkoutBusy;recipientInput.disabled=state.checkoutBusy;
+  document.querySelectorAll("[data-quantity]").forEach(button=>button.disabled=state.checkoutBusy);
+  el("openCartButton").classList.toggle("hidden",totals.units===0);
+  el("openCartButton").textContent=`${t("Your cart")} · ${totals.units} · ${money(totals.amount,totals.currency||"USD")}`;
 
   if (tg?.MainButton) {
     if (totals.units > 0) {
@@ -536,6 +573,8 @@ function renderCart() {
 
 function openCart() {
   if (!state.cart.size) return;
+  el("productDetailDialog").close();
+  closeTopup();
   cartBackdrop.classList.remove("hidden");
   cartSheet.classList.add("open");
   cartSheet.setAttribute("aria-hidden", "false");
@@ -545,7 +584,7 @@ function openCart() {
 function closeCart() {
   cartSheet.classList.remove("open");
   cartSheet.setAttribute("aria-hidden", "true");
-  window.setTimeout(() => cartBackdrop.classList.add("hidden"), 260);
+  window.setTimeout(() => {if(!cartSheet.classList.contains("open"))cartBackdrop.classList.add("hidden");}, 260);
   if (tg?.BackButton) tg.BackButton.hide();
 }
 
@@ -568,30 +607,33 @@ async function checkout() {
   const payload = {
     items: [...state.cart.values()].map(({ variant, quantity }) => ({ variant_id: variant.id, quantity })),
     recipient,
+    coupon_code: el("couponInput").value.trim() || null,
     idempotency_key: state.checkoutKey,
   };
 
   state.checkoutBusy = true;
   renderCart();
-  el("checkoutButton").textContent = "Processing…";
+  el("checkoutButton").textContent = t("Processing…");
   try {
     tg?.MainButton?.showProgress?.();
-    const order = await api("/api/v1/storefront/checkout", { method: "POST", body: JSON.stringify(payload) });
+    const order = await pending.run("/api/v1/storefront/checkout", payload);
     state.cart.clear();
     state.checkoutKey = null;
     recipientInput.value = "";
+    el("couponInput").value = "";
     closeCart();
     notifyHaptic("success");
-    showToast(`Order ${order.order_number} confirmed.`);
-    await Promise.all([loadBootstrap(), loadOrders(), loadCatalog(state.selectedCategory)]);
+    showToast(format("order_confirmed",{number:order.order_number}));
     switchView("orders");
+    try{await Promise.all([loadBootstrap(), loadOrders(), loadCatalog(state.selectedCategory)]);}
+    catch(_){showToast(t("Order received. Refresh Orders to load its latest status."), "error");}
   } catch (error) {
     notifyHaptic("error");
-    showToast(error.message || "Checkout failed.", "error");
+    showToast(error.message || t("Checkout failed."), "error");
   } finally {
     state.checkoutBusy = false;
     tg?.MainButton?.hideProgress?.();
-    el("checkoutButton").textContent = "Pay from wallet";
+    el("checkoutButton").textContent = t("Pay from wallet");
     renderCart();
   }
 }
@@ -621,7 +663,7 @@ function renderTopupForm(preferredCurrency = null) {
   if (!providers.length) {
     topupProviderSelect.innerHTML = "";
     topupCurrencySelect.innerHTML = "";
-    el("topupPolicyHelp").textContent = "No wallet funding provider is currently available.";
+    el("topupPolicyHelp").textContent = t("No wallet funding provider is currently available.");
     el("topupSubmitButton").disabled = true;
     return;
   }
@@ -645,8 +687,8 @@ function renderTopupForm(preferredCurrency = null) {
   const flexible = Boolean(currentProvider.flexible_deposits_enabled);
   el("topupFixedFields").classList.toggle("hidden", flexible);
   el("topupPolicyHelp").textContent = flexible
-    ? `Choose the asset and amount on the payment page. ${currentProvider.auto_credit_enabled ? "Confirmed funds are credited according to the store's asset/conversion policy." : "Confirmed funds require staff review before credit."}`
-    : `Allowed: ${money(currentProvider.min_amount, selectedCurrency)} – ${money(currentProvider.max_amount, selectedCurrency)}.`;
+    ? `${t("Choose the asset and amount on the payment page.")} ${currentProvider.auto_credit_enabled ? t("Confirmed funds are credited according to the store's asset/conversion policy.") : t("Confirmed funds require staff review before credit.")}`
+    : `${t("Allowed range")}: ${money(currentProvider.min_amount, selectedCurrency)} – ${money(currentProvider.max_amount, selectedCurrency)}.`;
   const termsRow = el("topupTermsRow");
   const termsLink = el("topupTermsLink");
   const termsCheckbox = el("topupTermsCheckbox");
@@ -676,25 +718,25 @@ function renderTopupStatus() {
   form.classList.add("hidden");
   card.classList.remove("hidden");
   const label = el("topupStatusLabel");
-  label.textContent = topup.status;
+  label.textContent = t(topup.status);
   label.className = `status-chip ${topupStatusClass(topup.status)}`;
   el("topupStatusAmount").textContent = topup._flexible
     ? (topup.credited_amount != null ? `${topup.credited_amount} ${topup.credited_currency || topup.credited_asset || ""}` : `${topup.amount_received ?? "0"} ${topup.asset || "awaiting asset"}`) + (topup.network ? ` · ${topup.network}` : "")
     : money(topup.amount, topup.currency);
   const messages = {
-    CREDITED: "Confirmed deposit credited. Asset and spending-wallet balances are shown separately in your account.",
-    SETTLED_REVIEW: "Deposit confirmed. Staff review is required before wallet credit.",
-    REVERSED: "The provider reversed this deposit. Contact the store for financial review.",
+    CREDITED: t("Confirmed deposit credited. Asset and spending-wallet balances are shown separately in your account."),
+    SETTLED_REVIEW: t("Deposit confirmed. Staff review is required before wallet credit."),
+    REVERSED: t("The provider reversed this deposit. Contact the store for financial review."),
     SUCCEEDED: `Funds confirmed. Wallet balance: ${money(topup.wallet_balance, topup.currency)}.`,
-    FAILED: "The payment provider reported that this payment failed.",
-    EXPIRED: "This payment session expired. Start a new top-up to continue.",
-    CANCELLED: "This payment was cancelled.",
-    UNKNOWN: "Provider status is temporarily uncertain. We will keep checking safely.",
-    PROCESSING: "The provider is processing your payment.",
-    PENDING: "Waiting for the payment provider to confirm settlement.",
-    CREATED: "Payment session created. Continue to the provider to complete it.",
+    FAILED: t("The payment provider reported that this payment failed."),
+    EXPIRED: t("This payment session expired. Start a new top-up to continue."),
+    CANCELLED: t("This payment was cancelled."),
+    UNKNOWN: t("Provider status is temporarily uncertain. We will keep checking safely."),
+    PROCESSING: t("The provider is processing your payment."),
+    PENDING: t("Waiting for the payment provider to confirm settlement."),
+    CREATED: t("Payment session created. Continue to the provider to complete it."),
   };
-  el("topupStatusMessage").textContent = messages[topup.status] || "Waiting for payment confirmation.";
+  el("topupStatusMessage").textContent = messages[topup.status] || t("Waiting for payment confirmation.");
 
   const instructions = topup.payment_instructions;
   el("topupInstructions").textContent = instructions ? [
@@ -740,11 +782,12 @@ function openPaymentCheckout() {
 }
 
 
-function openTopup(preferredCurrency = null) {
-  if (state.activeTopup && ["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status) && !topupSheet.classList.contains("open")) {
+function openTopup(preferredCurrency = null, preserveActive=false) {
+  el("productDetailDialog").close();
+  if (!preserveActive && state.activeTopup && ["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status) && !topupSheet.classList.contains("open")) {
     resetTopup();
   }
-  if (!state.topupOptions.length) {
+  if (!state.topupOptions.length && !state.activeTopup) {
     showToast("Wallet funding is not configured for this store.", "error");
     return;
   }
@@ -764,7 +807,7 @@ function openTopup(preferredCurrency = null) {
 function closeTopup() {
   topupSheet.classList.remove("open");
   topupSheet.setAttribute("aria-hidden", "true");
-  window.setTimeout(() => topupBackdrop.classList.add("hidden"), 260);
+  window.setTimeout(() => {if(!topupSheet.classList.contains("open"))topupBackdrop.classList.add("hidden");}, 260);
   if (!cartSheet.classList.contains("open")) tg?.BackButton?.hide?.();
 }
 
@@ -789,10 +832,10 @@ async function reconcileActiveTopup({ quiet = false } = {}) {
       showToast("Payment confirmed. Your account balances have been refreshed.");
     } else if (["FAILED", "EXPIRED", "CANCELLED", "REVERSED", "SETTLED_REVIEW"].includes(state.activeTopup.status)) {
       stopTopupPolling();
-      if (!quiet) showToast("Payment did not complete.", "error");
+      if (!quiet) showToast(state.activeTopup.status === "SETTLED_REVIEW" ? t("Deposit confirmed. Staff review is required before wallet credit.") : t("Payment did not complete."), "error");
     }
   } catch (error) {
-    if (!quiet) showToast(error.message || "Could not check payment status.", "error");
+    if (!quiet) showToast(error.message || t("Could not check payment status."), "error");
   } finally {
     state.topupBusy = false;
     el("topupCheckButton").disabled = false;
@@ -829,23 +872,21 @@ async function createTopup() {
     return;
   }
   if (!flexible && (amount < min || amount > max)) {
-    showToast(`Amount must be between ${money(min, currency)} and ${money(max, currency)}.`, "error");
+    showToast(format("amount_range",{min:money(min,currency),max:money(max,currency)}), "error");
     return;
   }
 
   state.topupKey = state.topupKey || (crypto.randomUUID?.() ?? `topup-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   state.topupBusy = true;
   el("topupSubmitButton").disabled = true;
-  el("topupSubmitButton").textContent = "Creating payment…";
+  el("topupSubmitButton").textContent = t("Creating payment…");
   try {
     const path = flexible ? "flexible-deposits" : (provider.id ? "topups/method" : "topups");
     const body = { idempotency_key: state.topupKey };
     if (provider.id) body.payment_method_id = provider.id;
     else { body.provider_name = provider.provider_name; body.terms_accepted = Boolean(el("topupTermsCheckbox").checked); }
     if (!flexible) { body.amount = amount.toFixed(2); body.currency = currency; }
-    state.activeTopup = { ...await api(`/api/v1/storefront/wallet/${path}`, {
-      method: "POST", body: JSON.stringify(body),
-    }), _flexible: flexible };
+    state.activeTopup = { ...await pending.run(`/api/v1/storefront/wallet/${path}`, body), _flexible: flexible };
     persistActiveTopup();
     renderTopupStatus();
     haptic("medium");
@@ -853,11 +894,11 @@ async function createTopup() {
     startTopupPolling();
   } catch (error) {
     notifyHaptic("error");
-    showToast(error.message || "Could not create wallet top-up.", "error");
+    showToast(error.message || t("Could not create wallet top-up."), "error");
   } finally {
     state.topupBusy = false;
     el("topupSubmitButton").disabled = false;
-    el("topupSubmitButton").textContent = "Continue to payment";
+    el("topupSubmitButton").textContent = t("Continue to payment");
   }
 }
 
@@ -894,8 +935,16 @@ async function submitPaymentProof(event) {
       }),
     });
     showToast("Reference submitted for verification. Credit follows confirmation.");
-  } catch (error) { showToast(error.message || "Could not submit reference.", "error"); }
+  } catch (error) { showToast(error.message || t("Could not submit reference."), "error"); }
   finally { button.disabled = false; }
+}
+
+async function openHistoricalPayment(id,kind){
+  if(state.topupBusy)return;
+  const flexible=kind==="flexible";
+  const payment=await api(`/api/v1/storefront/wallet/${flexible?"flexible-deposits":"topups"}/${encodeURIComponent(id)}`);
+  stopTopupPolling();state.activeTopup={...payment,_flexible:flexible};
+  openTopup(null,true);startTopupPolling();
 }
 
 function resetTopup() {
@@ -910,6 +959,7 @@ function resetTopup() {
 }
 
 function handleBackButton() {
+  if(el("productDetailDialog").open){el("productDetailDialog").close();return;}
   if (topupSheet.classList.contains("open")) closeTopup();
   else if (cartSheet.classList.contains("open")) closeCart();
 }
@@ -917,6 +967,8 @@ function handleBackButton() {
 function switchView(target) {
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.dataset.view === target));
   document.querySelectorAll(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.target === target));
+  if (target === "account") experience?.history();
+  if (target === "help") {experience?.renderHelp();customerCare?.list().catch(error=>showToast(error.message,"error"));}
   if (target === "orders") loadOrders().catch((error) => showToast(error.message, "error"));
   window.scrollTo({ top: 0, behavior: "smooth" });
   haptic("light");
@@ -970,6 +1022,13 @@ function bindEvents() {
     if (navButton) switchView(navButton.dataset.target);
   });
 
+  experience=bindExperience({state,api,esc:escapeHtml,money,t,toast:showToast,openPayment:openHistoricalPayment});
+  customerCare=bindCustomerCare({api,escapeHtml,toast:showToast,orders:()=>state.orders||[],t});
+  bindSheetAccess(cartSheet,closeCart);bindSheetAccess(topupSheet,closeTopup);
+  el("shopRecharge").onclick=()=>openTopup();
+  el("shopSupport").onclick=()=>switchView("help");
+  el("accountHelpButton").onclick=()=>switchView("help");
+  el("storeLanguage").addEventListener("change",()=>{setLanguage(el("storeLanguage").value,state.bootstrap?.store?.id,true);renderBootstrap();renderCategories();renderProducts();renderOrders();renderCart();});
   el("profileButton").addEventListener("click", () => switchView("account"));
   el("refreshCatalogButton").addEventListener("click", () => loadCatalog(state.selectedCategory).catch((error) => showToast(error.message, "error")));
   catalogSearchInput.addEventListener("input", () => {
@@ -993,10 +1052,13 @@ function bindEvents() {
   window.addEventListener("online", () => { renderNetworkState(); loadCatalog(state.selectedCategory).catch(() => {}); });
   window.addEventListener("offline", renderNetworkState);
   renderNetworkState();
+  el("ordersMore").addEventListener("click",()=>loadOrders(true).catch(error=>showToast(error.message,"error")));
   el("refreshOrdersButton").addEventListener("click", () => loadOrders().catch((error) => showToast(error.message, "error")));
+  el("openCartButton").addEventListener("click",openCart);
   el("closeCartButton").addEventListener("click", closeCart);
   cartBackdrop.addEventListener("click", closeCart);
   el("checkoutButton").addEventListener("click", checkout);
+  el("couponInput").addEventListener("input", () => { state.checkoutKey = null; });
   recipientInput.addEventListener("input", () => { state.checkoutKey = null; });
   el("retryButton").addEventListener("click", () => window.location.reload());
 
@@ -1024,20 +1086,35 @@ async function boot() {
     tg?.ready?.();
     tg?.expand?.();
     bindEvents();
+    const initialThemes = await StoreThemes.ready.catch(()=>null);
+    if(initialThemes)StoreThemes.apply(document.documentElement,initialThemes,
+      previewMode?new URLSearchParams(location.search).get("theme")||"emerald":"emerald");
     await authenticate();
-    await Promise.all([loadBootstrap(), loadCatalog(), loadOrders(), loadTopupOptions()]);
+    await loadBootstrap();
+    pending=previewMode?{run:(path,payload)=>api(path,{method:"POST",body:JSON.stringify(payload)}),render:()=>{}}:pendingOperations({state,api,t,onRecovered:async(path,result)=>{
+      if(path.endsWith('/checkout')){state.cart.clear();state.checkoutKey=null;renderCart();closeCart();await Promise.all([loadBootstrap(),loadOrders()]);switchView('orders');}
+      else{state.activeTopup={...result,_flexible:path.endsWith('/flexible-deposits')};persistActiveTopup();openTopup(undefined,true);renderTopupStatus();startTopupPolling();}
+    }});
+    pending.render();
+    await Promise.all([loadCatalog(), loadOrders(), loadTopupOptions()]);
     renderBootstrap();
-    await restorePendingTopup();
+    if(!previewMode)await restorePendingTopup();
+    document.documentElement.classList.remove("booting");
     loadingView.classList.add("hidden");
     errorView.classList.add("hidden");
     authenticatedApp.classList.remove("hidden");
     bottomNav.classList.remove("hidden");
     document.getElementById("app").setAttribute("aria-busy", "false");
     renderCart();
+    const entry = new URLSearchParams(location.search).get("view");
+    if (["account","orders"].includes(entry)) switchView(entry);
+    if (entry === "support") switchView("help");
+    if (entry === "recharge") {switchView("account");openTopup();}
   } catch (error) {
     console.error("Mini App bootstrap failed", error);
-    setFatalError("Unable to open the store", error.message || "The storefront could not be initialized.");
+    setFatalError(t("Unable to open the store"), error.message || "The storefront could not be initialized.");
   }
 }
 
+localizeStatic();
 boot();

@@ -375,3 +375,23 @@ async def authenticate_telegram_miniapp(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except MiniAppAuthError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/account/revoke-sessions", status_code=204)
+async def revoke_own_sessions(
+    response: Response,
+    principal: AuthenticatedPrincipal = Depends(require_staff_or_above),
+    session: AsyncSession = Depends(get_db_session),
+):
+    user = await session.scalar(select(User).join(Membership, Membership.user_id == User.id).where(
+        User.id == principal.user_id, Membership.tenant_id == principal.tenant_id,
+        Membership.is_active.is_(True), User.is_active.is_(True), User.deleted_at.is_(None),
+    ).with_for_update(of=User).execution_options(populate_existing=True))
+    if user is None or user.token_version != principal.token_version:
+        raise HTTPException(401, "Sign in again before revoking sessions.")
+    user.token_version += 1
+    session.add(AuditLog(tenant_id=principal.tenant_id, user_id=principal.user_id,
+        action="auth.sessions_revoked", resource_type="user", resource_id=str(user.id),
+        details={"scope": "all_account_sessions"}))
+    await session.commit()
+    response.headers["Cache-Control"] = "no-store"

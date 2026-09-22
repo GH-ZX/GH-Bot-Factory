@@ -23,6 +23,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         if settings.is_production_like:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Referrer-Policy"] = "no-referrer"
         if request.url.path.startswith("/miniapp"):
             response.headers.setdefault(
                 "Content-Security-Policy",
@@ -83,6 +86,8 @@ class MaxBodySizeMiddleware:
         total = 0
         while True:
             message = await receive()
+            if message["type"] == "http.disconnect":
+                return
             if message["type"] != "http.request":
                 continue
             chunk = message.get("body", b"")
@@ -124,6 +129,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not settings.rate_limit_enabled:
             return None
         path = request.url.path
+        if path == "/api/v1/maintenance-access/diagnostics":
+            return RatePolicy("auth", settings.rate_limit_auth_per_minute)
         if path in {"/api/v1/auth/telegram-miniapp", "/api/v1/auth/admin-code", "/api/v1/auth/login", "/api/v1/setup/initialize-web", "/api/v1/setup/initialize", "/api/v1/auth/account/password"}:
             return RatePolicy("auth", settings.rate_limit_auth_per_minute)
         if request.method == "POST" and path in {
@@ -173,9 +180,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             client = Redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
             try:
-                value = await client.incr(key)
-                if value == 1:
-                    await client.expire(key, 60)
+                value = await client.eval(
+                    "local n=redis.call('INCR',KEYS[1]); "
+                    "if redis.call('TTL',KEYS[1]) < 0 then redis.call('EXPIRE',KEYS[1],60) end; return n",
+                    1, key,
+                )
                 return int(value) <= limit
             except Exception:  # noqa: BLE001 - backend errors fail closed at the request boundary
                 if settings.is_production_like:

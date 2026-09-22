@@ -27,6 +27,7 @@ from packages.notifications.service import (
 )
 from packages.operations.service import apply_coupon
 from packages.payments.service import LedgerService
+from packages.tenants.models import Tenant
 
 logger = logging.getLogger("commerce.checkout")
 
@@ -144,6 +145,10 @@ class CheckoutService:
                     recipient=normalized_recipient,
                     execute_sync=execute_sync,
                 )
+
+        tenant = await session.scalar(select(Tenant).where(Tenant.id == tenant_id).with_for_update(read=True).execution_options(populate_existing=True))
+        if tenant is None or (tenant.settings or {}).get("sales_paused") is True:
+            raise ValueError("New purchases are temporarily paused. Existing orders and support remain available.")
 
         variants = await self._load_authoritative_variants(
             session=session,

@@ -2,7 +2,7 @@ import hashlib
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -46,15 +46,18 @@ PUBLIC_PRODUCT_METADATA_KEYS = frozenset(
         "featured",
         "image_url",
         "thumbnail_url",
+        "warranty_days", "warranty_terms",
     }
 )
 PUBLIC_TENANT_SETTING_KEYS = frozenset(
     {
         "brand_accent",
+        "miniapp_theme",
         "brand_logo_url",
         "store_description",
         "store_tagline",
         "support_url",
+        "store_notice", "terms_url", "privacy_url", "recipient_label", "recipient_help", "faq", "sales_paused",
     }
 )
 
@@ -333,6 +336,8 @@ class CheckoutRequest(BaseModel):
 
 
 class OrderItemResponse(BaseModel):
+    warranty_days: int = 0
+    warranty_terms: str = ""
     id: uuid.UUID
     product_variant_id: uuid.UUID
     quantity: int
@@ -413,7 +418,11 @@ def _bot_public_store_settings(bot: Bot | None) -> dict[str, Any]:
     branding = config.get("branding") if isinstance(config, dict) else None
     if not isinstance(branding, dict):
         return {}
-    return {key: branding[key] for key in PUBLIC_TENANT_SETTING_KEYS if key in branding}
+    public = {key: branding[key] for key in PUBLIC_TENANT_SETTING_KEYS if key in branding and branding[key] not in ("", None)}
+    public["locale"] = "ar" if str(config.get("locale", "en")).lower().startswith("ar") else "en"
+    if public.get("miniapp_theme") not in {"midnight", "emerald", "pearl", "ocean", "rose"}:
+        public["miniapp_theme"] = "midnight"
+    return public
 
 def _variant_response(variant: ProductVariant, *, effective_price: Decimal | None = None) -> VariantResponse:
     return VariantResponse(
@@ -474,6 +483,8 @@ def _order_response(
             OrderItemResponse(
                 id=item.id,
                 product_variant_id=item.product_variant_id,
+                warranty_days=(item.sale_terms or {}).get("warranty_days", 0),
+                warranty_terms=str((item.sale_terms or {}).get("warranty_terms", ""))[:2000],
                 quantity=item.quantity,
                 unit_price=item.unit_price,
                 total_price=item.total_price,
@@ -1078,6 +1089,7 @@ async def list_catalog(
 
 @router.get("/orders", response_model=list[OrderResponse])
 async def list_orders(
+    offset: int = Query(0, ge=0, le=1000000),
     limit: int = Query(20, ge=1, le=100),
     principal: AuthenticatedPrincipal = Depends(get_current_principal),
     session: AsyncSession = Depends(get_db_session),
@@ -1085,10 +1097,10 @@ async def list_orders(
     """Return orders visible to the authenticated principal inside its tenant."""
     stmt = (
         select(Order)
-        .where(Order.tenant_id == principal.tenant_id)
+        .where(Order.tenant_id == principal.tenant_id, Order.user_id == principal.user_id)
         .options(selectinload(Order.items))
-        .order_by(Order.created_at.desc())
-        .limit(limit)
+        .order_by(Order.created_at.desc(), Order.id.desc())
+        .offset(offset).limit(limit)
     )
     if principal.is_customer():
         stmt = stmt.where(Order.user_id == principal.user_id)
@@ -1293,3 +1305,70 @@ async def wallet_checkout(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/wallet-history")
+async def wallet_history(
+    offset: int = Query(0, ge=0, le=1000000),
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Only the signed shopper's spending-wallet ledger; no internal descriptions."""
+    from packages.payments.models import LedgerTransaction
+
+    rows = (await session.execute(
+        select(LedgerTransaction, Wallet.currency)
+        .join(Wallet, Wallet.id == LedgerTransaction.wallet_id)
+        .where(LedgerTransaction.tenant_id == principal.tenant_id,
+               Wallet.tenant_id == principal.tenant_id, Wallet.user_id == principal.user_id)
+        .order_by(LedgerTransaction.created_at.desc(), LedgerTransaction.id.desc())
+        .offset(offset).limit(51)
+    )).all()
+    return {"items": [{"id": row.id, "type": row.transaction_type.value,
+                       "amount": str(row.amount), "balance_after": str(row.balance_after),
+                       "currency": currency, "created_at": row.created_at}
+                      for row, currency in rows[:50]],
+            "next_offset": offset + 50 if len(rows) > 50 else None}
+
+
+@router.get("/asset-wallet-history")
+async def asset_wallet_history(
+    offset: int = Query(0, ge=0, le=1000000),
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    session: AsyncSession = Depends(get_db_session),
+):
+    from packages.payments.economics_models import AssetLedgerTransaction
+    rows = (await session.execute(select(AssetLedgerTransaction, AssetWallet.asset, AssetWallet.network)
+        .join(AssetWallet, AssetWallet.id == AssetLedgerTransaction.wallet_id)
+        .where(AssetLedgerTransaction.tenant_id == principal.tenant_id,
+               AssetWallet.tenant_id == principal.tenant_id, AssetWallet.user_id == principal.user_id)
+        .order_by(AssetLedgerTransaction.created_at.desc(), AssetLedgerTransaction.id.desc())
+        .offset(offset).limit(51))).all()
+    return {"items": [{"id": row.id, "type": row.transaction_type.value, "amount": str(row.amount),
+                       "balance_after": str(row.balance_after), "asset": asset, "network": network,
+                       "created_at": row.created_at} for row, asset, network in rows[:50]],
+            "next_offset": offset + 50 if len(rows) > 50 else None}
+
+
+@router.get("/wallet-funding-history")
+async def wallet_funding_history(
+    kind: Literal["standard", "flexible"] = "standard",
+    offset: int = Query(0, ge=0, le=1000000),
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    session: AsyncSession = Depends(get_db_session),
+):
+    model = FlexibleDepositSession if kind == "flexible" else PaymentIntent
+    filters = [model.tenant_id == principal.tenant_id, model.user_id == principal.user_id]
+    if kind == "standard":
+        filters.append(PaymentIntent.purpose == PaymentIntentPurpose.WALLET_TOPUP)
+    rows = (await session.scalars(select(model).where(*filters)
+        .order_by(model.created_at.desc(), model.id.desc()).offset(offset).limit(51))).all()
+    items = []
+    for row in rows[:50]:
+        items.append({"id": row.id, "status": row.status.value, "created_at": row.created_at,
+            "kind": kind, "amount": str(row.amount_received) if kind == "flexible" and row.amount_received is not None
+                else (str(row.amount) if kind == "standard" else None),
+            "currency": row.currency if kind == "standard" else None,
+            "asset": row.asset if kind == "flexible" else None,
+            "network": row.network if kind == "flexible" else None})
+    return {"items": items, "next_offset": offset + 50 if len(rows) > 50 else None}

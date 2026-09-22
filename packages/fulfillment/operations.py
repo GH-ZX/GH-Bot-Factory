@@ -84,7 +84,9 @@ async def evaluate_manual_requeue(
     if job.status != FulfillmentJobStatus.DEAD_LETTER:
         return RequeueDecision(False, "JOB_NOT_DEAD_LETTER", "Only dead-letter jobs can be manually requeued.")
 
-    order = await session.get(Order, job.order_id)
+    order = await session.scalar(select(Order).where(
+        Order.id == job.order_id, Order.tenant_id == tenant_id
+    ).with_for_update())
     if order is None or order.tenant_id != tenant_id:
         return RequeueDecision(False, "ORDER_NOT_FOUND", "Order is not available in this tenant.")
     if order.status not in {OrderStatus.PAID, OrderStatus.PROCESSING}:
@@ -150,7 +152,7 @@ async def requeue_dead_letter_job(
             select(FulfillmentJobRecord).where(
                 FulfillmentJobRecord.id == job_id,
                 FulfillmentJobRecord.tenant_id == tenant_id,
-            )
+            ).with_for_update()
         )
     ).scalar_one_or_none()
     if job is None:
@@ -187,6 +189,8 @@ async def requeue_dead_letter_job(
             "Job was already requeued or changed by another operator/worker.",
         )
     await session.flush()
-    refreshed = await session.get(FulfillmentJobRecord, job.id)
+    refreshed = await session.scalar(select(FulfillmentJobRecord).where(
+        FulfillmentJobRecord.id == job.id, FulfillmentJobRecord.tenant_id == tenant_id
+    ).execution_options(populate_existing=True))
     assert refreshed is not None
     return refreshed, decision

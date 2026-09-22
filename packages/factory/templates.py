@@ -22,6 +22,7 @@ PUBLIC_BRANDING_KEYS = frozenset(
         "store_tagline",
         "store_description",
         "brand_accent",
+        "miniapp_theme",
         "brand_logo_url",
         "support_contact",
         "support_url",
@@ -469,6 +470,8 @@ def validate_branding(branding: dict[str, Any] | None) -> dict[str, str]:
             raise TemplateValidationError(f"branding.{key} exceeds {limits[key]} characters.")
         normalized[key] = text
 
+    if "miniapp_theme" in normalized and normalized["miniapp_theme"] not in {"midnight", "emerald", "pearl", "ocean", "rose"}:
+        raise TemplateValidationError("Choose a supported MiniApp theme.")
     accent = normalized.get("brand_accent")
     if accent and not _HEX_COLOR_RE.fullmatch(accent):
         raise TemplateValidationError("branding.brand_accent must be a six-digit hex color such as #7C6CFF.")

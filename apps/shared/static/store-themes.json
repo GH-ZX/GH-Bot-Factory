@@ -1,0 +1,57 @@
+{
+  "midnight": {
+    "name": "Midnight",
+    "description": "Deep indigo \u00b7 luminous and focused",
+    "scheme": "dark",
+    "bg": "#0c101c",
+    "surface": "#161d30",
+    "surface2": "#202a40",
+    "text": "#f3f6ff",
+    "muted": "#b0bed6",
+    "accent": "#a399ff"
+  },
+  "emerald": {
+    "name": "Emerald",
+    "description": "Fresh green \u00b7 calm and confident",
+    "scheme": "light",
+    "bg": "#f2f7f3",
+    "surface": "#ffffff",
+    "surface2": "#e4efe8",
+    "text": "#16352b",
+    "muted": "#526d60",
+    "accent": "#166b52"
+  },
+  "pearl": {
+    "name": "Pearl",
+    "description": "Warm ivory \u00b7 minimal and editorial",
+    "scheme": "light",
+    "bg": "#f8f5ef",
+    "surface": "#fffefa",
+    "surface2": "#eee9df",
+    "text": "#302c25",
+    "muted": "#70685c",
+    "accent": "#875135"
+  },
+  "ocean": {
+    "name": "Ocean",
+    "description": "Marine blue \u00b7 bright and modern",
+    "scheme": "dark",
+    "bg": "#071d2a",
+    "surface": "#102c3b",
+    "surface2": "#193c4c",
+    "text": "#effbff",
+    "muted": "#a5c8d6",
+    "accent": "#61dcf0"
+  },
+  "rose": {
+    "name": "Rose",
+    "description": "Soft blush \u00b7 expressive and playful",
+    "scheme": "light",
+    "bg": "#fff4f7",
+    "surface": "#ffffff",
+    "surface2": "#f5e4ed",
+    "text": "#422439",
+    "muted": "#7c566f",
+    "accent": "#a02a65"
+  }
+}

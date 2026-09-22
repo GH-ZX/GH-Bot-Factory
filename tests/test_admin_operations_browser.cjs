@@ -1,20 +1,7 @@
 const {chromium}=require('playwright');
 const fs=require('node:fs'), http=require('node:http'), path=require('node:path'), assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..');
-const server=http.createServer((req,res)=>{
-  const sharedName = new URL(req.url, 'http://local').pathname.match(/^\/shared\/([a-z.-]+)$/)?.[1];
-  if (sharedName) {
-    const sharedFile = path.join(root, 'apps/shared/static', sharedName);
-    if (!fs.existsSync(sharedFile)) { res.writeHead(404); return res.end(); }
-    res.setHeader('Content-Type', sharedName.endsWith('.css') ? 'text/css' : 'image/png');
-    return res.end(fs.readFileSync(sharedFile));
-  }
-
- const file=new URL(req.url,'http://local').pathname.match(/^\/admin\/([a-z.-]+)?$/)?.[1]||'index.html';
- if(!/^[a-z.-]+$/.test(file)){res.writeHead(404);return res.end();}
- res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');
- res.end(fs.readFileSync(path.join(root,'apps/admin/static',file)));
-});
+const server=require('./browser_static.cjs').createServer(root);
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({headless:true, executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE});

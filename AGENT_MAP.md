@@ -1,11 +1,19 @@
 # GH-Bot-Factory: Master Coding Agent Map & Project Constitution
 
+> **Latest owner authorization — 2026-09-22:** Testing, verification, fixes, commit and push are now explicitly authorized. Earlier no-tests/no-push instructions below are historical. Fix MiniApp initial skeleton/bare-URL preview entry first, then use isolated verification environments; do not use a real customer.
+
+
+> **Latest owner testing instruction — 2026-09-22:** Do not run tests or verification gates until the user explicitly requests them. Batch coding work; mark unverified work as unverified. This overrides earlier automatic-testing requirements, without waiving evidence required to claim production readiness. See the product/support brainstorming entry in prompt history and RESUME_CUSTOMER_DELIVERY.md.
+
+
 > **Single Source of Truth for Autonomous Coding Agents**
 > *Last Updated: 2026-09-18 (Phase 14 Customer Marketplace Closure)*
 
 > **2026-09-20 UX advisory:** See “Usability and Template Simplification Advisory” in `docs/prompts/prompt_history.md` for ten recommendations grounded in the template catalog and setup screens. Advisory only; no implementation milestone or new verification claim.
 
 > **2026-09-19 advisory review:** User requested next priorities because the project remains unfinished. See “Project Next-Priority Advisory” in `docs/prompts/prompt_history.md`. Static marketplace review identified onboarding and secret-bearing export concerns; prioritize repair, complete customer journeys, and release evidence. Prior phase completion labels do not establish end-to-end readiness. No implementation milestone or fresh gate is claimed by this advisory.
+
+> **2026-09-21 product direction:** Customer-owned Docker + Supabase delivery, one-time pricing and integration add-ons are the requested primary flow. See [completion plan](docs/plans/customer-owned-bot-delivery.md) and prompt history. Advisory only; historical phase completion does not establish this end-to-end delivery.
 
 ---
 
@@ -977,6 +985,16 @@ Shared setup presentation lives in `apps/admin/static/store-setup.js` and `store
 > **2026-09-20 deployment:** UI `4e216ad` is live on the local API; deployment provenance, health checks, and hostname-resolution limitation are recorded under “Usability Deployment” in CURRENT_STATE and prompt history.
 
 
+### Open Code Review Integration & Delegation Mode — 2026-09-21
+
+Installed `@alibaba-group/open-code-review` and established local delegation mode via `.agents/skills/open-code-review-delegate/SKILL.md`. Configured `agy` to drive code reviews using OCR's deterministic file discovery, metadata, and language rules without requiring external LLM API keys. Fixed security findings in PBKDF2 hash iteration validation (`packages/core/auth.py`), login timing side-channel mitigation (`apps/api/v1/auth.py`), and admin login accessibility/styling.
+
+
+### Arabic Executive Reporting & Visual Diagrams — 2026-09-21
+
+Installed Antigravity skills for Arabic document reporting (`.agents/skills/arabic-document-reporting/SKILL.md`) and diagram generation (`.agents/skills/diagram-generator/SKILL.md`). Generated 3 high-DPI architecture and lifecycle diagrams (`diagram1_system_architecture.png`, `diagram2_sales_onboarding_flow.png`, `diagram3_order_fulfillment_flow.png`) with proper Arabic text shaping and bidirectional rendering. Built executive RTL Arabic report in Word (`docs/reports/GH_Bot_Factory_Full_Flows_AR.docx`) with embedded visuals and Markdown mirror (`docs/reports/GH_Bot_Factory_Full_Flows_AR.md`), along with reproducible generator scripts (`scripts/generate_arabic_flows_docx.py`, `scripts/generate_report_diagrams.py`).
+
+
 ## 2026-09-21 — Customer Builder Redesign Map
 
 Customer discovery lives in `apps/configurator/static/`, mounted at `/build/` (older `apps/build/static/` references are historical). Four-step project brief reuses public templates/integrations/inquiry APIs and shared StoreSetup helpers. Requested features/languages/design/handoff travel as bounded project notes, not entitlement or provisioning authority. Quote-on-review presentation supersedes live estimated prices; internal server estimates remain unchanged and need operator review. See ADR-048 and the matching prompt/current-state entries. No migration or deployment.
@@ -997,6 +1015,7 @@ Steps 1/3 implementation: Admin shares `/build/` cream/green identity, adds a re
 
 Implementation commit `1d4fcec` was pushed to `origin/main` on 2026-09-22. Canonical isolated-source gate: 474 fast + 19 PostgreSQL; browser workflows passed. Live deployment and actual customer acceptance remain pending.
 
+
 **2026-09-22 hostname advisory:** Recommended `factory.gh-store.me` with `/build/` and `/admin/`, using an additional published application route on the existing laptop tunnel. Simple instructions are in `docs/operations/RESUME_CUSTOMER_DELIVERY.md`; request recorded in prompt history. Documentation only, no DNS/tunnel changes.
 
 ## Admin sign-in redesign — 2026-09-22
@@ -1006,6 +1025,7 @@ ADR-050 documents tenant staff password login, explicit store disambiguation, au
 
 **2026-09-22 sign-in deployment:** Source `cbe4591` is pushed and deployed. New token/password sign-in and after-login Admin identity are live at https://factory.gh-store.me/admin/. Account supports password setup/change. All five services healthy; migration `0ce5d2c98e7f` applied after backup. Verification: 482 fast + 19 PostgreSQL, three browser suites and public live smoke checks. No actual live login/purchase/messages or production-release qualification claimed. Full image/backup evidence is in CURRENT_STATE. Steps 2 and 4–6 remain pending.
 
+
 **2026-09-22 setup/branding advisory:** See RESUME_CUSTOMER_DELIVERY and prompt history. Live installation has no tenants/memberships and is uninitialized; requested credentials remain unset pending owner setup. Shared theme/logo and setup repairs are proposed only. Real-customer trial explicitly deferred.
 
 
@@ -1013,3 +1033,138 @@ ADR-050 documents tenant staff password login, explicit store disambiguation, au
 
 
 **Web factory live completion — 2026-09-22:** All five [current steps](docs/plans/web-factory-completion.md) checked. Source 240a106 deployed, migration a71c9e23b840, 486 fast + 20 PostgreSQL, four browser suites and live password/sales/setup acceptance. ahmedghx is initialized; no owner bot required. Explicit installation binding protects platform access (ADR-051). See CURRENT_STATE for image/backup evidence. Later customer delivery/shopper/release milestones remain deferred.
+
+
+**Customer product implementation in progress:** [Active checklist](docs/plans/customer-product-completion.md). Tenant-selectable themes and shopper journeys, customer-owned packages, optional diagnostic support, issue history and release/update workflow. No tests or deployment performed; checkbox completion denotes source implementation only.
+
+
+## Customer product completion — 2026-09-22 (source only)
+
+Implementation checklist: `docs/plans/customer-product-completion.md` (five source steps checked;
+verification, image publication and deployment unchecked). Decision: ADR-052.
+
+- Theme catalog/client: `apps/shared/static/store-themes.{json,js}`; validation:
+  `packages/factory/templates.py`; Admin picker and MiniApp theme tokens.
+- Shopper support/localization: `apps/miniapp/static/customer-care.js`, `locale.js`;
+  storefront wallet-history/orders and existing customer support/warranty APIs.
+- Maintenance: `packages/delivery/models.py`, `apps/api/v1/admin_maintenance.py`,
+  `apps/admin/static/maintenance.js`, `scripts/support_diagnostics.py`.
+- Package generator: `packages/delivery/package.py`, `packages/delivery/templates/`,
+  platform-sales `POST /handoffs/{id}/package`, `scripts/customer_package_identity.py`.
+- Source migration `b82da430c951`; live `a71c9e23b840`. Maintenance history is portable;
+  diagnostic grants are excluded and pending source update consent is cancelled on restore.
+- No tests/build/deploy/push. Main-branch push triggers CI and is deferred under owner instruction.
+
+Release reference helper: `scripts/customer_release_reference.py`; package-local pre-pull guard: `packages/delivery/templates/check_release.py`.
+
+Latest owner authorization (2026-09-22): simple project Docker deployment now; implement delivery
+center, tenant settings, support-to-release links and MiniApp completion. Do not test, commit or
+push until asked. Active checklist: `docs/plans/factory-completion-next.md`.
+
+
+### Delivery/settings/releases/MiniApp completion — 2026-09-22
+
+- Active checklist: `docs/plans/factory-completion-next.md`; ADR-053.
+- `apps/api/v1/platform_delivery.py`, `apps/admin/static/delivery-center.js`: installation
+  operator-only handoff plans/checklist/history; `DeploymentHandoff.delivery_details`.
+- `apps/api/v1/admin_store_settings.py`, `apps/admin/static/store-settings.js`: bounded
+  tenant public profile, not arbitrary settings or financial-policy authority.
+- `CustomerRelease`, `ReleaseIssue`, maintenance issue source-case/affected-version and
+  update release association; `apps/admin/static/releases.js` and maintenance APIs.
+- Migration `c93eb541da62`; new release tables explicitly included in encrypted portability.
+- `apps/miniapp/static/experience.js`: product/help/history/sheet accessibility;
+  `preview.js`: visibly labelled static sample transport, never an auth bypass or real tenant.
+- Deployment authorized; tests, real tenant use, commits and push explicitly deferred.
+
+
+## 2026-09-22 — Completion batch deployed; verification deferred
+
+- Built and deployed `gh-bot-factory:work-20260922-completion` from uncommitted working source.
+- Applied PostgreSQL migration `b82da430c951 → c93eb541da62` successfully after the restricted
+  backup `backups/product-20260922/before-completion.dump`. No restore drill was performed.
+- Recreated only project API, worker and bot-runtime containers. Docker reports all five
+  project services healthy; PostgreSQL/Redis containers and Cloudflare tunnels were unchanged.
+- Delivery center, Store settings, Releases & fixes and the expanded MiniApp are in this image.
+  Sample design preview: https://factory.gh-store.me/miniapp/?preview=1 (sample data only).
+- Implementation and deployment boxes are checked in `docs/plans/factory-completion-next.md`.
+  No functional tests, browser runs, verification gates, real-tenant trials, commits or pushes.
+  Startup health is deployment evidence only; this source is not production-qualified.
+- Build log: `/tmp/ghbf-completion-build.log`; Compose override: `/tmp/ghbf-completion-runtime.yml`.
+  Use the override for this working image; do not assume the base Compose image tag includes it.
+- Next: await the owner's authorization for the batched verification/fix pass, then commit/push
+  after required gates pass. Real-customer delivery remains separately deferred.
+
+
+## 2026-09-22 — Ten-area hardening source implementation
+
+All ten targeted coding areas are checked in `docs/plans/factory-hardening.md`; ADR-054
+records the authority, safety and evidence boundaries. Added guarded customer package
+operations/backup scripts, scoped operational attention, pause-new-sales policy, session-based
+MiniApp request recovery, installation evidence/sanitized reports, stricter maintenance steps,
+API/session/rate-limit hardening and platform delivery progress. Existing commerce/admin
+features are reused; no direct ledger mutation or remote support execution was introduced.
+
+New routes: `/api/v1/admin/attention`, `/api/v1/admin/installation`,
+`/api/v1/auth/account/revoke-sessions`, `/api/v1/platform/delivery/workspace/overview`.
+Client modules: `attention.js`, `installation.js`, `pending-operations.js`.
+Service: `packages/operations/attention.py`. Package helpers: `preflight.py`, `lifecycle.py`,
+`backup.sh`, `update-approval.example.json`. Regenerate old customer packages.
+
+No new migration (head `c93eb541da62`). Source review only, no tests or functional/browser
+checks. No real tenant, commit or push. Final project-only Docker rollout pending; live
+remains `work-20260922-completion` until the deployment checkpoint below is recorded.
+
+
+## 2026-09-22 — Hardening batch deployed, functional verification deferred
+
+Image `gh-bot-factory:work-20260922-hardening` built and deployed from uncommitted working
+source. Only API, worker and bot-runtime were recreated. Docker reports all five project
+services healthy. No migration was required or executed; schema remains `c93eb541da62`.
+PostgreSQL/Redis containers, other host containers, ports and Cloudflare tunnels were unchanged.
+Build log: `/tmp/ghbf-hardening-build.log`; working-image Compose override:
+`/tmp/ghbf-hardening-runtime.yml`. Retain/use this override for the deployed working image.
+
+Visible additions: Admin → Needs attention; Store settings → Pause new purchases and
+Installation & backup evidence; Account → Sign out all account sessions; richer Delivery
+center cards; MiniApp recovery panel when an unresolved money request exists. Generated
+packages include the new guards/receipts/backup helper. Previously exported ZIPs must be regenerated.
+
+All ten targeted coding upgrades and this deployment are checked in `docs/plans/factory-hardening.md`.
+No automated tests, lint/syntax gates, browser checks, real-customer operations, commit or push.
+Container startup is not feature acceptance or production qualification. The next authorized
+verification batch must cover the new financial retry/locking behavior, tenant/RBAC isolation,
+package lifecycle/import/backup/restore, UI/RTL and security boundaries before release claims.
+
+
+## 2026-09-22 — Customer product verification and MiniApp entry repair
+
+Owner authorized testing, fixes, commit and push after successful gates. Earlier test deferrals
+are historical. Real-customer trials remain deferred.
+
+- MiniApp entry now redirects an unconfigured bare URL to the explicitly labelled preview.
+  Bot-bearing links preserve signed-Telegram authentication and never silently become sample sessions.
+- Render-blocking neutral skeleton hides the unthemed header, content, overlays and navigation;
+  the selected theme is applied before revealing content. Errors use the current light identity
+  and offer a preview link. Browser checks delayed the theme response and inspected screenshots.
+- Fixed a PostgreSQL stale-identity-map defect: checkout refreshes the paused-sales policy under
+  its shared row lock. A two-session regression proves a previously loaded tenant cannot bypass pause.
+- Corrected restore rejection wording while preserving the empty/uninitialized destination guard.
+- Verification now syntax-checks every Admin/MiniApp/shared JS module. Browser fixtures serve the
+  real static dependency graph, including theme JSON and new modules.
+- Added tests for scope/RBAC, version conflicts, bounded/revoked diagnostic grants, update evidence,
+  alert acknowledgement, session revocation, secret-safe validation, pause/replay, package integrity,
+  lifecycle rejection, fresh PostgreSQL SQL initialization and tenant restore, and browser money recovery.
+- **Canonical `make verify` passed: 500 fast + 22 PostgreSQL**, no schema drift, Ruff, compilation,
+  handoff/secret checks, JavaScript syntax, whitespace and dependency consistency. Two existing
+  FastAPI deprecation warnings remain; they do not fail tests.
+- **Seven browser suites passed:** Admin/login/MiniApp payments, operations, setup wizard, web setup,
+  MiniApp entry/themes/RTL/skeleton, lost-response recovery, and hardening workspaces.
+- Strict installed third-party dependency audit passed after updating the isolated development
+  environment's pip to 26.2.1. `scripts/audit_dependencies.py` audits exact installed versions;
+  it excludes only this first-party editable app, whose source is covered by the repository gates.
+  pip-audit cannot query this private package from PyPI; no third-party finding is ignored.
+- Source schema remains `c93eb541da62`. Fresh package PostgreSQL bootstrap/import passed on an
+  isolated local database, not a real Supabase account or customer VPS. Remote provider acceptance,
+  actual Telegram customer trial and staging/failure-injection qualification remain separate.
+- Logs: `/tmp/ghbf-canonical-final.log`, `/tmp/ghbf-dependency-audit.log`, browser logs under
+  `/tmp/ghbf-*-final-browser.log`, `/tmp/ghbf-miniapp-browser.log`. Release artifact build pending.

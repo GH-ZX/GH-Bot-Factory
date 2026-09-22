@@ -5,6 +5,14 @@ description: Core architecture guide, laws of the project, user prompt history, 
 
 # GH-Bot-Factory Core Skill
 
+> **Latest owner authorization — 2026-09-22:** Testing, verification, fixes, commit and push are now explicitly authorized. Earlier no-tests/no-push instructions below are historical. Fix MiniApp initial skeleton/bare-URL preview entry first, then use isolated verification environments; do not use a real customer.
+
+
+> **Current owner execution instruction — 2026-09-22:** Simple project Docker deployment is authorized now. Do not run tests, create real-tenant trials, commit or push until explicitly requested. Source completion is separate from feature verification and production readiness. Track active hardening work in `docs/plans/factory-hardening.md`; the prior completion batch is in `docs/plans/factory-completion-next.md`.
+
+> **Latest owner testing instruction — 2026-09-22:** Do not run tests or verification gates until the user explicitly requests them. Batch coding work; mark unverified work as unverified. This overrides earlier automatic-testing requirements, without waiving evidence required to claim production readiness. See the product/support brainstorming entry in prompt history and RESUME_CUSTOMER_DELIVERY.md.
+
+
 This skill equips any AI coding agent with the complete institutional memory, architectural laws, and operational protocols of **GH-Bot-Factory**.
 
 ## 1. The Core Repository Map

@@ -37,7 +37,7 @@ async function api(path, options = {}) {
     try { const parsed=(await response.json()).detail; detail=typeof parsed==="string"?parsed:(parsed?.message||JSON.stringify(parsed)||detail); } catch (_) {}
     if (response.status === 401 && !path.includes("/auth/")) {
       clearSessionToken();
-      showLogin("Session expired. Send /admin to your connected bot or request a new owner setup link.");
+      showLogin("Session expired. Sign in again with your username and password or an available sign-in token.");
     }
     throw new Error(detail);
   }
@@ -59,7 +59,7 @@ async function authenticate() {
 }
 
 let botOptionsRevision=0, botOptionsReady=false, botSaving=false, botSaveSucceeded=false;
-const botDraftFields=["botDisplayName","botExpectedUsername","botBrandAccent","botStoreTagline","botWelcomeText","botLogoUrl","botSupportContact","botSupportUrl","botMenuText","botCurrency","botLocale","botModuleCatalog","botModuleOrders","botModuleAccount","botEnabled"];
+const botDraftFields=["botDisplayName","botExpectedUsername","botBrandAccent","botMiniappTheme","botStoreTagline","botWelcomeText","botLogoUrl","botSupportContact","botSupportUrl","botMenuText","botCurrency","botLocale","botModuleCatalog","botModuleOrders","botModuleAccount","botEnabled"];
 function supplierStrategyLabel(value){return {PRIORITY:"Use my supplier order",AVAILABILITY:"Choose an available supplier",LOWEST_COST:"Choose the lowest supplier cost",MANUAL:"Use one specific supplier"}[value]||value;}
 function botDraftKey(){const b=state.bootstrap;return b?.store?.id&&b?.actor?.id?`ghbf_bot_draft:${b.store.id}:${b.actor.id}:${el("botWizardBotId").value||"new"}`:"ghbf_bot_draft:unavailable";}
 function showBotError(message,field=null){el("botWizardError").textContent=message;if(field){field.setAttribute("aria-invalid","true");field.setAttribute("aria-describedby","botWizardError");field.focus();}else el("botWizardError").focus();}
@@ -561,7 +561,7 @@ function openTemplateGuidance() {
   renderTemplateGuidanceList();
   el("templateGuidanceDialog").showModal();
 }
-function renderBotBrandPreview(){renderBotDemo();const name=el("botDisplayName").value.trim()||selectedBotTemplate()?.name||"My Store";const tagline=el("botStoreTagline").value.trim()||"Your storefront preview";const accent=el("botBrandAccent").value||"#7c6cff";const logo=el("botLogoUrl").value.trim();const mark=el("botBrandPreviewMark");mark.style.backgroundColor=accent;mark.style.backgroundImage=logo?`url("${logo.replaceAll('"','%22')}")`:"";mark.textContent=logo?"":(name.charAt(0).toUpperCase()||"G");el("botBrandPreviewName").textContent=name;el("botBrandPreviewTagline").textContent=tagline;}
+function renderBotBrandPreview(){renderTenantThemePreview();renderBotDemo();const name=el("botDisplayName").value.trim()||selectedBotTemplate()?.name||"My Store";const tagline=el("botStoreTagline").value.trim()||"Your storefront preview";const accent=el("botBrandAccent").value||"#7c6cff";const logo=el("botLogoUrl").value.trim();const mark=el("botBrandPreviewMark");mark.style.backgroundColor=accent;mark.style.backgroundImage=logo?`url("${logo.replaceAll('"','%22')}")`:"";mark.textContent=logo?"":(name.charAt(0).toUpperCase()||"G");el("botBrandPreviewName").textContent=name;el("botBrandPreviewTagline").textContent=tagline;}
 function templateKeyForBot(bot){return bot?.template_key||bot?.config?._factory?.template_key||"general-commerce";}
 async function openBotProvision(bot=null){
   state.botSource=undefined;
@@ -573,12 +573,13 @@ async function openBotProvision(bot=null){
   el("botToken").value="";el("botExpectedUsername").value=bot?.username||"";el("botDisplayName").value=bot?.display_name||"";el("botEnabled").checked=bot?.is_enabled??true;
   el("botCredentialFields").classList.toggle("hidden",Boolean(bot));el("botCredentialPreserved").classList.toggle("hidden",!bot);el("botToken").required=!bot;
   applyBotTemplateDefaults(selectedBotTemplate(),{preserveIdentity:Boolean(bot)});
+  el("botMiniappTheme").value=bot?.config?.branding?.miniapp_theme||"midnight";
   if(bot){const c=bot.config||{},b=c.branding||{};el("botCurrency").value=c.currency||el("botCurrency").value;el("botLocale").value=c.locale||el("botLocale").value;el("botBrandAccent").value=b.brand_accent||el("botBrandAccent").value;el("botStoreTagline").value=b.store_tagline||"";el("botWelcomeText").value=b.welcome_text||"";el("botLogoUrl").value=b.brand_logo_url||"";el("botSupportContact").value=b.support_contact||"";el("botSupportUrl").value=b.support_url||"";el("botMenuText").value=b.menu_text||"Open Store";const mods=new Set(c.enabled_modules||[]);el("botModuleCatalog").checked=mods.has("catalog");el("botModuleOrders").checked=mods.has("orders");el("botModuleAccount").checked=mods.has("account");}
   await loadBotWizardOptions({profile:bot?.business_profile||bot?.config?._business||null});
   renderBotChooser();renderBotBrandPreview();setWizardStep(1);el("botProvisionDialog").showModal();
   botSaveSucceeded=false;showBotDraft();
 }
-function botWizardPayload(){const template=selectedBotTemplate();if(!template)throw new Error("Select a bot template.");const modules=[["catalog","botModuleCatalog"],["orders","botModuleOrders"],["account","botModuleAccount"]].filter(([,id])=>el(id).checked).map(([name])=>name);if(!modules.length)throw new Error("Enable at least one bot module.");return {display_name:el("botDisplayName").value.trim(),template_key:template.key,template_version:template.version,currency:el("botCurrency").value.trim().toUpperCase(),locale:el("botLocale").value.trim(),branding:{brand_accent:el("botBrandAccent").value,store_tagline:el("botStoreTagline").value.trim(),welcome_text:el("botWelcomeText").value.trim(),brand_logo_url:el("botLogoUrl").value.trim(),support_contact:el("botSupportContact").value.trim(),support_url:el("botSupportUrl").value.trim(),menu_text:el("botMenuText").value.trim(),store_button_text:`🛍️ ${el("botMenuText").value.trim()||"Open Store"}`},enabled_modules:modules,business_profile:currentBotBusinessProfile()};}
+function botWizardPayload(){const template=selectedBotTemplate();if(!template)throw new Error("Select a bot template.");const modules=[["catalog","botModuleCatalog"],["orders","botModuleOrders"],["account","botModuleAccount"]].filter(([,id])=>el(id).checked).map(([name])=>name);if(!modules.length)throw new Error("Enable at least one bot module.");return {display_name:el("botDisplayName").value.trim(),template_key:template.key,template_version:template.version,currency:el("botCurrency").value.trim().toUpperCase(),locale:el("botLocale").value.trim(),branding:{miniapp_theme:el("botMiniappTheme").value,brand_accent:el("botBrandAccent").value,store_tagline:el("botStoreTagline").value.trim(),welcome_text:el("botWelcomeText").value.trim(),brand_logo_url:el("botLogoUrl").value.trim(),support_contact:el("botSupportContact").value.trim(),support_url:el("botSupportUrl").value.trim(),menu_text:el("botMenuText").value.trim(),store_button_text:`🛍️ ${el("botMenuText").value.trim()||"Open Store"}`},enabled_modules:modules,business_profile:currentBotBusinessProfile()};}
 async function saveBotProvision(event){
   event.preventDefault();if(!botOptionsReady)throw new Error("Connection choices could not load. Close setup and reopen it to retry.");
   if(!validateBotStep(true))return;
@@ -1348,15 +1349,18 @@ async function submitHandoffExport(event) {
         confirm_quiesced: el("handoffQuiesced").checked,
       }),
     });
-    const response = await fetch(`/api/v1/platform/sales/handoffs/${id}/bundle`, {
-      headers: state.platformToken ? {"X-GHBF-Platform-Token": state.platformToken} : {Authorization: `Bearer ${state.token}`},
+    const image=el("handoffPackageImage").value.trim();
+    const response = await fetch(`/api/v1/platform/sales/handoffs/${id}/${image?"package":"bundle"}`, {
+      method:image?"POST":"GET",
+      headers: {"Content-Type":"application/json",...(state.platformToken ? {"X-GHBF-Platform-Token": state.platformToken} : {Authorization: `Bearer ${state.token}`})},
+      ...(image?{body:JSON.stringify({image,language:el("handoffReportLanguage").value})}:{}),
     });
     if (!response.ok) throw new Error("Download failed. The encrypted artifact remains available to the operator.");
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement("a");
-    link.href = url; link.download = `tenant-${id}.ghbf.enc`; link.click();
+    link.href = url; link.download = image?`customer-${id}.zip`:`tenant-${id}.ghbf.enc`; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    el("handoffExportStatus").textContent = "Encrypted bundle downloaded. Validate its restore before customer cutover.";
+    el("handoffExportStatus").textContent = image?"Installation package downloaded. Image publication and customer acceptance must be completed before cutover.":"Encrypted bundle downloaded. Validate its restore before customer cutover.";
     await loadSales();
   } catch (err) {
     el("handoffExportStatus").textContent = err.message;
@@ -1540,7 +1544,7 @@ async function saveOnboardTenant(event) {
   }
 }
 
-async function refreshCurrent(){ const active=document.querySelector(".nav.active")?.dataset.view; if(active==="operations") await Operations.load(); else if(active==="plan") await loadSaas(); else if(active==="bots") await loadBots(); else if(active==="products") await Promise.all([loadCategories(),loadProducts()]); else if(active==="orders") await loadOrders(); else if(active==="fulfillment") await loadFulfillment(); else if(active==="providers") await loadProviderOps(); else if(active==="members") await loadMembers(); else if(active==="finance") await Promise.all([loadFinancialCases(),loadPaymentOperationsHealth()]); else if(active==="analytics") await loadAnalytics(); else if(active==="audit") await loadAuditLogs(0); else if(active==="reconciliation") await loadEvents(); else if(active==="sales") await loadSales(); else await loadBootstrap(); }
+async function refreshCurrent(){ const active=document.querySelector(".nav.active")?.dataset.view; if(active==="attention") await Attention.load(); else if(active==="store-settings") await StoreSettings.load(); else if(active==="delivery") await DeliveryCenter.load(); else if(active==="operations") await Operations.load(); else if(active==="plan") await loadSaas(); else if(active==="bots") await loadBots(); else if(active==="products") await Promise.all([loadCategories(),loadProducts()]); else if(active==="orders") await loadOrders(); else if(active==="fulfillment") await loadFulfillment(); else if(active==="providers") await loadProviderOps(); else if(active==="members") await loadMembers(); else if(active==="finance") await Promise.all([loadFinancialCases(),loadPaymentOperationsHealth()]); else if(active==="analytics") await loadAnalytics(); else if(active==="audit") await loadAuditLogs(0); else if(active==="reconciliation") await loadEvents(); else if(active==="sales") await loadSales(); else await loadBootstrap(); }
 
 function bind(){
   el("handoffExportForm").addEventListener("submit", submitHandoffExport);
@@ -1811,3 +1815,27 @@ el("accountButton").addEventListener("click",()=>openAccount().catch(showHomeErr
 el("closeAccount").addEventListener("click",()=>el("accountDialog").close());
 el("accountForm").addEventListener("submit",saveAccountPassword);
 el("accountDialog").addEventListener("close",()=>{el("accountCurrentPassword").value="";el("accountNewPassword").value="";});
+
+let themePreviewRevision=0;
+async function renderTenantThemePreview(){
+  const revision=++themePreviewRevision;
+  try {
+    const catalog=await StoreThemes.ready;
+    if(revision!==themePreviewRevision)return;
+    const key=el('botMiniappTheme').value, theme=catalog[key]||catalog.midnight;
+    const root=el('botThemePreview');
+    StoreThemes.apply(root,catalog,key,el('botBrandAccent').value);
+    root.innerHTML=`<div class="theme-preview-top"><strong>${escapeHtml(el('botDisplayName').value||'Your store')}</strong><span>${escapeHtml(theme.name)}</span></div><p>${escapeHtml(theme.description)}</p><div class="theme-preview-products"><article><div>✦</div><strong>Digital essentials</strong><small>Sample product</small></article><article><div>◈</div><strong>Something special</strong><small>Sample product</small></article></div><div class="theme-preview-action">Explore the collection <span>→</span></div><small>Appearance preview · sample content</small><a class="settings-link" href="/miniapp/?preview=1&theme=${encodeURIComponent(key)}" target="_blank" rel="noopener noreferrer">Open full MiniApp preview ↗</a>`;
+  } catch (_) {el('botThemePreview').textContent='Theme preview unavailable. Saved theme choices are unchanged.';}
+}
+el('botMiniappTheme').addEventListener('change',async()=>{
+  try {const catalog=await StoreThemes.ready;if(catalog[el('botMiniappTheme').value])el('botBrandAccent').value=catalog[el('botMiniappTheme').value].accent;}catch(_){}
+  renderBotBrandPreview();saveBotDraft();
+});
+
+el("revokeAccountSessions").addEventListener("click", async () => {
+  if(!confirm("Sign out every session for this account, including this one?"))return;
+  const button=el("revokeAccountSessions");button.disabled=true;
+  try{await api("/api/v1/auth/account/revoke-sessions",{method:"POST"});clearSessionToken();el("accountDialog").close();showLogin("All account sessions signed out. Sign in again to continue.");}
+  catch(error){el("accountError").textContent=error.message;}finally{button.disabled=false;}
+});

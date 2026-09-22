@@ -1,19 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="booting">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0d12">
+  <meta name="theme-color" content="#f2f7f3">
   <meta name="description" content="Telegram commerce storefront">
   <title>Storefront</title>
-  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260919_01">
+  <link rel="stylesheet" href="./boot.css?v=20260922_06">
+  <script src="./entry.js?v=20260922_06"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js?63" defer></script>
+  <link rel="stylesheet" href="./styles.css?v=20260922_06">
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
   <div class="ambient ambient-two" aria-hidden="true"></div>
 
   <main id="app" class="app-shell" aria-busy="true">
+    <div id="previewBanner" class="preview-banner hidden"><strong>Design preview · sample data</strong><p>Purchases, payments and messages are disabled.</p><label>Explore a theme<select id="previewTheme"><option value="emerald">Emerald</option><option value="midnight">Midnight</option><option value="pearl">Pearl</option><option value="ocean">Ocean</option><option value="rose">Rose</option></select></label></div>
+    <div class="language-bar"><label for="storeLanguage">Language</label><select id="storeLanguage"><option value="en">English</option><option value="ar">العربية</option></select></div>
     <header class="topbar glass-panel">
       <div class="brand-lockup">
         <div id="brandMark" class="brand-mark" aria-hidden="true">G</div>
@@ -27,9 +31,12 @@
       </button>
     </header>
 
-    <section id="loadingView" class="state-view">
-      <div class="loader-orbit" aria-hidden="true"><span></span></div>
-      <p>Securing your session…</p>
+    <section id="loadingView" class="boot-skeleton" role="status" aria-label="Loading storefront">
+      <span class="sr-only">Loading your storefront…</span>
+      <div aria-hidden="true" class="boot-header"><span class="boot-block boot-avatar"></span><span class="boot-block boot-line"></span></div>
+      <div aria-hidden="true" class="boot-block boot-hero"></div>
+      <div aria-hidden="true" class="boot-row"><span class="boot-block boot-pill"></span><span class="boot-block boot-pill"></span><span class="boot-block boot-pill"></span></div>
+      <div aria-hidden="true" class="boot-grid"><div class="boot-block boot-card"></div><div class="boot-block boot-card"></div><div class="boot-block boot-card"></div><div class="boot-block boot-card"></div></div>
     </section>
 
     <section id="errorView" class="state-view hidden" role="alert">
@@ -37,11 +44,15 @@
       <h2 id="errorTitle">Unable to open the store</h2>
       <p id="errorMessage">Please reopen the Mini App from Telegram.</p>
       <button id="retryButton" class="primary-button" type="button">Try again</button>
+      <a class="text-button" href="/miniapp/?preview=1">Explore the sample storefront</a>
     </section>
 
     <div id="authenticatedApp" class="hidden">
+      <div id="salesPauseBanner" class="network-banner hidden" role="status"></div>
+      <section id="pendingOperations" class="network-banner hidden" aria-live="polite"></section>
       <div id="networkBanner" class="network-banner hidden" role="status">You are offline. Showing the last loaded catalog.</div>
       <section id="shopView" class="view active" data-view="shop">
+        <div id="storeNotice" class="store-notice hidden" role="status"></div>
         <div class="hero-card glass-panel">
           <div>
             <span class="eyebrow">WELCOME BACK</span>
@@ -52,6 +63,7 @@
           <div class="hero-orb" aria-hidden="true"><span></span></div>
         </div>
 
+        <div class="shop-shortcuts"><button id="shopRecharge" type="button" class="shortcut-card"><span aria-hidden="true">＋</span><strong>Add funds</strong><small>Ready when you are</small></button><button id="shopSupport" type="button" class="shortcut-card"><span aria-hidden="true">◌</span><strong>Help &amp; support</strong><small>We are here to help</small></button></div>
         <div class="section-heading">
           <div>
             <span class="eyebrow">CATALOG</span>
@@ -99,7 +111,7 @@
           </div>
           <button id="refreshOrdersButton" class="text-button" type="button">Refresh</button>
         </div>
-        <div id="ordersList" class="orders-list"></div>
+        <div id="ordersList" class="orders-list"></div><button id="ordersMore" type="button" class="text-button hidden">Load more</button>
         <div id="emptyOrders" class="empty-card hidden">
           <span class="empty-icon" aria-hidden="true">◎</span>
           <h3>No orders yet</h3>
@@ -131,17 +143,21 @@
           <p>Your wallet will appear after it is funded for the first time.</p>
         </div>
 
+        <div class="section-heading"><h2>Wallet history</h2><button id="walletHistoryButton" type="button" class="text-button">Refresh history</button></div><label class="field-label" for="accountHistoryKind">Activity type</label><select id="accountHistoryKind" class="recipient-input"><option value="spending">Spending wallet</option><option value="assets">Asset wallet</option><option value="funding">Wallet funding</option><option value="deposits">Deposits</option></select><div id="walletHistory"></div><button id="walletHistoryMore" type="button" class="text-button hidden">Load more</button>
+        <button id="accountHelpButton" type="button" class="text-button">Help &amp; support</button><p id="customerIdentity" class="field-help"></p>
         <div class="security-card glass-panel">
           <div class="security-dot" aria-hidden="true"></div>
           <div>
             <strong>Authenticated by Telegram</strong>
-            <p>Identity and tenant context are verified server-side from signed initData.</p>
+            <p>Your purchases and wallet belong to your Telegram account.</p>
           </div>
         </div>
       </section>
+      <section id="helpView" class="view" data-view="help"><div class="section-heading page-heading"><div><span class="eyebrow">HERE TO HELP</span><h2>Support &amp; information</h2></div></div><p id="helpStoreDescription" class="store-description"></p><div id="storePolicyLinks" class="policy-links"></div><div id="storeFAQ"></div><div class="section-heading"><h2>Help &amp; support</h2><button id="supportButton" class="text-button" type="button">Open support</button></div><div id="supportPanel" class="glass-panel support-panel"></div></section>
     </div>
   </main>
 
+  <button id="openCartButton" class="floating-cart primary-button hidden" type="button">Your cart</button>
   <div id="cartBackdrop" class="sheet-backdrop hidden" aria-hidden="true"></div>
   <aside id="cartSheet" class="cart-sheet" aria-label="Shopping cart" aria-hidden="true">
     <div class="sheet-handle" aria-hidden="true"></div>
@@ -156,12 +172,15 @@
     <label class="field-label" for="recipientInput">Delivery recipient</label>
     <input id="recipientInput" class="recipient-input" type="text" maxlength="255" autocomplete="off" placeholder="Email, phone, account ID, or destination" aria-describedby="recipientHelp">
     <p id="recipientHelp" class="field-help">Enter the destination required by the product provider.</p>
+    <label class="field-label" for="couponInput">Coupon code (optional)</label>
+    <input id="couponInput" class="recipient-input" maxlength="40" autocomplete="off" placeholder="Enter your code">
+    <p class="field-help">Discount eligibility is confirmed at checkout.</p>
     <div class="checkout-summary">
-      <span>Total</span>
+      <span>Subtotal before discount</span>
       <strong id="cartTotal">0.00</strong>
     </div>
     <button id="checkoutButton" class="primary-button checkout-button" type="button">Pay from wallet</button>
-    <p class="checkout-note">Prices are revalidated by the server before any wallet debit.</p>
+    <p class="checkout-note">Your final total includes eligible discounts. Payment uses your available wallet balance.</p>
   </aside>
 
   <div id="topupBackdrop" class="sheet-backdrop hidden" aria-hidden="true"></div>
@@ -230,9 +249,12 @@
     <button class="nav-button" data-target="account" type="button" aria-label="Account">
       <span class="nav-icon">○</span><span>Account</span>
     </button>
+    <button class="nav-button" data-target="help" type="button" aria-label="Help"><span class="nav-icon">◌</span><span>Help</span></button>
   </nav>
 
+  <dialog id="productDetailDialog" class="product-dialog" aria-labelledby="productDetailTitle"><div class="sheet-header"><h2 id="productDetailTitle"></h2><button id="closeProductDetail" type="button" class="icon-button" aria-label="Close product details">×</button></div><div id="productDetailContent"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./app.js?v=20260919_01"></script>
+  <script src="/shared/store-themes.js?v=20260922_06"></script>
+  <script type="module" src="./app.js?v=20260922_06"></script>
 </body>
 </html>

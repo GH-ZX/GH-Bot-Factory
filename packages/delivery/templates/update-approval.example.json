@@ -1,0 +1,10 @@
+{
+  "owner_approved": false,
+  "writes_stopped": false,
+  "approved_image": "registry/repository@sha256:APPROVED_DIGEST",
+  "previous_image": "registry/repository@sha256:CURRENT_DIGEST",
+  "database_backup_sha256": "",
+  "vault_backup_sha256": "",
+  "backup_reference": "",
+  "rollback_notes": ""
+}

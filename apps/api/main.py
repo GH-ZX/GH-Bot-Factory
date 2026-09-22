@@ -7,17 +7,20 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, status
-from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from apps.api.v1.admin import router as admin_router
 from apps.api.v1.admin_analytics import router as admin_analytics_router
+from apps.api.v1.admin_attention import router as attention_router
 from apps.api.v1.admin_bots import router as admin_bots_router
 from apps.api.v1.admin_economics import router as admin_economics_router
 from apps.api.v1.admin_finance import router as admin_finance_router
+from apps.api.v1.admin_installation import router as installation_router
 from apps.api.v1.admin_integrations import router as admin_integrations_router
+from apps.api.v1.admin_maintenance import router as maintenance_router
+from apps.api.v1.admin_maintenance import support_router as maintenance_access_router
 from apps.api.v1.admin_members import router as admin_members_router
 from apps.api.v1.admin_onboarding import router as admin_onboarding_router
 from apps.api.v1.admin_operations import customer_router as support_router
@@ -25,9 +28,11 @@ from apps.api.v1.admin_operations import router as operations_router
 from apps.api.v1.admin_payments import router as admin_payments_router
 from apps.api.v1.admin_providers import router as admin_providers_router
 from apps.api.v1.admin_saas import router as admin_saas_router
+from apps.api.v1.admin_store_settings import router as store_settings_router
 from apps.api.v1.auth import router as auth_router
 from apps.api.v1.payments import router as payments_router
 from apps.api.v1.platform import router as platform_router
+from apps.api.v1.platform_delivery import router as platform_delivery_router
 from apps.api.v1.platform_sales import router as platform_sales_router
 from apps.api.v1.public_marketplace import router as public_marketplace_router
 from apps.api.v1.saas_billing import router as saas_billing_router
@@ -80,11 +85,12 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 @app.exception_handler(RequestValidationError)
 async def credential_validation_error(request: Request, exc: RequestValidationError):
-    if request.url.path.startswith(("/api/v1/auth/", "/api/v1/setup/")):
-        # Pydantic's default `input` can echo passwords even for length/type errors.
-        errors = [{key: error[key] for key in ("type", "loc", "msg")} for error in exc.errors()]
-        return JSONResponse({"detail": errors}, status_code=422, headers={"Cache-Control": "no-store"})
-    return await request_validation_exception_handler(request, exc)
+    # Validation must never reflect submitted credentials, payloads or file contents.
+    errors = [{"type": error["type"], "loc": error["loc"],
+               "msg": "Invalid value" if error["type"] == "value_error" else error["msg"]}
+              for error in exc.errors()]
+    return JSONResponse({"detail": errors}, status_code=422, headers={"Cache-Control": "no-store"})
+
 
 
 @app.middleware("http")
@@ -140,9 +146,15 @@ async def prometheus_metrics() -> PlainTextResponse:
 app.include_router(payments_router, prefix="/api/v1")
 app.include_router(platform_router, prefix="/api/v1")
 app.include_router(platform_sales_router, prefix="/api/v1")
+app.include_router(platform_delivery_router, prefix="/api/v1")
 app.include_router(saas_billing_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 app.include_router(operations_router, prefix="/api/v1")
+app.include_router(installation_router, prefix="/api/v1")
+app.include_router(attention_router, prefix="/api/v1")
+app.include_router(maintenance_router, prefix="/api/v1")
+app.include_router(store_settings_router, prefix="/api/v1")
+app.include_router(maintenance_access_router, prefix="/api/v1")
 app.include_router(support_router, prefix="/api/v1")
 app.include_router(admin_analytics_router, prefix="/api/v1")
 app.include_router(admin_bots_router, prefix="/api/v1")

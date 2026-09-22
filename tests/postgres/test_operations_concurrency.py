@@ -214,3 +214,24 @@ async def test_quote_acceptance_serializes_sibling_versions(postgres_session_fac
     finally:
         app.dependency_overrides.clear()
         settings.platform_admin_token = old_token
+
+
+async def test_pause_policy_refreshes_an_already_loaded_tenant(postgres_session_factory):
+    factory = postgres_session_factory
+    tenant_id, user_id, variant_id = await seed(factory)
+    async with factory() as checkout_session:
+        tenant = await checkout_session.get(Tenant, tenant_id)
+        assert not (tenant.settings or {}).get('sales_paused')
+        async with factory() as owner_session:
+            changed = await owner_session.get(Tenant, tenant_id)
+            changed.settings = {**(changed.settings or {}), 'sales_paused': True}
+            await owner_session.commit()
+        with pytest.raises(ValueError, match='paused'):
+            await CheckoutService().checkout(
+                checkout_session, tenant_id, user_id, variant_id, 1, 'buyer',
+                execute_sync=False, enqueue_durable=True, idempotency_key='paused-stale-session',
+            )
+        await checkout_session.rollback()
+    async with factory() as session:
+        assert await session.scalar(select(Wallet.balance).where(Wallet.tenant_id == tenant_id)) == Decimal(100)
+        assert await session.scalar(select(func.count()).select_from(Order).where(Order.tenant_id == tenant_id)) == 0
