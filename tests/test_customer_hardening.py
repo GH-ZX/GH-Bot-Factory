@@ -6,12 +6,12 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select, text
 
-from apps.api.deps import get_current_principal
+from apps.api.deps import get_auth_token_service, get_current_principal
 from apps.api.main import app
 from apps.api.platform_deps import PlatformOperator, require_platform_operator
 from packages.commerce.checkout import CheckoutService
 from packages.commerce.models import Product, ProductVariant
-from packages.core.auth import AuthenticatedPrincipal, AuthSource
+from packages.core.auth import AuthenticatedPrincipal, AuthSource, AuthTokenService
 from packages.core.database import get_db_session
 from packages.delivery.models import DiagnosticGrant, MaintenanceIssue
 from packages.marketplace.models import DeploymentHandoff
@@ -35,6 +35,7 @@ async def care(db_session, monkeypatch):
     await db_session.execute(text("INSERT INTO alembic_version VALUES ('c93eb541da62')"))
     await db_session.commit()
     principal = AuthenticatedPrincipal(user.id, tenant.id, AuthSource.SESSION, frozenset({Role.OWNER}))
+    app.dependency_overrides[get_auth_token_service] = lambda: AuthTokenService(secret_key="isolated-hardening-signing-key-at-least-32-bytes")
     app.dependency_overrides[get_db_session] = lambda: db_session
     app.dependency_overrides[get_current_principal] = lambda: principal
     async def observed(*args):
