@@ -2292,3 +2292,11 @@ are historical. Real-customer trials remain deferred.
   actual Telegram customer trial and staging/failure-injection qualification remain separate.
 - Logs: `/tmp/ghbf-canonical-final.log`, `/tmp/ghbf-dependency-audit.log`, browser logs under
   `/tmp/ghbf-*-final-browser.log`, `/tmp/ghbf-miniapp-browser.log`. Release artifact build pending.
+
+## 2026-09-28 — Push authorization and live test scoping
+
+> ok im with u , for now ill stop adding , please commit and push all, so new updates live, i need to try the project live, i have empty supabase account, and another laptop i can do it, i need to go through this now, btw, the payments would be on sam api (shamcash ) and nowpayment, just those for now need on the live test , ill do it, u can tell me what i need to hear
+
+Owner authorized committing and pushing all current updates to live remote, pausing new feature accretion,
+and preparing for a live deployment test using an empty Supabase instance and an independent laptop.
+Target payment providers scoped to NOWPayments (implemented) and ShamCash / Sam API (requires integration specification).
