@@ -286,26 +286,14 @@ function renderBootstrap() {
   document.body.dataset.templateKey = tKey;
 
   const verticalLabels = {
-    NUMBER_SMS: { eyebrow: "📱 VIRTUAL NUMBERS & SMS", badge: "⚡ Real-time SMS Activation", search: "Search services (Telegram, WhatsApp, Google…)" },
-    ACCOUNT: { eyebrow: "👤 ACCOUNTS STORE", badge: "🛡️ Verified Platform Accounts", search: "Search accounts, platforms, regions…" },
-    GIFT_CARD: { eyebrow: "🎁 GIFT CARDS & CODES", badge: "💳 Instant Digital Delivery", search: "Search gift cards, games, vouchers…" },
-    DIGITAL_PRODUCT: { eyebrow: "⚡ DIGITAL PRODUCTS", badge: "🔑 Instant Keys & Licenses", search: "Search digital products, keys, licenses…" },
-    RESELLER: { eyebrow: "🌐 MULTI-API RESELLER", badge: "🚀 Automated Multi-Supplier Routing", search: "Search products across suppliers…" },
-    HYBRID: { eyebrow: "✨ HYBRID DIGITAL STORE", badge: "⭐ Unified Products & Services", search: "Search catalog…" },
+    NUMBER_SMS: { search: "Search services (Telegram, WhatsApp, Google…)" },
+    ACCOUNT: { search: "Search accounts, platforms, regions…" },
+    GIFT_CARD: { search: "Search gift cards, games, vouchers…" },
+    DIGITAL_PRODUCT: { search: "Search digital products, keys, licenses…" },
+    RESELLER: { search: "Search products across suppliers…" },
+    HYBRID: { search: "Search catalog…" },
   };
-
-  const vertical = verticalLabels[bType] || { eyebrow: t("TELEGRAM STORE"), badge: "", search: t("Search products, plans, or SKU") };
-  const storeEyebrow = el("storeEyebrow");
-  if (storeEyebrow) storeEyebrow.textContent = t(vertical.eyebrow);
-  const verticalBadge = el("verticalBadge");
-  if (verticalBadge) {
-    if (vertical.badge) {
-      verticalBadge.textContent = t(vertical.badge);
-      verticalBadge.classList.remove("hidden");
-    } else {
-      verticalBadge.classList.add("hidden");
-    }
-  }
+  const vertical = verticalLabels[bType] || { search: t("Search products, plans, or SKU") };
   if (catalogSearchInput && vertical.search) {
     catalogSearchInput.placeholder = t(vertical.search);
   }
@@ -313,8 +301,10 @@ function renderBootstrap() {
   const enabledModules = Array.isArray(store.enabled_modules) ? store.enabled_modules : ["catalog", "orders", "account"];
   const ordersNav = document.querySelector('.nav-button[data-target="orders"]');
   if (ordersNav) ordersNav.classList.toggle("hidden", !enabledModules.includes("orders"));
-  const accountNav = document.querySelector('.nav-button[data-target="account"]');
-  if (accountNav) accountNav.classList.toggle("hidden", !enabledModules.includes("account"));
+  const walletNav = document.querySelector('.nav-button[data-target="wallet"]');
+  if (walletNav) walletNav.classList.toggle("hidden", !enabledModules.includes("account"));
+  const settingsNav = document.querySelector('.nav-button[data-target="settings"], .nav-button[data-target="account"]');
+  if (settingsNav) settingsNav.classList.toggle("hidden", !enabledModules.includes("account"));
 
   const accent = store.settings?.brand_accent;
   if (/^#[0-9a-fA-F]{6}$/.test(accent ?? "")) document.documentElement.style.setProperty("--accent", accent);
@@ -337,9 +327,14 @@ function renderBootstrap() {
     <span class="field-help">${t("Asset balance · separate from your spending wallet")}</span>
   </article>`).join("");
   experience?.renderHelp();
+  const primaryWallet = wallets.find(w => w.currency === "USD") || wallets[0];
+  const heroBal = primaryWallet ? escapeHtml(money(primaryWallet.balance, primaryWallet.currency)) : "$0.00";
+  const heroEl = el("walletHeroBalance");
+  if (heroEl) heroEl.textContent = heroBal;
   el("shopRecharge").classList.toggle("hidden",state.topupOptions.length===0);
   el("emptyWallets").classList.toggle("hidden", wallets.length + assets.length > 0);
   el("fundWalletButton").classList.toggle("hidden", state.topupOptions.length === 0);
+  el("walletRechargeButton")?.classList.toggle("hidden", state.topupOptions.length === 0);
 }
 
 function renderCategories() {
@@ -965,10 +960,17 @@ function handleBackButton() {
 }
 
 function switchView(target) {
-  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.dataset.view === target));
-  document.querySelectorAll(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.target === target));
-  if (target === "account") experience?.history();
-  if (target === "help") {experience?.renderHelp();customerCare?.list().catch(error=>showToast(error.message,"error"));}
+  if (target === "account" || target === "help") target = "settings";
+  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.dataset.view === target || view.dataset.aliasView === target));
+  document.querySelectorAll(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.target === target || (target === "settings" && button.dataset.target === "account")));
+  if (target === "wallet") {
+    experience?.history();
+    renderTopupForm();
+  }
+  if (target === "settings") {
+    experience?.renderHelp();
+    customerCare?.list().catch(error=>showToast(error.message,"error"));
+  }
   if (target === "orders") loadOrders().catch((error) => showToast(error.message, "error"));
   window.scrollTo({ top: 0, behavior: "smooth" });
   haptic("light");
@@ -1025,11 +1027,23 @@ function bindEvents() {
   experience=bindExperience({state,api,esc:escapeHtml,money,t,toast:showToast,openPayment:openHistoricalPayment});
   customerCare=bindCustomerCare({api,escapeHtml,toast:showToast,orders:()=>state.orders||[],t});
   bindSheetAccess(cartSheet,closeCart);bindSheetAccess(topupSheet,closeTopup);
-  el("shopRecharge").onclick=()=>openTopup();
-  el("shopSupport").onclick=()=>switchView("help");
-  el("accountHelpButton").onclick=()=>switchView("help");
+  el("shopRecharge").onclick=()=>switchView("wallet");
+  const walletRecharge = el("walletRechargeButton");
+  if (walletRecharge) walletRecharge.onclick=()=>openTopup();
+  if (el("shopSupport")) {
+    el("shopSupport").onclick=()=>{
+      switchView("settings");
+      el("supportSection")?.scrollIntoView({behavior:"smooth"});
+    };
+  }
+  const helpBtn = el("accountHelpButton");
+  if (helpBtn) {
+    helpBtn.onclick=()=>{
+      el("supportSection")?.scrollIntoView({behavior:"smooth"});
+    };
+  }
   el("storeLanguage").addEventListener("change",()=>{setLanguage(el("storeLanguage").value,state.bootstrap?.store?.id,true);renderBootstrap();renderCategories();renderProducts();renderOrders();renderCart();});
-  el("profileButton").addEventListener("click", () => switchView("account"));
+  el("profileButton").addEventListener("click", () => switchView("settings"));
   el("refreshCatalogButton").addEventListener("click", () => loadCatalog(state.selectedCategory).catch((error) => showToast(error.message, "error")));
   catalogSearchInput.addEventListener("input", () => {
     window.clearTimeout(bindEvents.catalogSearchTimer);
@@ -1107,9 +1121,12 @@ async function boot() {
     document.getElementById("app").setAttribute("aria-busy", "false");
     renderCart();
     const entry = new URLSearchParams(location.search).get("view");
-    if (["account","orders"].includes(entry)) switchView(entry);
-    if (entry === "support") switchView("help");
-    if (entry === "recharge") {switchView("account");openTopup();}
+    if (["account","orders","settings","wallet"].includes(entry)) switchView(entry);
+    if (entry === "support" || entry === "help") {
+      switchView("settings");
+      el("supportSection")?.scrollIntoView({behavior:"smooth"});
+    }
+    if (entry === "recharge") switchView("wallet");
   } catch (error) {
     console.error("Mini App bootstrap failed", error);
     setFatalError(t("Unable to open the store"), error.message || "The storefront could not be initialized.");

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -180,6 +181,9 @@ class BotRuntimeManager:
         instance = self.active_bots.pop(bot_id, None)
         if instance is None:
             return
+        if instance.dispatcher._running_lock.locked():
+            with contextlib.suppress(Exception):
+                await instance.dispatcher.stop_polling()
         if instance.task and not instance.task.done():
             instance.task.cancel()
             await asyncio.gather(instance.task, return_exceptions=True)

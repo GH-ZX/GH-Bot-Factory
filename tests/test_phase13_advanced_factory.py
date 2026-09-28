@@ -163,7 +163,7 @@ async def test_advanced_templates_and_wizard_options_are_category_aware(client_e
     assert str(gift.id) not in {row["id"] for row in data["providers"]}
     assert {row["id"] for row in data["payment_methods"]} == {str(method_a.id), str(method_b.id)}
     assert str(tier.id) in {row["id"] for row in data["pricing_tiers"]}
-
+    assert data["total_tenant_providers"] == 2
 
 async def test_provisioning_validates_business_profile_tenant_and_category(client_env):
     client: httpx.AsyncClient = client_env["client"]

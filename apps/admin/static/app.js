@@ -99,7 +99,10 @@ function validateBotStep(all=false){
     let parent=field.parentElement;while(parent&&parent!==el("botProvisionForm")){if(parent.tagName==="DETAILS")parent.open=true;parent=parent.parentElement;}
     showBotError(`${field.closest('label')?.childNodes[0]?.textContent?.trim()||"This field"}: ${field.validationMessage}`,field);return false;
   }}
-  if((all||state.botWizardStep===4)&&el("botRoutingStrategy").value==="MANUAL"&&!el("botPreferredProvider").value){setWizardStep(4);el("botAdvancedConnections").open=true;showBotError("Choose a supplier, or select a different supplier selection method.",el("botPreferredProvider"));return false;}
+  if((all||state.botWizardStep===4)&&el("botRoutingStrategy").value==="MANUAL"){
+    if(!(state.botWizardOptions?.providers||[]).length){setWizardStep(4);el("botAdvancedConnections").open=true;showBotError("No suppliers are connected to this store yet. Connect a supplier in Suppliers & payments, or choose a different supplier selection method.",el("botRoutingStrategy"));return false;}
+    if(!el("botPreferredProvider").value){setWizardStep(4);el("botAdvancedConnections").open=true;showBotError("Choose a supplier, or select a different supplier selection method.",el("botPreferredProvider"));return false;}
+  }
   return true;
 }
 async function navigateTo(view){
@@ -392,7 +395,11 @@ async function loadBotWizardOptions({preserveSelections=false,profile=null}={}){
   el("botRoutingStrategy").value=profile?.routing_strategy||o.default_routing_strategy||"PRIORITY";
   el("botPricingTier").innerHTML=`<option value="">Store default</option>`+o.pricing_tiers.map(t=>`<option value="${t.id}">${escapeHtml(t.display_name)}${t.is_default?' · default':''}</option>`).join("");
   el("botPricingTier").value=profile?.default_pricing_tier_id||"";
-  el("botProviderChoices").innerHTML=o.providers.length?o.providers.map(v=>`<label class="choice-card"><input type="checkbox" data-bot-provider value="${v.id}" ${previousProviders.has(String(v.id))?'checked':''}><span><strong>${escapeHtml(v.name)}</strong><small class="muted">${escapeHtml(v.category)} · ${escapeHtml(v.health_status)}</small></span></label>`).join(""):`<div class="empty">No suppliers connected yet. Create your bot now, then add a supplier from Suppliers & payments.</div>`;
+  let emptyMsg="No suppliers connected yet. Create your bot now, then add a supplier from Suppliers & payments.";
+  if(!o.providers.length&&(o.total_tenant_providers||0)>0){
+    emptyMsg=`You have ${o.total_tenant_providers} supplier connection(s), but none match this template's category (${(o.provider_categories||[]).join(", ")||"compatible"}) or they are disabled. Add or enable a compatible supplier in Suppliers & payments.`;
+  }
+  el("botProviderChoices").innerHTML=o.providers.length?o.providers.map(v=>`<label class="choice-card"><input type="checkbox" data-bot-provider value="${v.id}" ${previousProviders.has(String(v.id))?'checked':''}><span><strong>${escapeHtml(v.name)}</strong><small class="muted">${escapeHtml(v.category)} · ${escapeHtml(v.health_status)}</small></span></label>`).join(""):`<div class="empty">${escapeHtml(emptyMsg)}</div>`;
   el("botPaymentChoices").innerHTML=o.payment_methods.length?o.payment_methods.map(v=>`<label class="choice-card"><input type="checkbox" data-bot-payment value="${v.id}" ${previousMethods.has(String(v.id))?'checked':''}><span><strong>${escapeHtml(v.display_name)}</strong><small class="muted">${escapeHtml(v.method_type)}${v.provider_name?` · ${escapeHtml(v.provider_name)}`:''}${v.flexible_deposits_enabled?' · flexible':''}</small></span></label>`).join(""):`<div class="empty">No enabled payment methods yet. Wallet checkout remains available for pre-funded balances.</div>`;
   el("botAllowAutoCredit").checked=profile?.allow_flexible_auto_credit??false;
   refreshPreferredProvider(profile?.preferred_provider_id||null);
@@ -400,14 +407,30 @@ async function loadBotWizardOptions({preserveSelections=false,profile=null}={}){
   el("botWizardNext").disabled=false;el("botWizardSubmit").disabled=false;
 }
 function refreshPreferredProvider(selected=null){
+  const allProviders=state.botWizardOptions?.providers||[];
   const checked=[...document.querySelectorAll('[data-bot-provider]:checked')];
-  el("botPreferredProvider").innerHTML=`<option value="">Select provider</option>`+checked.map(n=>{const label=n.closest('label')?.querySelector('strong')?.textContent||n.value;return `<option value="${n.value}">${escapeHtml(label)}</option>`}).join("");
-  if(selected&&checked.some(n=>n.value===String(selected)))el("botPreferredProvider").value=String(selected);
+  const candidates=checked.length>0
+    ? checked.map(n=>({id:n.value,name:n.closest('label')?.querySelector('strong')?.textContent||n.value}))
+    : allProviders.map(p=>({id:String(p.id),name:p.name}));
+  const currentVal=selected!==null?String(selected):el("botPreferredProvider").value;
+  if(!allProviders.length){
+    el("botPreferredProvider").innerHTML=`<option value="">No suppliers connected yet</option>`;
+  }else{
+    el("botPreferredProvider").innerHTML=`<option value="">Select provider</option>`+candidates.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join("");
+    if(currentVal&&candidates.some(c=>c.id===currentVal)){
+      el("botPreferredProvider").value=currentVal;
+    }
+  }
   el("botPreferredProviderWrap").classList.toggle("hidden",el("botRoutingStrategy").value!=="MANUAL");
 }
 function currentBotBusinessProfile(){
   const template=selectedBotTemplate();const o=state.botWizardOptions||{};
-  return {business_type:o.business_type||template?.business_type||"GENERAL",provider_ids:[...document.querySelectorAll('[data-bot-provider]:checked')].map(n=>n.value),payment_method_ids:[...document.querySelectorAll('[data-bot-payment]:checked')].map(n=>n.value),routing_strategy:el("botRoutingStrategy").value||o.default_routing_strategy||"PRIORITY",preferred_provider_id:el("botRoutingStrategy").value==="MANUAL"?(el("botPreferredProvider").value||null):null,default_pricing_tier_id:el("botPricingTier").value||null,allow_flexible_auto_credit:el("botAllowAutoCredit").checked};
+  const checkedProviders=[...document.querySelectorAll('[data-bot-provider]:checked')].map(n=>n.value);
+  const preferred=el("botRoutingStrategy").value==="MANUAL"?(el("botPreferredProvider").value||null):null;
+  if(preferred&&!checkedProviders.includes(preferred)){
+    checkedProviders.push(preferred);
+  }
+  return {business_type:o.business_type||template?.business_type||"GENERAL",provider_ids:checkedProviders,payment_method_ids:[...document.querySelectorAll('[data-bot-payment]:checked')].map(n=>n.value),routing_strategy:el("botRoutingStrategy").value||o.default_routing_strategy||"PRIORITY",preferred_provider_id:preferred,default_pricing_tier_id:el("botPricingTier").value||null,allow_flexible_auto_credit:el("botAllowAutoCredit").checked};
 }
 function renderBotWizardReview(){
   const t=selectedBotTemplate(),p=currentBotBusinessProfile(),providers=[...document.querySelectorAll('[data-bot-provider]:checked')].map(n=>n.closest('label')?.querySelector('strong')?.textContent||n.value),methods=[...document.querySelectorAll('[data-bot-payment]:checked')].map(n=>n.closest('label')?.querySelector('strong')?.textContent||n.value);
@@ -1585,6 +1608,13 @@ function bind(){
   el("botTemplate").addEventListener("change",()=>changeBotTemplate());
   el("botRoutingStrategy").addEventListener("change",()=>refreshPreferredProvider());
   el("botProviderChoices").addEventListener("change",()=>refreshPreferredProvider(el("botPreferredProvider").value));
+  el("botPreferredProvider").addEventListener("change",()=>{
+    const val=el("botPreferredProvider").value;
+    if(val){
+      const cb=document.querySelector(`[data-bot-provider][value="${val}"]`);
+      if(cb&&!cb.checked){cb.checked=true;saveBotDraft();}
+    }
+  });
   ["botDisplayName","botStoreTagline","botBrandAccent","botLogoUrl"].forEach(id=>el(id).addEventListener("input",renderBotBrandPreview));
   document.querySelectorAll("[data-home-view]").forEach(button=>button.addEventListener("click",()=>navigateTo(button.dataset.homeView).catch(showHomeError)));
   el("homePreview").addEventListener("click",()=>openHomePreview().catch(showHomeError));

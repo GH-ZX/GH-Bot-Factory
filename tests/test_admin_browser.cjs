@@ -119,7 +119,7 @@ const server=require('./browser_static.cjs').createServer(root);
     });
     await store.goto(`${base}/miniapp/?bot_id=11111111-1111-1111-1111-111111111111`);
     await store.locator('#authenticatedApp').waitFor({state: 'visible'});
-    await store.locator('[data-target="account"]').click();
+    await store.locator('[data-target="wallet"], [data-target="settings"], [data-target="account"]').first().click();
     assert((await store.locator('#walletGrid').textContent()).includes('1.000000000000000001'));
     await store.locator('#fundWalletButton').click();
     await store.locator('#topupAmountInput').fill('10');

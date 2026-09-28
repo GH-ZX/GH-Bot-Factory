@@ -43,9 +43,10 @@ export function bindCustomerCare({api, escapeHtml:esc, toast, orders, t}) {
   };
   document.addEventListener('click',event=>{
     const button=event.target.closest('[data-order-support]');if(!button||busy)return;
-    document.querySelector('[data-target="help"]').click();
+    const navBtn=document.querySelector('[data-target="settings"], [data-target="account"], [data-target="help"]');
+    if(navBtn)navBtn.click();
     compose(button.dataset.orderSupport,button.dataset.warrantyItem||'');root.scrollIntoView({behavior:'smooth'});
   });
   document.getElementById('supportButton').onclick=()=>list().catch(e=>toast(e.message,'error'));
-  return {list};
+  return {list,compose};
 }

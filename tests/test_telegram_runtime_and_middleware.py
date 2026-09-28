@@ -288,3 +288,18 @@ async def test_runtime_only_loads_configured_release_channels(
     )
     rows = await manager._load_desired_bots()
     assert [row.id for row in rows] == [canary.id]
+
+
+@pytest.mark.asyncio
+async def test_create_dispatcher_can_be_called_repeatedly(db_session: AsyncSession):
+    import uuid
+
+    manager = BotRuntimeManager(
+        secret_storage=EnvSecretStorage({}),
+        session_factory=async_sessionmaker(bind=db_session.bind, class_=AsyncSession),
+    )
+    dp1 = manager.create_dispatcher(uuid.uuid4())
+    dp2 = manager.create_dispatcher(uuid.uuid4())
+    assert dp1 is not dp2
+    assert dp1.sub_routers
+    assert dp2.sub_routers

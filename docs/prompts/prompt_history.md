@@ -2300,3 +2300,131 @@ are historical. Real-customer trials remain deferred.
 Owner authorized committing and pushing all current updates to live remote, pausing new feature accretion,
 and preparing for a live deployment test using an empty Supabase instance and an independent laptop.
 Target payment providers scoped to NOWPayments (implemented) and ShamCash / Sam API (requires integration specification).
+
+## 2026-09-28 — Bot wizard step 4 provider options repair
+
+> i noticed on step 4 while making a bot for tenant, it doesnt show any provider on options
+
+Repaired Step 4 provider option population in the Admin Bot Provisioning Wizard:
+- Fixed `refreshPreferredProvider` in `apps/admin/static/app.js`: when no checkboxes are checked in `botProviderChoices` (the default state per instructions to allow all compatible connections), the "Preferred provider" dropdown (`#botPreferredProvider`) now lists all available compatible providers from `state.botWizardOptions.providers`, rather than rendering an empty dropdown with only "Select provider".
+- When specific provider checkboxes are checked, the dropdown limits options to the checked candidates. If zero providers exist, it displays "No suppliers connected yet".
+- Selecting a preferred provider in the dropdown now automatically marks its corresponding checkbox as checked and ensures `currentBotBusinessProfile` includes `preferred_provider_id` in `provider_ids` so backend validation (`preferred_provider_id must also be present in provider_ids`) succeeds.
+- In `validateBotStep`, if `MANUAL` routing is selected without connected providers, the wizard displays a clear actionable error message rather than a generic prompt to choose from an empty list.
+- In `apps/api/v1/admin_bots.py`, added `total_tenant_providers` count to `BotWizardOptionsResponse` and queried it in `get_bot_wizard_options`.
+- In `loadBotWizardOptions`, added informative empty-state messaging when a tenant has connected suppliers that are disabled or incompatible with the selected template's category.
+- Bumped Admin asset cache buster for `app.js` to `v=20260928_01` in `apps/admin/static/index.html`.
+- Updated `tests/test_phase13_advanced_factory.py` with assertion on `total_tenant_providers`.
+
+## 2026-09-28 — Clarification on Suppliers & Payments vs Bot Creation
+
+> wait i noticed theres suppliers and payments page, i shouldve added there then i choose in making bot step 4??????????
+
+Explained the architecture and workflow relationship between the tenant-level "Suppliers & payments" catalog and Bot Wizard Step 4:
+- "Suppliers & payments" configures tenant-level infrastructure credentials and integrations (API keys, webhooks, adapter configs).
+- Bot Wizard Step 4 ("Connections") is optional bot-level routing and scope restriction. Bots default to using all compatible enabled connections across the store.
+- Merchants can create the bot first, or add suppliers first; manual supplier routing on Step 4 requires the supplier to exist in "Suppliers & payments" first.
+
+## 2026-09-28 — Bot runtime router re-attachment defect repair (@mrandroid_robot)
+
+> now i made a new bot, @mrandroid_robot for a tenant, he would would buy it 100$ , anyway i guess theres some problems ? it stucked, can u inspect and tell me
+
+Investigated running containers and PostgreSQL database state for `@mrandroid_robot`:
+- Provisioning job (`87030593-5b6f-4746-b9d3-1bce445dd6b8`) succeeded and verified credentials.
+- Initial polling started at `00:24:27Z`. At `00:29:34Z`, the bot configuration was updated, triggering desired-state reconciliation to recreate the bot dispatcher instance.
+- Discovered defect in `packages/telegram/routers/__init__.py`: `get_root_router()` combined module-level singleton feature routers (`start_router`, etc.) into a new `Router(name="root_telegram_router")`. Under aiogram 3, attaching a sub-router sets its `parent_router`. On subsequent calls (bot restart or multiple bots), aiogram raised `RuntimeError: Router is already attached to <Router 'root_telegram_router'>`, putting the bot into an endless backoff retry loop.
+- Fixed `packages/telegram/routers/__init__.py`: implemented `copy_router(source)` which clones observers, handlers, and middlewares into a fresh unattached `Router`, allowing `get_root_router()` to be called repeatedly across multiple dispatchers and bot instances.
+- Enhanced `_stop_instance` in `packages/telegram/runtime.py` to gracefully stop polling via `instance.dispatcher.stop_polling()` before task cancellation.
+- Added missing `sqlalchemy[asyncio]>=2.0` and `greenlet>=3.0` dependency to `pyproject.toml` so container image builds and alembic migrations succeed.
+- Added regression unit test `test_create_dispatcher_can_be_called_repeatedly` in `tests/test_telegram_runtime_and_middleware.py`.
+- Rebuilt and updated `gh-bot-factory` Docker services (`api`, `bot-runtime`, `worker`). Verified `@mrandroid_robot` successfully initialized and is live polling Telegram updates.
+
+## 2026-09-28 — Pivot to Plug-and-Play Customer Bot Delivery Model
+
+> yah it is B , i would like this factory to be just a maker for telegram bots, i give full code forr the bot as plug and play , friendly, i use anydesk to do bot settings and migrations and prepare it to work always on his vps and migrate to his supabase, edit what need editingg for whhat im saying , maybe the factory didnt reach the point i was want, anyway, let us stay on what we are and edit like the plan of this and what remmmainig work do we have to do now
+
+Owner clarified the commercial deployment model:
+- Factory role: A builder/maker of Telegram store bots.
+- Delivery model: Full plug-and-play source code and migration scripts handed over to the buyer.
+- Deployment workflow: Using AnyDesk on the customer's VPS, pasting the migration SQL into their Supabase project, configuring environment variables, running the runtime on their VPS, and managing the bot independently.
+- Inspection requested on what needs editing in the factory architecture to make this workflow smooth, plug-and-play, and friction-free before execution.
+
+## 2026-09-28 — MiniApp Help Consolidation into Settings Page
+
+> no , i will make this mrandroid for testing porpose, this shows me how the bot would show, can we for now do some changings for the final bot he gets ? the tenant? , u can get some of the ui,ux from the parentfolder/gh-store-tele , this a working bot/miniapp i use for now (not connected to this project, just get some codes from it if it helps, for now , theres a page named help in the miniapp, remove it , it should be in settings page, on the miniapp
+
+Refined MiniApp navigation and page architecture following `gh-store-tele` patterns:
+- Removed standalone "Help" button from the bottom navigation bar (`apps/miniapp/static/index.html`).
+- Renamed the 3rd bottom navigation button to "Settings" (`⚙ Settings`), consolidating navigation to 3 clean tabs: Shop, Orders, Settings.
+- Nested the Help & Support sections (store description, policy links, FAQs, and CustomerCare support ticket system) directly inside the Settings view (`#settingsView`, aliasing `#accountView`).
+- Updated `apps/miniapp/static/styles.css` to set `.bottom-nav` grid template to `repeat(3, 1fr)` and styled `.settings-help-panel`.
+- Added Arabic translation `"Settings": "الإعدادات"` in `apps/miniapp/static/locale.js`.
+- Updated `apps/miniapp/static/app.js` and `apps/miniapp/static/customer-care.js` to route `help` and `account` targets to `settings` with smooth-scroll to `#supportSection`.
+- Updated `tests/test_miniapp_entry_browser.cjs` and `tests/test_admin_browser.cjs` to target `[data-target="settings"]`. All 7 browser test suites pass.
+- Bumped MiniApp asset cache busters to `v=20260928_01`.
+
+## 2026-09-28 — MiniApp Homepage UI/UX Cleanup & Header Realignment
+
+> for next, remove the unified product servis in the homepage of the miniapp, remove the language toggle from mini app , it should be in settings of the miniapp, the header should be in the top ofcourse, help and suppurt shouldnt be in homepage too, remove it, on header theres a "hybrid digital store" or the type we chosen for the store, remove this , this shouldnt show for users at all
+
+Executed five MiniApp homepage and UI/UX refinements following the user's direct specification:
+- Header docked at the absolute top of the app shell: removed the floating `.language-bar` from above the header so `<header class="topbar glass-panel">` sits directly at the top.
+- Removed internal business types from the header: deleted `<span id="storeEyebrow">` so technical template types ("✨ HYBRID DIGITAL STORE", "📱 VIRTUAL NUMBERS & SMS", etc.) are never shown to end-customers.
+- Removed internal vertical badges from the homepage: deleted `<div id="verticalBadge">` from the hero card so "⭐ Unified Products & Services" and internal vertical tags are completely hidden.
+- Relocated Language Selector into Settings: moved the interface language dropdown (`#storeLanguage`) into `#settingsView` under a dedicated Preferences section.
+- Cleaned homepage shortcuts: removed the `#shopSupport` ("Help & support") card from the homepage `.shop-shortcuts` grid, leaving a clean, focused "Add funds" action.
+- Updated `apps/miniapp/static/styles.css` `.shop-shortcuts` layout to 1 column.
+- Updated `tests/test_miniapp_entry_browser.cjs`; all 7 browser suites passed.
+- Rebuilt Docker image and redeployed runtime containers.
+
+## 2026-09-28 — Dedicated Wallet Page & Full ghstoretele Integration
+
+> wallet on settings should be removed, in the miniapp should be a page (look like the one from ghstoretele) for wallet, it has recharge too, integrate it good
+
+Architected and integrated a dedicated Wallet page inspired by `gh-store-tele`:
+- Removed all wallet components (balance cards, Add funds button, wallet grid, activity history, and filters) from Settings (`#settingsView`). Settings is now purely focused on Profile, Preferences, and Help/Support.
+- Created a dedicated Wallet view (`#walletView`, `data-view="wallet"`):
+  - Hero balance banner with eyebrow, available balance label, large `$0.00` balance headline (`#walletHeroBalance`), and spending status ("Ready for purchases").
+  - Wallets grid (`#walletGrid`) displaying all currency and asset balances.
+  - Embedded Recharge Action card with a prominent "Add funds now" trigger (`#walletRechargeButton`) that directly opens the topup form.
+  - Wallet transaction history section with activity filter (`#accountHistoryKind`) and pagination.
+- Updated the bottom navigation bar (`<nav class="bottom-nav">`) to 4 clean tabs matching `gh-store-tele`: Shop (`⌂`), Orders (`◫`), Wallet (`▤`), and Settings (`⚙`).
+- Updated `apps/miniapp/static/styles.css` with 4-column grid layout for `.bottom-nav` and custom styles for `.wallet-hero`, `.wallet-hero-balance`, `.wallet-hero-status`, and `.recharge-action-card`.
+- Added Arabic translation `"Wallet": "المحفظة"` and related strings in `apps/miniapp/static/locale.js`.
+- Updated `apps/miniapp/static/app.js`: updated `switchView` to handle `wallet`, updated `renderBootstrap` to calculate `walletHeroBalance`, and linked `#shopRecharge` to navigate to the Wallet view.
+- Updated browser test suite (`tests/test_admin_browser.cjs`). All 7 browser test suites passed cleanly.
+- Rebuilt Docker image and redeployed runtime containers.
+
+## 2026-09-28 — Confirmation of Factory-Wide Architecture for Future Bots
+
+> just to make sure , are those changes happening to all future bots ill make in this factory ?
+
+Confirmed factory architecture and universality of changes:
+- Shared MiniApp Frontend: All bots share `apps/miniapp/static/` served by the central API. Any bot opens `{miniapp_url}?bot_id={id}` and loads the 4-tab layout (Shop, Orders, Wallet, Settings), top-docked header, and consolidated settings help automatically.
+- Shared Telegram Runtime: `packages/telegram/routers/__init__.py` clones routers per dispatcher, allowing unlimited concurrent bots and restarts.
+- Shared Admin Creation Wizard: The Step 4 provider fix and onboarding logic are built into `apps/admin/static/` and `apps/api/v1/admin_bots.py`, applying to every new bot.
+
+## 2026-09-28 — Session Handover Checkpoint
+
+> ok ok , ill now go to antigravity and resume working , make sure we end our last tasks
+
+Final session check completed:
+- All todo items completed and closed.
+- All 7 Playwright browser test suites verified and passing.
+- Static JS syntax verified across all modules (0 errors).
+- Docker image rebuilt and deployed; all services healthy; `@mrandroid_robot` active and live polling.
+- Repository clean and ready for continuation.
+
+## 2026-09-28 — Wallet Page Fine-Tuning & Brand Cleanup
+
+> Yah, our work now will be in 1 and 2, after that we would work on plug and play for tenants who wants bots from my bot factory, for now, this miniapp has a little bad things on wallet page, like the "gh /wallet" this is bad, u should remove the gh / , and make a good tuning for this page, a fine tune no more
+
+Executed focused fine-tuning of the MiniApp Wallet page:
+- Removed `GH / ` prefix from `apps/miniapp/static/index.html` (eyebrow changed to clean `WALLET`).
+- Integrated primary `#walletRechargeButton` ("Add funds") directly inside `.wallet-hero-inner` with sleek rounded pill styling, eliminating the redundant bottom `.recharge-action-card`.
+- Added `.status-indicator-dot` with glowing indicator next to "Ready for purchases".
+- Streamlined the Transactions filter dropdown with compact `.wallet-filter-bar` and `.wallet-filter-select`.
+- Updated `apps/miniapp/static/locale.js` with `"BALANCES": "الأرصدة"` and `"TRANSACTIONS": "المعاملات"`.
+- Updated `apps/miniapp/static/app.js` to toggle `#walletRechargeButton` visibility when top-up options are not available.
+- Bumped asset cache busters to `v=20260928_02`.
+- Verified browser test suite (`test_miniapp_entry_browser.cjs` and `test_admin_browser.cjs`) passing 100%.
+

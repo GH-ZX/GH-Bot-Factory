@@ -773,3 +773,101 @@ are historical. Real-customer trials remain deferred.
   actual Telegram customer trial and staging/failure-injection qualification remain separate.
 - Logs: `/tmp/ghbf-canonical-final.log`, `/tmp/ghbf-dependency-audit.log`, browser logs under
   `/tmp/ghbf-*-final-browser.log`, `/tmp/ghbf-miniapp-browser.log`. Release artifact build pending.
+
+## 2026-09-28 — Bot wizard step 4 provider options repair
+
+Repaired Step 4 provider option population in the Admin Bot Provisioning Wizard:
+- Fixed `refreshPreferredProvider` in `apps/admin/static/app.js`: when no checkboxes are checked in `botProviderChoices` (the default state per instructions to allow all compatible connections), the "Preferred provider" dropdown (`#botPreferredProvider`) now lists all available compatible providers from `state.botWizardOptions.providers`, rather than rendering an empty dropdown with only "Select provider".
+- When specific provider checkboxes are checked, the dropdown limits options to the checked candidates. If zero providers exist, it displays "No suppliers connected yet".
+- Selecting a preferred provider in the dropdown now automatically marks its corresponding checkbox as checked and ensures `currentBotBusinessProfile` includes `preferred_provider_id` in `provider_ids` so backend validation (`preferred_provider_id must also be present in provider_ids`) succeeds.
+- In `validateBotStep`, if `MANUAL` routing is selected without connected providers, the wizard displays a clear actionable error message rather than a generic prompt to choose from an empty list.
+- In `apps/api/v1/admin_bots.py`, added `total_tenant_providers` count to `BotWizardOptionsResponse` and queried it in `get_bot_wizard_options`.
+- In `loadBotWizardOptions`, added informative empty-state messaging when a tenant has connected suppliers that are disabled or incompatible with the selected template's category.
+- Bumped Admin asset cache buster for `app.js` to `v=20260928_01` in `apps/admin/static/index.html`.
+- Updated `tests/test_phase13_advanced_factory.py` with assertion on `total_tenant_providers`.
+
+## 2026-09-28 — Clarification on Suppliers & Payments vs Bot Creation
+
+Clarified relationship between store-wide "Suppliers & payments" and Bot Wizard Step 4 ("Connections"):
+- Store-level integration authority: "Suppliers & payments" holds API credentials and tenant integration adapters.
+- Bot-level routing scope: Step 4 is optional filtering. A bot can be created before suppliers are added and will dynamically route through any compatible store suppliers added later.
+- Manual routing dependency: Step 4 "Manual selection" requires at least one compatible supplier configured in "Suppliers & payments".
+
+## 2026-09-28 — Bot runtime router re-attachment defect repair (@mrandroid_robot)
+
+Repaired multi-bot and restart defect in Telegram Bot Runtime (`packages/telegram/routers/__init__.py` and `packages/telegram/runtime.py`):
+- Root cause: In aiogram 3, attaching a sub-router sets its `parent_router`. When a bot configuration changed or a bot was restarted, `get_root_router()` attempted to re-include module-level singleton routers into a new root router, throwing `RuntimeError: Router is already attached`.
+- Fix: Implemented `copy_router(source)` in `packages/telegram/routers/__init__.py` to clone observers, handlers, and middlewares into a fresh unattached router instance per dispatcher.
+- Enhanced `_stop_instance` in `packages/telegram/runtime.py` to gracefully stop polling before task cancellation.
+- Added `greenlet>=3.0` and `sqlalchemy[asyncio]>=2.0` to `pyproject.toml` for container build dependencies.
+- Added regression test `test_create_dispatcher_can_be_called_repeatedly` in `tests/test_telegram_runtime_and_middleware.py`.
+- Rebuilt Docker images; verified `@mrandroid_robot` successfully converged to live polling.
+
+## 2026-09-28 — MiniApp Help Consolidation into Settings Page
+
+Refined MiniApp navigation and page architecture following `gh-store-tele` patterns:
+- Removed standalone "Help" button from the bottom navigation bar (`apps/miniapp/static/index.html`).
+- Renamed the 3rd bottom navigation button to "Settings" (`⚙ Settings`), consolidating navigation to 3 clean tabs: Shop, Orders, Settings.
+- Nested the Help & Support sections (store description, policy links, FAQs, and CustomerCare support ticket system) directly inside the Settings view (`#settingsView`, aliasing `#accountView`).
+- Updated `apps/miniapp/static/styles.css` to set `.bottom-nav` grid template to `repeat(3, 1fr)` and styled `.settings-help-panel`.
+- Added Arabic translation `"Settings": "الإعدادات"` in `apps/miniapp/static/locale.js`.
+- Updated `apps/miniapp/static/app.js` and `apps/miniapp/static/customer-care.js` to route `help` and `account` targets to `settings` with smooth-scroll to `#supportSection`.
+- Updated `tests/test_miniapp_entry_browser.cjs` and `tests/test_admin_browser.cjs` to target `[data-target="settings"]`. All 7 browser test suites pass.
+- Bumped MiniApp asset cache busters to `v=20260928_01`.
+
+## 2026-09-28 — MiniApp Homepage UI/UX Cleanup & Header Realignment
+
+Executed MiniApp homepage and UI/UX refinements:
+- Header docked at the absolute top of the app shell: removed the floating `.language-bar` from above the header so `<header class="topbar glass-panel">` sits directly at the top.
+- Removed internal business types from the header: deleted `<span id="storeEyebrow">` so technical template types ("✨ HYBRID DIGITAL STORE", "📱 VIRTUAL NUMBERS & SMS", etc.) are never shown to end-customers.
+- Removed internal vertical badges from the homepage: deleted `<div id="verticalBadge">` from the hero card so "⭐ Unified Products & Services" and internal vertical tags are completely hidden.
+- Relocated Language Selector into Settings: moved the interface language dropdown (`#storeLanguage`) into `#settingsView` under a dedicated Preferences section.
+- Cleaned homepage shortcuts: removed the `#shopSupport` ("Help & support") card from the homepage `.shop-shortcuts` grid, leaving a clean, focused "Add funds" action.
+- Updated `apps/miniapp/static/styles.css` `.shop-shortcuts` layout to 1 column.
+- Updated `tests/test_miniapp_entry_browser.cjs`; all 7 browser suites passed.
+- Rebuilt Docker image and redeployed runtime containers.
+
+## 2026-09-28 — Dedicated Wallet Page & Full ghstoretele Integration
+
+Architected and integrated a dedicated Wallet page inspired by `gh-store-tele`:
+- Removed all wallet components (balance cards, Add funds button, wallet grid, activity history, and filters) from Settings (`#settingsView`). Settings is now purely focused on Profile, Preferences, and Help/Support.
+- Created a dedicated Wallet view (`#walletView`, `data-view="wallet"`):
+  - Hero balance banner with eyebrow, available balance label, large `$0.00` balance headline (`#walletHeroBalance`), and spending status ("Ready for purchases").
+  - Wallets grid (`#walletGrid`) displaying all currency and asset balances.
+  - Embedded Recharge Action card with a prominent "Add funds now" trigger (`#walletRechargeButton`) that directly opens the topup form.
+  - Wallet transaction history section with activity filter (`#accountHistoryKind`) and pagination.
+- Updated the bottom navigation bar (`<nav class="bottom-nav">`) to 4 clean tabs matching `gh-store-tele`: Shop (`⌂`), Orders (`◫`), Wallet (`▤`), and Settings (`⚙`).
+- Updated `apps/miniapp/static/styles.css` with 4-column grid layout for `.bottom-nav` and custom styles for `.wallet-hero`, `.wallet-hero-balance`, `.wallet-hero-status`, and `.recharge-action-card`.
+- Added Arabic translation `"Wallet": "المحفظة"` and related strings in `apps/miniapp/static/locale.js`.
+- Updated `apps/miniapp/static/app.js`: updated `switchView` to handle `wallet`, updated `renderBootstrap` to calculate `walletHeroBalance`, and linked `#shopRecharge` to navigate to the Wallet view.
+- Updated browser test suite (`tests/test_admin_browser.cjs`). All 7 browser test suites passed cleanly.
+- Rebuilt Docker image and redeployed runtime containers.
+
+## 2026-09-28 — Confirmation of Factory-Wide Architecture for Future Bots
+
+Confirmed factory architecture and universality of changes:
+- Shared MiniApp Frontend: All bots share `apps/miniapp/static/` served by the central API. Any bot opens `{miniapp_url}?bot_id={id}` and loads the 4-tab layout (Shop, Orders, Wallet, Settings), top-docked header, and consolidated settings help automatically.
+- Shared Telegram Runtime: `packages/telegram/routers/__init__.py` clones routers per dispatcher, allowing unlimited concurrent bots and restarts.
+- Shared Admin Creation Wizard: The Step 4 provider fix and onboarding logic are built into `apps/admin/static/` and `apps/api/v1/admin_bots.py`, applying to every new bot.
+
+## 2026-09-28 — Session Handover Checkpoint
+
+Final session check completed:
+- All todo items completed and closed.
+- All 7 Playwright browser test suites verified and passing.
+- Static JS syntax verified across all modules (0 errors).
+- Docker image rebuilt and deployed; all services healthy; `@mrandroid_robot` active and live polling.
+- Repository clean and ready for continuation.
+
+## 2026-09-28 — Wallet Page Fine-Tuning & Brand Cleanup
+
+Executed focused fine-tuning of the MiniApp Wallet page:
+- Removed `GH / ` prefix from `apps/miniapp/static/index.html` (eyebrow changed to clean `WALLET`).
+- Integrated primary `#walletRechargeButton` ("Add funds") directly inside `.wallet-hero-inner` with sleek rounded pill styling, eliminating the redundant bottom `.recharge-action-card`.
+- Added `.status-indicator-dot` with glowing indicator next to "Ready for purchases".
+- Streamlined the Transactions filter dropdown with compact `.wallet-filter-bar` and `.wallet-filter-select`.
+- Updated `apps/miniapp/static/locale.js` with `"BALANCES": "الأرصدة"` and `"TRANSACTIONS": "المعاملات"`.
+- Updated `apps/miniapp/static/app.js` to toggle `#walletRechargeButton` visibility when top-up options are not available.
+- Bumped asset cache busters to `v=20260928_02`.
+- Verified browser test suite (`test_miniapp_entry_browser.cjs` and `test_admin_browser.cjs`) passing 100%.
+

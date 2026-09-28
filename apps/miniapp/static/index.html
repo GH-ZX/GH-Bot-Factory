@@ -6,30 +6,28 @@
   <meta name="theme-color" content="#f2f7f3">
   <meta name="description" content="Telegram commerce storefront">
   <title>Storefront</title>
-  <link rel="stylesheet" href="./boot.css?v=20260922_06">
-  <script src="./entry.js?v=20260922_06"></script>
+  <link rel="stylesheet" href="./boot.css?v=20260928_01">
+  <script src="./entry.js?v=20260928_01"></script>
   <script src="https://telegram.org/js/telegram-web-app.js?63" defer></script>
-  <link rel="stylesheet" href="./styles.css?v=20260922_06">
+  <link rel="stylesheet" href="./styles.css?v=20260928_01">
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
   <div class="ambient ambient-two" aria-hidden="true"></div>
 
   <main id="app" class="app-shell" aria-busy="true">
-    <div id="previewBanner" class="preview-banner hidden"><strong>Design preview · sample data</strong><p>Purchases, payments and messages are disabled.</p><label>Explore a theme<select id="previewTheme"><option value="emerald">Emerald</option><option value="midnight">Midnight</option><option value="pearl">Pearl</option><option value="ocean">Ocean</option><option value="rose">Rose</option></select></label></div>
-    <div class="language-bar"><label for="storeLanguage">Language</label><select id="storeLanguage"><option value="en">English</option><option value="ar">العربية</option></select></div>
     <header class="topbar glass-panel">
       <div class="brand-lockup">
         <div id="brandMark" class="brand-mark" aria-hidden="true">G</div>
         <div class="brand-copy">
-          <span id="storeEyebrow" class="eyebrow">TELEGRAM STORE</span>
           <h1 id="storeName">Loading storefront</h1>
         </div>
       </div>
-      <button id="profileButton" class="icon-button" type="button" aria-label="Open account">
+      <button id="profileButton" class="icon-button" type="button" aria-label="Open settings">
         <span id="profileInitial">•</span>
       </button>
     </header>
+    <div id="previewBanner" class="preview-banner hidden"><strong>Design preview · sample data</strong><p>Purchases, payments and messages are disabled.</p><label>Explore a theme<select id="previewTheme"><option value="emerald">Emerald</option><option value="midnight">Midnight</option><option value="pearl">Pearl</option><option value="ocean">Ocean</option><option value="rose">Rose</option></select></label></div>
 
     <section id="loadingView" class="boot-skeleton" role="status" aria-label="Loading storefront">
       <span class="sr-only">Loading your storefront…</span>
@@ -58,12 +56,17 @@
             <span class="eyebrow">WELCOME BACK</span>
             <h2 id="heroGreeting">Discover what is available today.</h2>
             <p id="storeTagline">Fast checkout. Secure delivery. Built for Telegram.</p>
-            <div id="verticalBadge" class="vertical-badge hidden"></div>
           </div>
           <div class="hero-orb" aria-hidden="true"><span></span></div>
         </div>
 
-        <div class="shop-shortcuts"><button id="shopRecharge" type="button" class="shortcut-card"><span aria-hidden="true">＋</span><strong>Add funds</strong><small>Ready when you are</small></button><button id="shopSupport" type="button" class="shortcut-card"><span aria-hidden="true">◌</span><strong>Help &amp; support</strong><small>We are here to help</small></button></div>
+        <div class="shop-shortcuts">
+          <button id="shopRecharge" type="button" class="shortcut-card">
+            <span aria-hidden="true">＋</span>
+            <strong>Add funds</strong>
+            <small>Ready when you are</small>
+          </button>
+        </div>
         <div class="section-heading">
           <div>
             <span class="eyebrow">CATALOG</span>
@@ -119,20 +122,26 @@
         </div>
       </section>
 
-      <section id="accountView" class="view" data-view="account">
-        <div class="account-hero glass-panel">
-          <div id="accountAvatar" class="account-avatar">U</div>
-          <div>
-            <span class="eyebrow">ACCOUNT</span>
-            <h2 id="accountName">Telegram User</h2>
-            <p id="accountUsername">Secure Mini App session</p>
+      <section id="walletView" class="view" data-view="wallet">
+        <div class="wallet-hero glass-panel">
+          <div class="wallet-hero-inner">
+            <span class="eyebrow">WALLET</span>
+            <div class="wallet-hero-balance-label">Available balance</div>
+            <div id="walletHeroBalance" class="wallet-hero-balance">$0.00</div>
+            <div class="wallet-hero-status"><span class="status-indicator-dot"></span><span>Ready for purchases</span></div>
+            <div class="wallet-hero-actions">
+              <button id="walletRechargeButton" class="primary-button wallet-recharge-hero-btn" type="button">
+                <span aria-hidden="true">＋</span>
+                <span>Add funds</span>
+              </button>
+            </div>
           </div>
         </div>
 
         <div class="section-heading">
           <div>
-            <span class="eyebrow">BALANCE</span>
-            <h2>Wallets</h2>
+            <span class="eyebrow">BALANCES</span>
+            <h2>Your wallets</h2>
           </div>
           <button id="fundWalletButton" class="text-button" type="button">Add funds</button>
         </div>
@@ -143,8 +152,68 @@
           <p>Your wallet will appear after it is funded for the first time.</p>
         </div>
 
-        <div class="section-heading"><h2>Wallet history</h2><button id="walletHistoryButton" type="button" class="text-button">Refresh history</button></div><label class="field-label" for="accountHistoryKind">Activity type</label><select id="accountHistoryKind" class="recipient-input"><option value="spending">Spending wallet</option><option value="assets">Asset wallet</option><option value="funding">Wallet funding</option><option value="deposits">Deposits</option></select><div id="walletHistory"></div><button id="walletHistoryMore" type="button" class="text-button hidden">Load more</button>
-        <button id="accountHelpButton" type="button" class="text-button">Help &amp; support</button><p id="customerIdentity" class="field-help"></p>
+        <div class="section-heading" style="margin-top:24px;">
+          <div>
+            <span class="eyebrow">TRANSACTIONS</span>
+            <h2>Wallet history</h2>
+          </div>
+          <button id="walletHistoryButton" type="button" class="text-button">Refresh history</button>
+        </div>
+        <div class="wallet-filter-bar">
+          <label class="field-label" for="accountHistoryKind">Activity type</label>
+          <select id="accountHistoryKind" class="recipient-input wallet-filter-select">
+            <option value="spending">Spending wallet</option>
+            <option value="assets">Asset wallet</option>
+            <option value="funding">Wallet funding</option>
+            <option value="deposits">Deposits</option>
+          </select>
+        </div>
+        <div id="walletHistory" class="wallet-history-list"></div>
+        <button id="walletHistoryMore" type="button" class="text-button hidden">Load more</button>
+      </section>
+
+      <section id="settingsView" class="view" data-view="settings" data-alias-view="account">
+        <div class="account-hero glass-panel">
+          <div id="accountAvatar" class="account-avatar">U</div>
+          <div>
+            <span class="eyebrow">SETTINGS &amp; ACCOUNT</span>
+            <h2 id="accountName">Telegram User</h2>
+            <p id="accountUsername">Secure Mini App session</p>
+          </div>
+        </div>
+
+        <div class="settings-card glass-panel" style="margin-bottom:18px;">
+          <div class="section-heading" style="margin-bottom:8px;">
+            <div>
+              <span class="eyebrow">PREFERENCES</span>
+              <h2>Language</h2>
+            </div>
+          </div>
+          <div class="settings-language-row">
+            <label for="storeLanguage" class="field-label">Interface language</label>
+            <select id="storeLanguage" class="recipient-input">
+              <option value="en">English</option>
+              <option value="ar">العربية</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="accountHelpButton" type="button" class="text-button hidden">Help &amp; support</button>
+        <div id="helpView" class="settings-help-panel">
+          <div class="section-heading page-heading" id="supportSection">
+            <div>
+              <span class="eyebrow">SUPPORT &amp; INFO</span>
+              <h2>Help &amp; support</h2>
+            </div>
+            <button id="supportButton" class="text-button" type="button">Open support</button>
+          </div>
+          <p id="helpStoreDescription" class="store-description"></p>
+          <div id="storePolicyLinks" class="policy-links"></div>
+          <div id="storeFAQ"></div>
+          <div id="supportPanel" class="glass-panel support-panel"></div>
+        </div>
+
+        <p id="customerIdentity" class="field-help"></p>
         <div class="security-card glass-panel">
           <div class="security-dot" aria-hidden="true"></div>
           <div>
@@ -153,7 +222,6 @@
           </div>
         </div>
       </section>
-      <section id="helpView" class="view" data-view="help"><div class="section-heading page-heading"><div><span class="eyebrow">HERE TO HELP</span><h2>Support &amp; information</h2></div></div><p id="helpStoreDescription" class="store-description"></p><div id="storePolicyLinks" class="policy-links"></div><div id="storeFAQ"></div><div class="section-heading"><h2>Help &amp; support</h2><button id="supportButton" class="text-button" type="button">Open support</button></div><div id="supportPanel" class="glass-panel support-panel"></div></section>
     </div>
   </main>
 
@@ -246,15 +314,17 @@
     <button class="nav-button" data-target="orders" type="button" aria-label="Orders">
       <span class="nav-icon">◫</span><span>Orders</span>
     </button>
-    <button class="nav-button" data-target="account" type="button" aria-label="Account">
-      <span class="nav-icon">○</span><span>Account</span>
+    <button class="nav-button" data-target="wallet" type="button" aria-label="Wallet">
+      <span class="nav-icon">▤</span><span>Wallet</span>
     </button>
-    <button class="nav-button" data-target="help" type="button" aria-label="Help"><span class="nav-icon">◌</span><span>Help</span></button>
+    <button class="nav-button" data-target="settings" type="button" aria-label="Settings">
+      <span class="nav-icon">⚙</span><span>Settings</span>
+    </button>
   </nav>
 
   <dialog id="productDetailDialog" class="product-dialog" aria-labelledby="productDetailTitle"><div class="sheet-header"><h2 id="productDetailTitle"></h2><button id="closeProductDetail" type="button" class="icon-button" aria-label="Close product details">×</button></div><div id="productDetailContent"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/shared/store-themes.js?v=20260922_06"></script>
-  <script type="module" src="./app.js?v=20260922_06"></script>
+  <script src="/shared/store-themes.js?v=20260928_02"></script>
+  <script type="module" src="./app.js?v=20260928_02"></script>
 </body>
 </html>

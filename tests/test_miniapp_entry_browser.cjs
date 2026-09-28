@@ -35,9 +35,9 @@ const server=require('./browser_static.cjs').createServer(path.resolve(__dirname
       await page.waitForFunction(key=>document.documentElement.dataset.storeTheme===key,theme);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     }
+    await page.locator('[data-target="settings"]').click();
     await page.locator('#storeLanguage').selectOption('ar');
     assert.equal(await page.locator('html').getAttribute('dir'),'rtl');
-    await page.locator('[data-target="help"]').click();
     assert.equal(await page.locator('#helpView').isVisible(),true);
     await page.screenshot({path:'/tmp/ghbf-miniapp-help-arabic.png'});
     await page.setViewportSize({width:1440,height:1000});

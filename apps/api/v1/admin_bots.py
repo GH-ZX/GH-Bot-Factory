@@ -201,7 +201,7 @@ class BotWizardOptionsResponse(BaseModel):
     providers: list[BotWizardProviderOption]
     payment_methods: list[BotWizardPaymentMethodOption]
     pricing_tiers: list[BotWizardPricingTierOption]
-
+    total_tenant_providers: int = 0
 
 class BotProvisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -596,6 +596,13 @@ async def get_bot_wizard_options(
             )
         ).scalars().all()
     )
+    total_tenant_providers = int(
+        (
+            await session.execute(
+                select(func.count(Provider.id)).where(Provider.tenant_id == principal.tenant_id)
+            )
+        ).scalar_one()
+    )
     return BotWizardOptionsResponse(
         template_key=template.key,
         business_type=template.business_type.value,
@@ -630,6 +637,7 @@ async def get_bot_wizard_options(
             )
             for row in tiers
         ],
+        total_tenant_providers=total_tenant_providers,
     )
 
 
