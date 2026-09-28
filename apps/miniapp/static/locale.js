@@ -250,7 +250,23 @@ const ar = {
   "In stock": "متوفر",
   "Select Package": "اختر الباقة",
   "Package": "الباقة",
-  "Features": "المميزات"
+  "Features": "المميزات",
+  "RECHARGE": "شحن الرصيد",
+  "Top up your wallet": "طرق شحن المحفظة",
+  "No methods available": "لا تتوفر طرق شحن",
+  "No wallet funding providers are currently configured.": "لم يتم تكوين مزودي شحن للمحفظة حالياً.",
+  "Select": "اختيار",
+  "Top up via": "شحن عبر",
+  "Syria ShamCash wallet transfer": "تحويل محفظة شام كاش سوريا",
+  "Syriatel Cash mobile transfer": "تحويل عبر سيريتل كاش",
+  "Instant crypto settlement": "دفع فوري بالعملات الرقمية",
+  "Zero-fee instant transfer": "تحويل فوري بدون رسوم إضافية",
+  "Bybit wallet transfer": "تحويل محفظة بايبت",
+  "Visa / Mastercard": "فيزا / ماستركارد",
+  "Interface language": "لغة الواجهة",
+  "SUPPORT & INFO": "الدعم والمعلومات",
+  "Guaranteed delivery & full replacement via support.": "تسليم مضمون واستبدال كامل عبر الدعم الفني.",
+  "Wallet Checkout": "دفع آمن من المحفظة"
 };
 const en = {"greeting": "Hi {name}. Find your next purchase.", "products_count": "{loaded} of {total} products", "available_count": "{count} available", "items_count": "{count} items", "added_to_cart": "{name} added to cart.", "order_confirmed": "Order {number} confirmed.", "amount_range": "Amount must be between {min} and {max}.", "subtotal": "Subtotal before discount"};
 let language='en';

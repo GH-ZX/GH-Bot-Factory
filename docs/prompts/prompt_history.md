@@ -2526,3 +2526,27 @@ Addressed tenant API token configurability architecture, rebuilt product grid ca
 - **Verification**:
   - Created new unit test suite `tests/test_sam_api_provider.py` covering invoice creation, auto-wallet discovery, payment queries, webhooks, and delivery artifact generation (6/6 passing).
   - Full suite verified: 507/507 tests passing (100%), clean Ruff linter.
+
+## Milestone: MiniApp UI/UX Hardening & Toast Localization
+**Date:** 2026-09-28
+**Prompt:** "Please harden ui ux on some parts of some pages"
+
+### Key Changes:
+- **Wallet View Recharge Methods Styling (`apps/miniapp/static/styles.css`, `app.js`)**:
+  - Implemented responsive `.recharge-method-card` with method avatar/icon, title, badges (SYP, USDT, BINANCE, BYBIT, CARD), subtitle, and tactile `:active` state.
+  - Aligned cards for seamless touch interactions and full bi-directional support (LTR / RTL).
+- **Order Card Alignment & Support CTA (`apps/miniapp/static/app.js`, `styles.css`)**:
+  - Relocated the order support action button from the card header into `.order-bottom-meta` in the footer.
+  - Kept order numbers and status chips cleanly aligned at the top, fixing visual clipping and misalignments.
+- **Copy Button Visual Feedback (`apps/miniapp/static/app.js`, `styles.css`)**:
+  - Added `.copy-artifact-btn.copied` state with instant green styling (`var(--success)`), checkmark confirmation, and 2-second revert.
+  - Normalized `.copy-artifact-btn` min-height to 28px to eliminate abnormal stretching inside delivery card headers.
+- **Comprehensive Toast & Interface Localization (`apps/miniapp/static/app.js`, `locale.js`)**:
+  - Wrapped all payment checkout, Stars invoice, wallet funding, and validation toasts in `t(...)`.
+  - Added missing Arabic translations for all recharge methods (ShamCash, Syriatel Cash, Crypto, Binance Pay, Bybit, Card), wallet headings ("RECHARGE", "Top up your wallet"), and form labels ("Interface language", "SUPPORT & INFO", "Guaranteed delivery").
+- **Form Ergonomics & Focus States (`apps/miniapp/static/styles.css`)**:
+  - Added explicit focus ring styles for inputs, select elements, textareas, and `.catalog-search:focus-within` for tactile mobile/desktop navigation.
+  - Bumped asset cache-busters to `v=20260928_04`.
+- **Verification**:
+  - 507/507 unit/integration tests passing (100%), clean Ruff linter.
+  - Live Docker API container rebuilt and verified serving the updated assets.

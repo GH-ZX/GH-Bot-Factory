@@ -916,3 +916,11 @@ Overhauled product presentation and storefront shopping experience across all fa
 - Added Voucher Redemption Manual in MiniApp: Embedded game-specific activation instructions (PUBG, Free Fire, Steam, PSN, Xbox, Roblox, Valorant) and official redemption links directly in the `#productDetailDialog` product modal.
 - Added Digital Goods Delivery module (`packages/notifications/delivery.py`): Formats one-tap copyable codes and generates automatic `.txt` file attachments for bulk orders to prevent Telegram truncation.
 - Verified 507/507 tests passing in pytest suite; clean Ruff check.
+
+### 2026-09-28: MiniApp UI/UX Hardening & Toast Localization
+- Styled `.recharge-method-card` with provider avatar, badges, title, subtitle, and tactile feedback in `apps/miniapp/static/styles.css`.
+- Repositioned order support CTA to `.order-bottom-meta` in order cards, leaving header order number and status chips cleanly aligned.
+- Added `.copy-artifact-btn.copied` state with green visual confirmation and reset timer; normalized min-height to 28px.
+- Localized all payment and top-up error toasts in `app.js` using `t(...)`, and expanded `locale.js` with missing Arabic translations.
+- Added input, select, textarea, and search container `:focus` rings.
+- Rebuilt Docker API image and verified live serving at `v=20260928_04`.

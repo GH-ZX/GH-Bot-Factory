@@ -1291,3 +1291,21 @@ Overhauled product presentation and storefront shopping experience across all fa
   - Created `tests/test_miniapp_product_detail.cjs` verifying minimal grid layout, dialog opening, quantity adjustments, price calculation, variant switching, closing, desktop view, and Arabic RTL.
   - Verified against live container and test server; 100% test pass rate.
 
+## 2026-09-28 — MiniApp UI/UX Hardening & Toast Localization
+
+Polished key interaction friction points across the MiniApp storefront:
+- **Recharge Method Cards (`.recharge-method-card`):**
+  - Styled with provider avatar, badges (SYP, USDT, BINANCE, BYBIT, CARD), name, subtitle, and tactile feedback.
+  - Direction-aware flex layout supporting LTR and RTL.
+- **Order Card Alignment:**
+  - Moved misplaced "Get help with this order" action from above the card into `.order-bottom-meta` in the footer.
+  - Preserved clear top alignment of order number and status chip.
+- **Copy Button Visual Feedback:**
+  - Added `.copy-artifact-btn.copied` state styling with green success indicator, and normalized button min-height to 28px.
+- **Full Toast & Form Localization:**
+  - Localized all payment checkout, Stars invoice, and top-up validation toasts in `apps/miniapp/static/app.js` using `t(...)`.
+  - Added full Arabic translations in `locale.js` for recharge cards, wallet section headings, and form labels.
+- **Form Ergonomics:**
+  - Added explicit focus ring styles for inputs, selects, textareas, and search containers.
+- **Verification:**
+  - 507/507 tests passing, clean Ruff check, Docker API container rebuilt and active.

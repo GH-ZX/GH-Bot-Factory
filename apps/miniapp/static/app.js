@@ -309,19 +309,88 @@ function renderBootstrap() {
   const accent = store.settings?.brand_accent;
   if (/^#[0-9a-fA-F]{6}$/.test(accent ?? "")) document.documentElement.style.setProperty("--accent", accent);
 
+  function getProviderMeta(provider) {
+    const pName = (provider.provider_name || "").toLowerCase();
+    const displayName = provider.name || provider.display_name || provider.provider_name;
+    if (pName.includes("shamcash")) {
+      return {
+        icon: "🇸🇾",
+        badge: "SYP",
+        title: displayName || "ShamCash",
+        subtitle: t("Syria ShamCash wallet transfer"),
+      };
+    }
+    if (pName.includes("syriatel")) {
+      return {
+        icon: "📱",
+        badge: "SYP",
+        title: displayName || "Syriatel Cash",
+        subtitle: t("Syriatel Cash mobile transfer"),
+      };
+    }
+    if (pName.includes("crypto") || pName.includes("nowpayments") || pName.includes("gozapay")) {
+      return {
+        icon: "💎",
+        badge: "USDT",
+        title: displayName || "Crypto Pay",
+        subtitle: t("Instant crypto settlement"),
+      };
+    }
+    if (pName.includes("binance")) {
+      return {
+        icon: "🟡",
+        badge: "BINANCE",
+        title: displayName || "Binance Pay",
+        subtitle: t("Zero-fee instant transfer"),
+      };
+    }
+    if (pName.includes("bybit")) {
+      return {
+        icon: "🟠",
+        badge: "BYBIT",
+        title: displayName || "Bybit Pay",
+        subtitle: t("Bybit wallet transfer"),
+      };
+    }
+    if (pName.includes("stripe") || pName.includes("card")) {
+      return {
+        icon: "💳",
+        badge: "CARD",
+        title: displayName || "Bank Card",
+        subtitle: t("Visa / Mastercard"),
+      };
+    }
+    return {
+      icon: "⚡",
+      badge: (provider.currencies && provider.currencies[0]) || "FAST",
+      title: displayName,
+      subtitle: `${t("Top up via")} ${displayName}`,
+    };
+  }
+
   const rechargeGrid = el("rechargeMethodsGrid");
   if (rechargeGrid) {
-    rechargeGrid.innerHTML = state.topupOptions.map((provider) => `
-      <article class="wallet-card recharge-method-card" data-provider="${escapeHtml(provider.provider_name)}" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <strong class="wallet-balance" style="font-size:1.1rem; margin-bottom:4px;">${escapeHtml(provider.name || provider.provider_name)}</strong>
-          <span class="wallet-currency" style="margin-bottom:0;">${t("Top up via")} ${escapeHtml(provider.provider_name)}</span>
-        </div>
-        <button class="wallet-fund-button" type="button" style="margin-top:0;">${t("Select")}</button>
-      </article>
-    `).join("");
+    rechargeGrid.innerHTML = state.topupOptions.map((provider) => {
+      const meta = getProviderMeta(provider);
+      return `
+        <article class="recharge-method-card" data-provider="${escapeHtml(provider.provider_name)}" role="button" tabindex="0" aria-label="${escapeHtml(meta.title)}">
+          <div class="recharge-method-left">
+            <div class="recharge-method-avatar" aria-hidden="true">${meta.icon}</div>
+            <div class="recharge-method-info">
+              <div class="recharge-method-name-row">
+                <span class="recharge-method-title">${escapeHtml(meta.title)}</span>
+                <span class="recharge-method-badge">${escapeHtml(meta.badge)}</span>
+              </div>
+              <span class="recharge-method-sub">${escapeHtml(meta.subtitle)}</span>
+            </div>
+          </div>
+          <span class="recharge-method-cta">${t("Select")}</span>
+        </article>
+      `;
+    }).join("");
     rechargeGrid.querySelectorAll('.recharge-method-card').forEach(card => {
       card.onclick = () => openTopup(null, false, card.dataset.provider);
+      card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") openTopup(null, false, card.dataset.provider); };
     });
   }
   experience?.renderHelp();
@@ -487,16 +556,18 @@ function renderOrders() {
     }
     return `
       <article class="order-card">
-        <button class="text-button" data-order-support="${escapeHtml(order.id)}">${t("Get help with this order")}</button>
         <div class="order-top">
-          <div><span class="order-number">${escapeHtml(order.order_number)}</span><span class="order-date">${escapeHtml(label)}</span></div>
+          <div><span class="order-number">#${escapeHtml(order.order_number)}</span><span class="order-date">${escapeHtml(label)}</span></div>
           <span class="status-chip ${orderStatusClass(order.status)}">${escapeHtml(t(order.status))}</span>
         </div>
         ${deliveryHtml}
         ${order.items.filter(item=>item.warranty_days>0).map(item=>`<details class="warranty-terms"><summary>${t("Warranty")} · ${item.warranty_days} ${t("days")}</summary><p>${escapeHtml(item.warranty_terms)}</p>${order.status==="FULFILLED"?`<button class="text-button" data-order-support="${escapeHtml(order.id)}" data-warranty-item="${escapeHtml(item.id)}">${t("Request warranty review")}</button>`:""}</details>`).join("")}
         <div class="order-divider"></div>
         <div class="order-bottom">
-          <span class="order-items-count">${format("items_count",{count:units})}</span>
+          <div class="order-bottom-meta">
+            <span class="order-items-count">${format("items_count",{count:units})}</span>
+            <button class="text-button order-support-btn" data-order-support="${escapeHtml(order.id)}" type="button">${t("Get help with this order")}</button>
+          </div>
           <strong class="order-total">${escapeHtml(money(order.total_amount, order.currency))}</strong>
         </div>
       </article>
@@ -514,7 +585,7 @@ function addToCart(variantId, addQuantity = 1) {
   const variant = findVariant(variantId);
   if (!variant) return;
   if (Number(variant.stock_quantity) <= 0) {
-    showToast("This option is currently sold out.", "error");
+    showToast(t("This option is currently sold out."), "error");
     return;
   }
   const existing = state.cart.get(variantId);
@@ -610,14 +681,14 @@ async function checkout() {
   if (state.checkoutBusy || !state.cart.size) return;
   const recipient = recipientInput.value.trim();
   if (!recipient) {
-    showToast("Enter the delivery recipient before checkout.", "error");
+    showToast(t("Enter the delivery recipient before checkout."), "error");
     recipientInput.focus();
     notifyHaptic("error");
     return;
   }
   const totals = cartTotals();
   if (totals.mixedCurrency) {
-    showToast("Checkout supports one currency at a time.", "error");
+    showToast(t("Checkout supports one currency at a time."), "error");
     return;
   }
 
@@ -718,6 +789,17 @@ function renderTopupForm(preferredCurrency = null, preferredProvider = null) {
   termsCheckbox.required = Boolean(currentProvider.terms_required);
   if (currentProvider.terms_url) termsLink.href = currentProvider.terms_url;
   else termsLink.removeAttribute("href");
+
+  const quickAmountsContainer = document.querySelector(".quick-amounts");
+  if (quickAmountsContainer) {
+    const isSYP = selectedCurrency === "SYP";
+    const amounts = isSYP ? [10000, 25000, 50000, 100000] : [10, 25, 50, 100];
+    const labels = isSYP ? ["10K", "25K", "50K", "100K"] : ["10", "25", "50", "100"];
+    quickAmountsContainer.innerHTML = amounts.map((val, idx) => `
+      <button type="button" data-topup-amount="${val}">${labels[idx]}</button>
+    `).join("");
+  }
+
   el("topupSubmitButton").disabled = state.topupBusy;
 }
 
@@ -776,7 +858,7 @@ function renderTopupStatus() {
 function openPaymentCheckout() {
   const checkoutUrl = safeHttpsUrl(state.activeTopup?.checkout_url);
   if (!checkoutUrl) {
-    showToast("Payment provider did not supply a valid checkout URL.", "error");
+    showToast(t("Payment provider did not supply a valid checkout URL."), "error");
     return;
   }
   const isStars = state.activeTopup?.provider === "telegram_stars";
@@ -786,12 +868,12 @@ function openPaymentCheckout() {
         if (invoiceStatus === "paid") {
           window.setTimeout(() => reconcileActiveTopup({ quiet: true }), 350);
         } else if (invoiceStatus === "failed") {
-          showToast("Telegram could not complete the Stars payment.", "error");
+          showToast(t("Telegram could not complete the Stars payment."), "error");
         }
       });
       return;
     } catch (_) {
-      showToast("Could not open the Telegram Stars invoice.", "error");
+      showToast(t("Could not open the Telegram Stars invoice."), "error");
       return;
     }
   }
@@ -810,7 +892,7 @@ function openTopup(preferredCurrency = null, preserveActive=false, preferredProv
     resetTopup();
   }
   if (!state.topupOptions.length && !state.activeTopup) {
-    showToast("Wallet funding is not configured for this store.", "error");
+    showToast(t("Wallet funding is not configured for this store."), "error");
     return;
   }
   closeCart();
@@ -851,7 +933,7 @@ async function reconcileActiveTopup({ quiet = false } = {}) {
       stopTopupPolling();
       await loadBootstrap();
       notifyHaptic("success");
-      showToast("Payment confirmed. Your account balances have been refreshed.");
+      showToast(t("Payment confirmed. Your account balances have been refreshed."));
     } else if (["FAILED", "EXPIRED", "CANCELLED", "REVERSED", "SETTLED_REVIEW"].includes(state.activeTopup.status)) {
       stopTopupPolling();
       if (!quiet) showToast(state.activeTopup.status === "SETTLED_REVIEW" ? t("Deposit confirmed. Staff review is required before wallet credit.") : t("Payment did not complete."), "error");
@@ -880,17 +962,17 @@ async function createTopup() {
   const amount = Number(rawAmount);
   const flexible = Boolean(provider?.flexible_deposits_enabled);
   if (!provider || (!flexible && (!currency || !/^\d+(?:\.\d{1,2})?$/.test(rawAmount) || !Number.isFinite(amount)))) {
-    showToast("Choose a provider, currency, and valid amount.", "error");
+    showToast(t("Choose a provider, currency, and valid amount."), "error");
     return;
   }
   const min = Number(provider.min_amount);
   const max = Number(provider.max_amount);
   if (provider.whole_units_only && !Number.isInteger(amount)) {
-    showToast("This payment method requires a whole-number amount.", "error");
+    showToast(t("This payment method requires a whole-number amount."), "error");
     return;
   }
   if (provider.terms_required && !el("topupTermsCheckbox").checked) {
-    showToast("Accept the payment terms before continuing.", "error");
+    showToast(t("Accept the payment terms before continuing."), "error");
     return;
   }
   if (!flexible && (amount < min || amount > max)) {
@@ -956,7 +1038,7 @@ async function submitPaymentProof(event) {
         note: el("topupProofNote").value.trim() || null,
       }),
     });
-    showToast("Reference submitted for verification. Credit follows confirmation.");
+    showToast(t("Reference submitted for verification. Credit follows confirmation."));
   } catch (error) { showToast(error.message || t("Could not submit reference."), "error"); }
   finally { button.disabled = false; }
 }
@@ -1036,9 +1118,13 @@ function bindEvents() {
         try {
           await navigator.clipboard.writeText(text);
           const orig = copyButton.textContent;
-          copyButton.textContent = "Copied!";
-          setTimeout(() => { copyButton.textContent = orig; }, 2000);
-          showToast("Copied to clipboard!");
+          copyButton.textContent = t("Copied!");
+          copyButton.classList.add("copied");
+          setTimeout(() => {
+            copyButton.textContent = orig;
+            copyButton.classList.remove("copied");
+          }, 2000);
+          showToast(t("Copied to clipboard!"));
           haptic("medium");
         } catch (_) {
           showToast(text);

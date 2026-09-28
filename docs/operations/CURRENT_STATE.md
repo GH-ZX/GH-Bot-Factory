@@ -11,8 +11,8 @@
 
 > First stop for any human or coding agent resuming work. This file distinguishes implemented behavior from externally executed release evidence.
 
-- **Last updated:** 2026-09-22
-- **Current phase:** Customer product verification and MiniApp entry repair
+- **Last updated:** 2026-09-28
+- **Current phase:** Storefront UI/UX hardening & provider ecosystem readiness
 - **Implementation status:** Customer-product/hardening source and MiniApp entry fix verified: 500 fast + 22 PostgreSQL, seven browser suites, dependency audit. Verified-image build/rollout and push pending.
 - **Current migration head:** `c93eb541da62`
 - **Current source migration head:** `c93eb541da62`, applied to the live project database.
