@@ -1103,7 +1103,7 @@ function bindEvents() {
   recipientInput.addEventListener("input", () => { state.checkoutKey = null; });
   el("retryButton").addEventListener("click", () => window.location.reload());
 
-  el("fundWalletButton").addEventListener("click", () => openTopup());
+  el("fundWalletButton")?.addEventListener("click", () => openTopup());
   el("closeTopupButton").addEventListener("click", closeTopup);
   topupBackdrop.addEventListener("click", closeTopup);
   el("topupSubmitButton").addEventListener("click", createTopup);
