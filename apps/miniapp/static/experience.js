@@ -282,6 +282,8 @@ export function bindExperience({state,api,esc,money,t,format,toast,openPayment,a
             <strong class="detail-single-price">${priceDisplay}</strong>
           </div>
         `;
+      }
+
       const guide = resolveVoucherGuide(item.title, categoryName, item.metadata || {});
       const isAr = (document.documentElement.lang === "ar");
       let voucherManualHtml = "";
