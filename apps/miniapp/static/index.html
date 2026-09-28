@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#f2f7f3">
   <meta name="description" content="Telegram commerce storefront">
   <title>Storefront</title>
-  <link rel="stylesheet" href="./boot.css?v=20260928_01">
-  <script src="./entry.js?v=20260928_01"></script>
+  <link rel="stylesheet" href="./boot.css?v=20260928_03">
+  <script src="./entry.js?v=20260928_03"></script>
   <script src="https://telegram.org/js/telegram-web-app.js?63" defer></script>
-  <link rel="stylesheet" href="./styles.css?v=20260928_01">
+  <link rel="stylesheet" href="./styles.css?v=20260928_03">
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -322,9 +322,19 @@
     </button>
   </nav>
 
-  <dialog id="productDetailDialog" class="product-dialog" aria-labelledby="productDetailTitle"><div class="sheet-header"><h2 id="productDetailTitle"></h2><button id="closeProductDetail" type="button" class="icon-button" aria-label="Close product details">×</button></div><div id="productDetailContent"></div></dialog>
+  <dialog id="productDetailDialog" class="product-dialog" aria-labelledby="productDetailTitle">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-header product-sheet-header">
+      <div class="product-header-info">
+        <span class="eyebrow" id="productDetailEyebrow">PRODUCT</span>
+        <h2 id="productDetailTitle"></h2>
+      </div>
+      <button id="closeProductDetail" type="button" class="icon-button compact" aria-label="Close product details">×</button>
+    </div>
+    <div id="productDetailContent" class="product-detail-body"></div>
+  </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/shared/store-themes.js?v=20260928_02"></script>
-  <script type="module" src="./app.js?v=20260928_02"></script>
+  <script src="/shared/store-themes.js?v=20260928_03"></script>
+  <script type="module" src="./app.js?v=20260928_03"></script>
 </body>
 </html>

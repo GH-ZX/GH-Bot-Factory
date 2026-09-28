@@ -230,10 +230,27 @@ const ar = {
   "HERE TO HELP": "هنا لمساعدتك",
   "Support & information": "الدعم والمعلومات",
   "Ready when you are": "جاهز وقتما تريد",
-  "We are here to help": "نحن هنا لمساعدتك",
   "Close product details": "إغلاق تفاصيل المنتج",
   "CONVERSION_IN": "تحويل وارد",
-  "CONVERSION_OUT": "تحويل صادر"
+  "CONVERSION_OUT": "تحويل صادر",
+  "From": "من",
+  "View": "عرض",
+  "View details": "عرض التفاصيل",
+  "Choose an option": "اختر الخيار المناسب",
+  "Select option": "اختر الخيار",
+  "Description": "الوصف",
+  "Options": "الخيارات المتاحة",
+  "Warranty": "الضمان",
+  "Instant Delivery": "تسليم فوري",
+  "100% Guaranteed": "مضمون 100%",
+  "Safe payment via wallet & instant delivery": "دفع آمن من المحفظة وتسليم تلقائي فوري",
+  "Add to cart": "إضافة إلى السلة",
+  "Quantity": "الكمية",
+  "Product": "المنتج",
+  "In stock": "متوفر",
+  "Select Package": "اختر الباقة",
+  "Package": "الباقة",
+  "Features": "المميزات"
 };
 const en = {"greeting": "Hi {name}. Find your next purchase.", "products_count": "{loaded} of {total} products", "available_count": "{count} available", "items_count": "{count} items", "added_to_cart": "{name} added to cart.", "order_confirmed": "Order {number} confirmed.", "amount_range": "Amount must be between {min} and {max}.", "subtotal": "Subtotal before discount"};
 let language='en';

@@ -1266,3 +1266,28 @@ Executed focused fine-tuning of the MiniApp Wallet page:
 - Bumped asset cache busters to `v=20260928_02`.
 - Verified browser test suite (`test_miniapp_entry_browser.cjs` and `test_admin_browser.cjs`) passing 100%.
 
+## 2026-09-28 — Wholesale Suppliers & Payment Connectors Live Integration
+
+Configured, encrypted, and live-verified all wholesale supplier providers, payment methods, and automated catalog imports for the factory bot (`@mrandroid_robot`):
+- **Live Wholesale Suppliers:** G2Bulk (Gaming Top-Ups, live balance `$8.71 USD`) and VenteBot (Accounts & AI, live balance `$34.38 USD`) connected, encrypted via `SecretStorage`, health verified `HEALTHY`.
+- **Payment Methods:** Telegram Stars (`XTR`), Sham Cash (`0968098330`), Syriatel Cash (`0968098330`), USDT TRC-20 (`TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE`) configured and active.
+- **Bot Routing Profile:** Bound providers and payment methods to `@mrandroid_robot`'s `_business` profile with `HEALTHIEST` routing strategy.
+- **Live Catalog Imported:** 8 products across "AI & Subscriptions" and "Gaming Top-Ups" imported with server-authoritative markup calculations.
+
+## 2026-09-28 — Minimal Product Cards & Rich Dedicated Product Page
+
+Overhauled product presentation and storefront shopping experience across all factory bot templates:
+- **Tenant API Key Configurability Architecture:**
+  - Confirmed provider credentials are demo/reference keys for the factory bot; all tenant credentials remain strictly multi-tenant scoped by `tenant_id`.
+  - Future tenants purchasing or launching bots configure their own API tokens through the Admin UI (`/admin/#providers`), encrypted into the local vault via `SecretStorage`.
+- **Minimal Grid Cards:**
+  - Streamlined `.product-card` to display only the product visual/icon monogram, title (2-line clamp), starting price ("From $XX.XX"), and subtle chevron cue.
+  - Eliminated bulky inline variant items and long text from cards, preserving a clean 2-column e-commerce grid on mobile devices.
+- **Rich Dedicated Product Page (`<dialog id="productDetailDialog">`):**
+  - Integrated full-featured product page bottom sheet (mobile) and modal (desktop).
+  - Displays product media/icon monogram, delivery eta, category eyebrow, bold title, trust badges or warranty terms (`🛡️ Warranty · X days`), interactive package/variant selector (`.detail-option-card`), quantity stepper (`−`/`+`), full description, and sticky bottom action bar (`Add to cart · $XX.XX`).
+  - Added full Arabic RTL translation support in `apps/miniapp/static/locale.js`.
+- **Automated Verification:**
+  - Created `tests/test_miniapp_product_detail.cjs` verifying minimal grid layout, dialog opening, quantity adjustments, price calculation, variant switching, closing, desktop view, and Arabic RTL.
+  - Verified against live container and test server; 100% test pass rate.
+

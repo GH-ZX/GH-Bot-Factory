@@ -358,43 +358,67 @@ function renderCatalogMeta() {
   loadMoreProductsButton.disabled = state.catalogBusy;
 }
 
+function getProductIcon(title) {
+  const lower = (title || "").toLowerCase();
+  if (lower.includes("pubg") || lower.includes("free fire") || lower.includes("game") || lower.includes("razer") || lower.includes("steam") || lower.includes("uc ") || lower.includes("coins")) return "🎮";
+  if (lower.includes("chatgpt") || lower.includes("gemini") || lower.includes("claude") || lower.includes("ai ") || lower.includes("bot") || lower.includes("duolingo")) return "🤖";
+  if (lower.includes("itunes") || lower.includes("card") || lower.includes("gift") || lower.includes("voucher") || lower.includes("apple")) return "💳";
+  if (lower.includes("vpn") || lower.includes("proxy") || lower.includes("account") || lower.includes("sub") || lower.includes("plus") || lower.includes("premium")) return "💎";
+  if (lower.includes("sms") || lower.includes("number") || lower.includes("sim") || lower.includes("phone")) return "📱";
+  return "⚡";
+}
+
 function renderProducts() {
   const products = state.catalog.products ?? [];
   productGrid.innerHTML = products.map((product) => {
     const imageUrl = safeImageUrl(product.metadata?.image_url || product.metadata?.thumbnail_url);
     const badge = product.metadata?.badge || (product.metadata?.featured ? t("FEATURED") : "");
     const deliveryEta = product.metadata?.delivery_eta;
+
+    let minPrice = null;
+    let minCurrency = "USD";
+    let totalStock = 0;
+    for (const v of product.variants ?? []) {
+      const p = Number(v.price);
+      if (minPrice === null || p < minPrice) {
+        minPrice = p;
+        minCurrency = v.currency;
+      }
+      totalStock += Number(v.stock_quantity ?? 0);
+    }
+    const hasMultiple = (product.variants?.length ?? 0) > 1;
+    const isOutOfStock = totalStock <= 0;
+    const priceText = minPrice !== null ? money(minPrice, minCurrency) : "—";
+
+    const icon = getProductIcon(product.title);
+    const initial = (product.title || "").charAt(0).toUpperCase();
+
     const visual = imageUrl
-      ? `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
-      : `<div class="product-placeholder" aria-hidden="true"></div>`;
-    const variants = product.variants.map((variant) => {
-      const inStock = Number(variant.stock_quantity) > 0;
-      const stockLabel = inStock
-        ? format("available_count",{count:variant.stock_quantity})
-        : t("Sold out");
-      return `
-        <div class="variant-row">
-          <div class="variant-info">
-            <span class="variant-title">${escapeHtml(variant.title)}</span>
-            <strong class="variant-price">${escapeHtml(money(variant.price, variant.currency))}</strong>
-            <span class="variant-meta"><span class="stock-dot ${inStock ? "" : "sold-out"}"></span>${escapeHtml(stockLabel)} · ${escapeHtml(variant.sku)}</span>
-          </div>
-          <button class="add-button" data-add-variant="${variant.id}" type="button" ${inStock ? "" : "disabled"} aria-label="${inStock ? t("Add") : t("Sold out:")} ${escapeHtml(product.title)} ${escapeHtml(variant.title)}">${inStock ? "+" : "×"}</button>
-        </div>
-      `;
-    }).join("");
+      ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(product.title)}" loading="lazy" referrerpolicy="no-referrer">`
+      : `<div class="product-placeholder" aria-hidden="true">
+           <span class="placeholder-icon">${icon}</span>
+           <span class="placeholder-initial">${escapeHtml(initial)}</span>
+         </div>`;
+
     return `
-      <article class="product-card">
+      <article class="product-card ${isOutOfStock ? "out-of-stock" : ""}" data-product-detail="${escapeHtml(product.id)}" role="button" tabindex="0" aria-label="${escapeHtml(product.title)}">
         <div class="product-visual">
           ${visual}
           ${badge ? `<span class="product-badge">${escapeHtml(badge)}</span>` : ""}
+          ${isOutOfStock ? `<span class="product-soldout-badge">${t("Sold out")}</span>` : ""}
+          ${deliveryEta && !isOutOfStock ? `<span class="product-eta-badge">⚡ ${escapeHtml(deliveryEta)}</span>` : ""}
         </div>
         <div class="product-body">
-          <h3 class="product-title"><button type="button" class="product-title-button" data-product-detail="${escapeHtml(product.id)}">${escapeHtml(product.title)}</button></h3>
-          <p class="product-description">${escapeHtml(product.description || t("Ready for instant checkout."))}</p>
-          ${deliveryEta ? `<span class="delivery-chip">${t("Delivery")} · ${escapeHtml(deliveryEta)}</span>` : ""}
-          <button type="button" class="text-button product-details-link" data-product-detail="${escapeHtml(product.id)}">${t("View details")}</button>
-          <div class="variant-list">${variants}</div>
+          <h3 class="product-title">${escapeHtml(product.title)}</h3>
+          <div class="product-card-footer">
+            <div class="product-price-box">
+              ${hasMultiple ? `<span class="product-price-from">${t("From")}</span>` : ""}
+              <strong class="product-price">${escapeHtml(priceText)}</strong>
+            </div>
+            <div class="product-open-cue" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </div>
         </div>
       </article>
     `;
@@ -487,7 +511,7 @@ function findVariant(variantId) {
   return state.variantCache.get(variantId) ?? null;
 }
 
-function addToCart(variantId) {
+function addToCart(variantId, addQuantity = 1) {
   if(state.checkoutBusy)return;
   const variant = findVariant(variantId);
   if (!variant) return;
@@ -497,7 +521,8 @@ function addToCart(variantId) {
   }
   const existing = state.cart.get(variantId);
   const maxQuantity = Math.min(100, Number(variant.stock_quantity));
-  state.cart.set(variantId, { variant, quantity: Math.min((existing?.quantity ?? 0) + 1, maxQuantity) });
+  const newQty = Math.min((existing?.quantity ?? 0) + addQuantity, maxQuantity);
+  state.cart.set(variantId, { variant, quantity: newQty });
   state.checkoutKey = null;
   renderCart();
   haptic("light");
@@ -1024,7 +1049,7 @@ function bindEvents() {
     if (navButton) switchView(navButton.dataset.target);
   });
 
-  experience=bindExperience({state,api,esc:escapeHtml,money,t,toast:showToast,openPayment:openHistoricalPayment});
+  experience=bindExperience({state,api,esc:escapeHtml,money,t,format,toast:showToast,openPayment:openHistoricalPayment,addToCart,openCart});
   customerCare=bindCustomerCare({api,escapeHtml,toast:showToast,orders:()=>state.orders||[],t});
   bindSheetAccess(cartSheet,closeCart);bindSheetAccess(topupSheet,closeTopup);
   el("shopRecharge").onclick=()=>switchView("wallet");

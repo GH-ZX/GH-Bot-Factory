@@ -889,4 +889,20 @@ Configured, encrypted, and live-verified all wholesale supplier providers, payme
 - **Verification:**
   - Playwright browser test suites passed cleanly.
 
+## 2026-09-28 — Minimal Product Cards & Rich Dedicated Product Page
+
+Overhauled product presentation and storefront shopping experience across all factory bot templates:
+- **Tenant Token Architecture:**
+  - Re-verified supplier credentials isolation; wholesale API tokens are configured per-tenant through `/admin/#providers` and encrypted via `SecretStorage`.
+- **Minimal Grid Cards:**
+  - Redesigned `.product-card` to display only the product visual/icon monogram, title (2-line clamp), starting price ("From $XX.XX"), and subtle chevron cue.
+  - Eliminated bulky inline variant items and long text from cards, preserving a clean 2-column e-commerce grid on mobile devices.
+- **Rich Dedicated Product Page (`<dialog id="productDetailDialog">`):**
+  - Integrated full-featured product page bottom sheet (mobile) and modal (desktop).
+  - Displays product media/icon monogram, delivery eta, category eyebrow, bold title, trust badges or warranty terms (`🛡️ Warranty · X days`), interactive package/variant selector (`.detail-option-card`), quantity stepper (`−`/`+`), full description, and sticky bottom action bar (`Add to cart · $XX.XX`).
+  - Added full Arabic RTL translation support in `apps/miniapp/static/locale.js`.
+- **Automated Verification:**
+  - Created `tests/test_miniapp_product_detail.cjs` verifying minimal grid layout, dialog opening, quantity adjustments, price calculation, variant switching, closing, desktop view, and Arabic RTL.
+  - Verified against live container and test server; 100% test pass rate.
+
 

@@ -2456,3 +2456,38 @@ Configured, encrypted, and live-verified all wholesale supplier providers, payme
   - Verified `/api/v1/storefront/wallet/topups/method` -> 201 Created for both Sham Cash and Telegram Stars.
   - Verified Playwright browser test suites passing 100%.
 
+## 2026-09-28 — Minimal Product Cards & Rich Dedicated Product Page
+
+> The api tokens you got, are not for this store, but for now it's ok, the api token should be configurable for the tenant who bought the bot from my factory, and btw, the products cards are broken , cards should be minimal, entering a card should show a nice product page, on all bot templates we have
+
+Addressed tenant API token configurability architecture, rebuilt product grid cards to be minimal and elegant, and implemented a rich dedicated Product Detail Page across all bot templates:
+- **Tenant API Key Configurability Architecture:**
+  - Confirmed and verified that the provider credentials used are reference credentials for this demo/factory instance, and all supplier credentials in GH-Bot-Factory are strictly scoped by `tenant_id`.
+  - When a tenant purchases or creates a bot via the factory, they configure their own supplier API keys and tokens in the Admin Panel (`/admin/#providers`). Tokens are written directly through `SecretStorage` (`upsert_provider_credential_value`) and encrypted with local vault keys; no credentials are leaked or shared cross-tenant.
+- **Minimal Product Card Overhaul:**
+  - Redesigned `.product-card` across the shared MiniApp template (`apps/miniapp/static/app.js` and `styles.css`):
+    - Removed cluttered variant lists, inline SKU texts, stock chips, and lengthy descriptions from grid cards.
+    - Card now displays: clean visual/icon avatar (`.product-visual`), optional badge, 2-line clamped title (`.product-title`), starting price ("From $XX.XX"), and a subtle chevron cue (`.product-open-cue`).
+    - Enforced responsive 2-column grid layout across mobile screens down to 320px (`.product-grid`).
+- **Rich Dedicated Product Page (`<dialog id="productDetailDialog">`):**
+  - Upgraded `product(id)` in `apps/miniapp/static/experience.js` to render a complete Product Page:
+    - Cover visual with image or fallback category icon monogram and delivery badge.
+    - Header eyebrow displaying product category and bold title.
+    - Trust badges (`⚡ Instant Delivery`, `🛡️ 100% Guaranteed`, `💳 Wallet Checkout`) or warranty guarantee box (`🛡️ Warranty · X days`).
+    - Interactive package selector (`.detail-option-card`) allowing customers to tap and choose between multiple variants with live price synchronization.
+    - Interactive quantity stepper (`−` / `+`) with stock cap enforcement.
+    - Full product description text.
+    - Sticky bottom action bar (`Add to cart · $XX.XX`) wired to `addToCart(variantId, qty)`.
+    - Native sheet backdrop, desktop modal centering, and full Arabic RTL typography support.
+- **Automated Verification & Test Coverage:**
+  - Added new Playwright browser test suite `tests/test_miniapp_product_detail.cjs`:
+    - Tests minimal grid card structure (asserts absence of bulky variant items).
+    - Tests opening product page dialog, verifying title, category eyebrow, warranty card, and variant list.
+    - Tests interactive quantity adjustment and dynamic total price updates.
+    - Tests variant switching and sticky button label update.
+    - Tests closing via close button and backdrop click.
+    - Tests responsive desktop modal rendering.
+    - Tests Arabic RTL localization and button translations.
+  - Verified against live Docker container endpoint (`http://127.0.0.1:8010/miniapp/`).
+  - Full suite verification: 501 unit/integration tests passing (100%), clean Ruff linter, all browser tests passing.
+
