@@ -2,6 +2,166 @@ export function bindExperience({state,api,esc,money,t,format,toast,openPayment,a
   const el=id=>document.getElementById(id);
   let historyOffset=null,historyBusy=false,historyRevision=0;
 
+  const VOUCHER_REDEMPTION_GUIDES = {
+    pubg: {
+      url: "https://www.midasbuy.com",
+      steps_en: [
+        "Visit www.midasbuy.com and select PUBG Mobile.",
+        "Log in and enter your Player ID to verify your character nickname.",
+        "Enter the voucher PIN code received in your order.",
+        "Click OK to redeem. Your UC will be credited to your game account immediately."
+      ],
+      steps_ar: [
+        "توجه إلى موقع midasbuy.com الرسمي واختر لعبة ببجي موبايل.",
+        "سجل الدخول وأدخل معرف اللاعب (Player ID) وتأكد من ظهور اسم حسابك.",
+        "أدخل كود القسيمة (PIN) المستلم من تفاصيل طلبك.",
+        "اضغط تأكيد، وسيتم شحن الشدات (UC) في حسابك داخل اللعبة فوراً."
+      ]
+    },
+    free_fire: {
+      url: "https://shop2game.com",
+      steps_en: [
+        "Visit shop2game.com and select Free Fire.",
+        "Log in using your Player ID.",
+        "Choose Garena Voucher as payment method and enter your voucher PIN.",
+        "Confirm redemption to receive your diamonds in-game instantly."
+      ],
+      steps_ar: [
+        "توجه إلى موقع shop2game.com واختر فري فاير.",
+        "سجل الدخول بواسطة معرف اللاعب (Player ID) الخاص بك.",
+        "اختر طريقة الدفع عبر بطاقة قارينا وأدخل كود القسيمة المستلم.",
+        "اضغط تأكيد لإضافة الجواهر فوراً إلى حسابك في اللعبة."
+      ]
+    },
+    razer: {
+      url: "https://gold.razer.com",
+      steps_en: [
+        "Log in to your Razer Gold account at gold.razer.com.",
+        "Click 'Reload Now' and select 'Razer Gold PIN'.",
+        "Enter the PIN code received and follow instructions to add funds.",
+        "Use your balance to purchase gaming credits across thousands of games."
+      ],
+      steps_ar: [
+        "سجل الدخول إلى حسابك في موقع gold.razer.com.",
+        "اضغط على زر 'Reload Now' (إعادة الشحن) واختر 'Razer Gold PIN'.",
+        "أدخل رمز PIN المستلم واضغط متابعة لإضافة الرصيد إلى محفظتك.",
+        "استخدم رصيد المحفظة للشحن في آلاف الألعاب والتطبيقات المدعومة."
+      ]
+    },
+    steam: {
+      url: "https://store.steampowered.com/account/redeemwalletcode",
+      steps_en: [
+        "Launch the Steam client or go to store.steampowered.com/account/redeemwalletcode.",
+        "Sign in to your Steam account.",
+        "Enter the Steam Wallet Code into the input field.",
+        "Click Continue. The funds will be added to your Steam Wallet immediately."
+      ],
+      steps_ar: [
+        "افتح تطبيق Steam أو توجه إلى store.steampowered.com/account/redeemwalletcode.",
+        "سجل الدخول إلى حساب ستيم الخاص بك.",
+        "أدخل كود محفظة ستيم في خانة الرمز.",
+        "اضغط متابعة (Continue) لإضافة الرصيد إلى محفظتك واستخدامه لشراء الألعاب."
+      ]
+    },
+    playstation: {
+      url: "https://store.playstation.com",
+      steps_en: [
+        "Open PlayStation Store on your console or visit store.playstation.com.",
+        "Sign in to your PlayStation Network account.",
+        "Click on your profile avatar at the top and select 'Redeem Code'.",
+        "Enter the 12-digit voucher code and select Redeem."
+      ],
+      steps_ar: [
+        "افتح متجر PlayStation Store من جهاز الكونسول أو المتصفح.",
+        "سجل الدخول إلى حساب شبكة PlayStation Network الخاص بك.",
+        "اضغط على صورة ملفك الشخصي بالأعلى واختر 'Redeem Code' (استرداد الرمز).",
+        "أدخل رمز القسيمة المكون من 12 خانة واضغط Redeem لتعبئة المحفظة."
+      ]
+    },
+    xbox: {
+      url: "https://redeem.microsoft.com",
+      steps_en: [
+        "Go to redeem.microsoft.com in any web browser.",
+        "Sign in with your Microsoft / Xbox account.",
+        "Enter the 25-character code received.",
+        "Click Next and confirm to apply the gift card or subscription."
+      ],
+      steps_ar: [
+        "توجه إلى موقع redeem.microsoft.com عبر المتصفح.",
+        "سجل الدخول بحساب Microsoft / Xbox الخاص بك.",
+        "أدخل الكود المكون من 25 رمزاً في الخانة المخصصة.",
+        "اضغط التالي (Next) وتأكيد لتفعيل الرصيد أو الاشتراك في حسابك."
+      ]
+    },
+    roblox: {
+      url: "https://www.roblox.com/redeem",
+      steps_en: [
+        "Go to roblox.com/redeem in your web browser.",
+        "Log in to the Roblox account where you want the credit.",
+        "Enter the PIN code from your order.",
+        "Click Redeem to add Robux or Credit to your account."
+      ],
+      steps_ar: [
+        "توجه إلى موقع roblox.com/redeem عبر المتصفح.",
+        "سجل الدخول إلى حساب روبلوكس المراد شحنه.",
+        "أدخل كود PIN المستلم من تفاصيل طلبك.",
+        "اضغط Redeem لإضافة رصيد Robux أو رصيد المحفظة إلى حسابك فوراً."
+      ]
+    },
+    valorant: {
+      url: "https://playvalorant.com",
+      steps_en: [
+        "Launch the Valorant game client and log in.",
+        "Click the VP icon in the top-right corner next to the Store tab.",
+        "Select 'Prepaid Cards & Codes' payment method.",
+        "Enter the voucher code and click Submit to receive your VP."
+      ],
+      steps_ar: [
+        "افتح لعبة فالورانت وسجل الدخول إلى حسابك.",
+        "اضغط على أيقونة نقاط VP في الزاوية العلوية بجوار تبويب المتجر.",
+        "اختر طريقة الدفع 'Prepaid Cards & Codes' (البطاقات مسبقة الدفع).",
+        "أدخل كود القسيمة واضغط Submit لاستلام النقاط فوراً داخل اللعبة."
+      ]
+    }
+  };
+
+  const GENERIC_VOUCHER_GUIDE = {
+    url: "",
+    steps_en: [
+      "Visit the official redemption website or launch the application.",
+      "Sign in to your account.",
+      "Navigate to 'Redeem Code' or 'Prepaid Voucher' section.",
+      "Enter the digital voucher code and confirm to activate."
+    ],
+    steps_ar: [
+      "توجه إلى الموقع الرسمي أو افتح التطبيق التابع للخدمة.",
+      "سجل الدخول إلى حسابك الشخصي.",
+      "انتقل إلى قسم 'استرداد الرمز' أو 'شحن بطاقة مسبقة الدفع'.",
+      "أدخل كود القسيمة الرقمية واضغط تأكيد للتفعيل فوراً."
+    ]
+  };
+
+  function resolveVoucherGuide(productTitle, categoryName, metadata = {}) {
+    if (metadata.instructions_en || metadata.instructions_ar) {
+      return {
+        url: metadata.redemption_url || "",
+        steps_en: metadata.instructions_en || [],
+        steps_ar: metadata.instructions_ar || [],
+      };
+    }
+    const combined = `${productTitle} ${categoryName || ""}`.toLowerCase();
+    for (const [key, guide] of Object.entries(VOUCHER_REDEMPTION_GUIDES)) {
+      if (combined.includes(key.replace("_", " ")) || combined.includes(key)) {
+        return guide;
+      }
+    }
+    const voucherKeywords = ["voucher", "قسيمة", "بطاقة", "gift card", "redeem", "code", "pin", "شحن شدات", "شحن جواهر", "كود"];
+    if (voucherKeywords.some(kw => combined.includes(kw))) {
+      return GENERIC_VOUCHER_GUIDE;
+    }
+    return null;
+  }
+
   function getProductIcon(title) {
     const lower = (title || "").toLowerCase();
     if (lower.includes("pubg") || lower.includes("free fire") || lower.includes("game") || lower.includes("razer") || lower.includes("steam") || lower.includes("uc ") || lower.includes("coins")) return "🎮";
@@ -122,6 +282,27 @@ export function bindExperience({state,api,esc,money,t,format,toast,openPayment,a
             <strong class="detail-single-price">${priceDisplay}</strong>
           </div>
         `;
+      const guide = resolveVoucherGuide(item.title, categoryName, item.metadata || {});
+      const isAr = (document.documentElement.lang === "ar");
+      let voucherManualHtml = "";
+      if (guide) {
+        const steps = isAr ? (guide.steps_ar || guide.steps_en || []) : (guide.steps_en || guide.steps_ar || []);
+        if (steps.length > 0) {
+          voucherManualHtml = `
+            <div class="detail-voucher-manual">
+              <div class="detail-voucher-header">
+                <div class="detail-voucher-title">
+                  <span>📋</span>
+                  <strong>${isAr ? 'طريقة الاستخدام وتفعيل الكود' : 'How to Redeem & Activate'}</strong>
+                </div>
+                ${guide.url ? `<a href="${esc(guide.url)}" target="_blank" rel="noopener noreferrer" class="detail-voucher-link">🌐 ${isAr ? 'الموقع الرسمي' : 'Official Site'} ↗</a>` : ''}
+              </div>
+              <ol class="detail-voucher-steps">
+                ${steps.map(step => `<li>${esc(step)}</li>`).join('')}
+              </ol>
+            </div>
+          `;
+        }
       }
 
       el('productDetailContent').innerHTML = `
@@ -135,6 +316,7 @@ export function bindExperience({state,api,esc,money,t,format,toast,openPayment,a
           </div>
           ${warrantyHtml}
           ${optionsHtml}
+          ${voucherManualHtml}
           <div class="detail-section">
             <h4 class="detail-section-heading">${t('Description')}</h4>
             <p class="detail-description-text">${esc(item.description || t('Ready for instant checkout.'))}</p>

@@ -911,3 +911,8 @@ Overhauled product presentation and storefront shopping experience across all fa
 - Replaced the duplicate fiat/asset `walletGrid` with a dedicated "Top up your wallet" section (`.recharge-methods-grid`).
 - Top-up methods are now directly selectable via UI cards (e.g., clicking the "ShamCash" card seamlessly opens the recharge modal with ShamCash pre-selected).
 - Added `SamApiProvider` (handling ShamCash and SyriatelCash gateways seamlessly in Syria) mapped through `packages/payments/providers/sam_api.py`.
+### 2026-09-28: Advanced Sam API & Voucher Redemption Experience
+- Enhanced `SamApiProvider`: Added automated wallet discovery (`GET /v1/wallets`), `paymentUrl` resolution, payment status lookup, and multi-currency balance queries.
+- Added Voucher Redemption Manual in MiniApp: Embedded game-specific activation instructions (PUBG, Free Fire, Steam, PSN, Xbox, Roblox, Valorant) and official redemption links directly in the `#productDetailDialog` product modal.
+- Added Digital Goods Delivery module (`packages/notifications/delivery.py`): Formats one-tap copyable codes and generates automatic `.txt` file attachments for bulk orders to prevent Telegram truncation.
+- Verified 507/507 tests passing in pytest suite; clean Ruff check.

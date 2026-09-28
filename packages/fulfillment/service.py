@@ -17,6 +17,7 @@ from packages.factory.business_profiles import (
     business_profile_from_config,
 )
 from packages.fulfillment.models import FulfillmentAttempt, FulfillmentStatus
+from packages.notifications.delivery import format_delivery_text
 from packages.notifications.service import (
     NotificationEventType,
     NotificationPayload,
@@ -305,6 +306,34 @@ class FulfillmentService:
                 attempt.external_order_id,
             )
 
+            delivered_artifacts = []
+            for resp in responses:
+                for art in getattr(resp, "delivery", ()):
+                    delivered_artifacts.append(
+                        {
+                            "kind": getattr(art.kind, "value", str(art.kind)),
+                            "value": art.value,
+                            "fields": art.fields,
+                        }
+                    )
+
+            delivery_values = [str(art["value"]) for art in delivered_artifacts if art.get("value")]
+            first_product_name = ""
+            if order.items and hasattr(order.items[0], "product_variant") and order.items[0].product_variant:
+                first_product_name = order.items[0].product_variant.title
+
+            formatted_msg = (
+                format_delivery_text(
+                    order_identifier=order.order_number,
+                    product_name=first_product_name or f"Order #{order.order_number}",
+                    total_paid=order.total_amount,
+                    currency=order.currency,
+                    goods=delivery_values,
+                )
+                if delivery_values
+                else f"🎉 Order #{order.order_number} fulfilled successfully!"
+            )
+
             await self.notifications.notify(
                 NotificationPayload(
                     event_type=NotificationEventType.FULFILLMENT_SUCCEEDED,
@@ -312,8 +341,12 @@ class FulfillmentService:
                     recipient=recipient,
                     order_id=order.id,
                     order_number=order.order_number,
-                    message=f"🎉 Order #{order.order_number} fulfilled successfully!",
-                    metadata={"external_order_id": attempt.external_order_id},
+                    message=formatted_msg,
+                    metadata={
+                        "external_order_id": attempt.external_order_id,
+                        "delivery": delivered_artifacts,
+                        "goods": delivery_values,
+                    },
                 )
             )
             return attempt

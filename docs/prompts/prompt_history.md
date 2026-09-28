@@ -2505,3 +2505,24 @@ Addressed tenant API token configurability architecture, rebuilt product grid ca
 
 ### Dependencies / Links
 - See Docs: `https://www.sam-api.pro/api-docs`
+
+## Milestone: Advanced Sam API & Voucher Redemption Experience
+**Date:** 2026-09-28
+**Prompt:** "U can get some codes of sam how does work from ghstore tele, and same for vouchers reveal and those stuff, u might get a how to, from ghstore tele, for 1 not now" -> "Yah do those, make factory perfect to make new bots"
+
+### Key Changes:
+- **Sam API Provider Enhancements (`packages/payments/providers/sam_api.py`)**:
+  - Implemented automatic wallet discovery from `GET /v1/wallets` when an explicit merchant identifier is not supplied, choosing the active ShamCash address/account or Syriatel phone.
+  - Aligned response parsing with official `paymentUrl`, with fallback to hosted `/pay/{invoiceId}`.
+  - Implemented real-time wallet balance queries across USD, SYP, and EUR (`get_wallet_balances`).
+  - Added payment lookup (`GET /pay/{invoiceId}`) and webhook verification mapped to safe `PaymentIntentStatus` states.
+- **Voucher Redemption Manuals in MiniApp (`apps/miniapp/static/experience.js`, `styles.css`)**:
+  - Ported `VOUCHER_REDEMPTION_GUIDES` knowledge base covering PUBG Mobile, Free Fire, Razer Gold, Steam, PlayStation, Xbox, Roblox, Valorant, and generic digital vouchers.
+  - Dynamically renders a styled activation guide and direct "Official Site" link within the rich `#productDetailDialog` product modal in both Arabic and English.
+- **Digital Goods Delivery Formatting & Protection (`packages/notifications/delivery.py`, `packages/fulfillment/service.py`)**:
+  - Added clean extraction and normalization for delivered keys, voucher PINs, and account credentials.
+  - Added smart formatting with copyable `<code>...</code>` blocks for 1–3 items and automatic `.txt` file artifact generation (`build_order_goods_txt`) for bulk orders (>=2 items or >300 chars) to prevent Telegram length limit crashes.
+  - Enriched fulfillment completion notification payload with delivered artifacts.
+- **Verification**:
+  - Created new unit test suite `tests/test_sam_api_provider.py` covering invoice creation, auto-wallet discovery, payment queries, webhooks, and delivery artifact generation (6/6 passing).
+  - Full suite verified: 507/507 tests passing (100%), clean Ruff linter.

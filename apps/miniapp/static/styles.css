@@ -1193,3 +1193,59 @@ body { font-size:15px; line-height:1.5; }
 
 .preview-banner { background:var(--surface); border:1px dashed var(--accent); border-radius:18px; padding:18px; margin-bottom:16px; font-size:13px; }
 .preview-banner p { margin:6px 0 12px; color:var(--muted); }.preview-banner label { display:flex; justify-content:space-between; align-items:center; gap:12px; }.preview-banner select { padding:8px; }
+
+/* Voucher Manual & Redemption Instructions */
+.detail-voucher-manual {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+}
+.detail-voucher-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.detail-voucher-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--accent);
+}
+.detail-voucher-link {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--accent);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  padding: 4px 9px;
+  border-radius: 8px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.detail-voucher-link:hover {
+  text-decoration: underline;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.detail-voucher-steps {
+  margin: 0;
+  padding-left: 18px;
+  padding-right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+}
+[dir="rtl"] .detail-voucher-steps {
+  padding-left: 0;
+  padding-right: 18px;
+}
