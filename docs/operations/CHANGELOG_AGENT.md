@@ -906,3 +906,8 @@ Overhauled product presentation and storefront shopping experience across all fa
   - Verified against live container and test server; 100% test pass rate.
 
 
+### 2026-09-28: MiniApp Wallet UI Polish & Sam API Integration
+- UI Polish (MiniApp): Addressed redundant "wallet and recharge things" on the Wallet view. 
+- Replaced the duplicate fiat/asset `walletGrid` with a dedicated "Top up your wallet" section (`.recharge-methods-grid`).
+- Top-up methods are now directly selectable via UI cards (e.g., clicking the "ShamCash" card seamlessly opens the recharge modal with ShamCash pre-selected).
+- Added `SamApiProvider` (handling ShamCash and SyriatelCash gateways seamlessly in Syria) mapped through `packages/payments/providers/sam_api.py`.

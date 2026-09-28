@@ -2491,3 +2491,17 @@ Addressed tenant API token configurability architecture, rebuilt product grid ca
   - Verified against live Docker container endpoint (`http://127.0.0.1:8010/miniapp/`).
   - Full suite verification: 501 unit/integration tests passing (100%), clean Ruff linter, all browser tests passing.
 
+
+## Milestone: MiniApp Wallet UI Polish & Sam API Integration
+**Date:** 2026-09-28
+**Prompt:** "On wallet (miniapp) there is repeat of wallet and recharge things, remove the one on the bottom, and add recharging methods, like shamCash or things like that, btw in bot Factory there is no api implementation for Sam api that deal with shamCash and syriatelcash (two separete servis in syria) u can get docs from here : https://www.sam-api.pro/api-docs Make sure codes are good and no bad stuff"
+
+### Artifacts Changed:
+- `apps/miniapp/static/index.html`: Replaced duplicate "Your wallets" grid with a new visual "Top up your wallet" (.recharge-methods-grid) populated directly by topupOptions.
+- `apps/miniapp/static/app.js`: Wired new .recharge-methods-grid to `state.topupOptions`, and updated `openTopup()` to accept a `preferredProvider` to pre-select it in the sheet.
+- `apps/miniapp/static/styles.css`: Added styles for `.recharge-methods-grid`.
+- `packages/payments/providers/sam_api.py`: Implemented robust `SamApiProvider` that respects `method` config for mapping "shamcash" or "syriatel". Fully integrated via `registry.py`.
+- **Docker/Tests**: Tests run successfully via `ruff` and `pytest`. Docker images rebuilt.
+
+### Dependencies / Links
+- See Docs: `https://www.sam-api.pro/api-docs`
