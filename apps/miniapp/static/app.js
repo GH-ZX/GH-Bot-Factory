@@ -309,31 +309,29 @@ function renderBootstrap() {
   const accent = store.settings?.brand_accent;
   if (/^#[0-9a-fA-F]{6}$/.test(accent ?? "")) document.documentElement.style.setProperty("--accent", accent);
 
-  const walletGrid = el("walletGrid");
-  walletGrid.innerHTML = wallets.map((wallet) => `
-    <article class="wallet-card">
-      <span class="wallet-currency">${escapeHtml(wallet.currency)} · ${t("WALLET")}</span>
-      <strong class="wallet-balance">${escapeHtml(money(wallet.balance, wallet.currency))}</strong>
-      <div class="wallet-actions">
-        <span class="field-help">${t("Provider-confirmed balance")}</span>
-        ${state.topupOptions.length ? `<button class="wallet-fund-button" data-fund-currency="${escapeHtml(wallet.currency)}" type="button">${t("Add funds")}</button>` : ""}
-      </div>
-    </article>
-  `).join("");
-  const assets = state.bootstrap.asset_wallets ?? [];
-  walletGrid.innerHTML += assets.map(wallet => `<article class="wallet-card">
-    <span class="wallet-currency">${escapeHtml(wallet.asset)} · ${escapeHtml(wallet.network)}</span>
-    <strong class="wallet-balance">${escapeHtml(wallet.balance)}</strong>
-    <span class="field-help">${t("Asset balance · separate from your spending wallet")}</span>
-  </article>`).join("");
+  const rechargeGrid = el("rechargeMethodsGrid");
+  if (rechargeGrid) {
+    rechargeGrid.innerHTML = state.topupOptions.map((provider) => `
+      <article class="wallet-card recharge-method-card" data-provider="${escapeHtml(provider.provider_name)}" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <strong class="wallet-balance" style="font-size:1.1rem; margin-bottom:4px;">${escapeHtml(provider.name || provider.provider_name)}</strong>
+          <span class="wallet-currency" style="margin-bottom:0;">${t("Top up via")} ${escapeHtml(provider.provider_name)}</span>
+        </div>
+        <button class="wallet-fund-button" type="button" style="margin-top:0;">${t("Select")}</button>
+      </article>
+    `).join("");
+    rechargeGrid.querySelectorAll('.recharge-method-card').forEach(card => {
+      card.onclick = () => openTopup(null, false, card.dataset.provider);
+    });
+  }
   experience?.renderHelp();
   const primaryWallet = wallets.find(w => w.currency === "USD") || wallets[0];
   const heroBal = primaryWallet ? escapeHtml(money(primaryWallet.balance, primaryWallet.currency)) : "$0.00";
   const heroEl = el("walletHeroBalance");
   if (heroEl) heroEl.textContent = heroBal;
   el("shopRecharge").classList.toggle("hidden",state.topupOptions.length===0);
-  el("emptyWallets").classList.toggle("hidden", wallets.length + assets.length > 0);
-  el("fundWalletButton").classList.toggle("hidden", state.topupOptions.length === 0);
+  el("emptyRecharge")?.classList.toggle("hidden", state.topupOptions.length > 0);
+  el("fundWalletButton")?.classList.toggle("hidden", state.topupOptions.length === 0);
   el("walletRechargeButton")?.classList.toggle("hidden", state.topupOptions.length === 0);
 }
 
@@ -678,7 +676,7 @@ function selectedTopupProvider() {
   return state.topupOptions.find((provider) => provider.provider_name === topupProviderSelect.value) ?? null;
 }
 
-function renderTopupForm(preferredCurrency = null) {
+function renderTopupForm(preferredCurrency = null, preferredProvider = null) {
   const providers = state.topupOptions ?? [];
   if (!providers.length) {
     topupProviderSelect.innerHTML = "";
@@ -688,9 +686,13 @@ function renderTopupForm(preferredCurrency = null) {
     return;
   }
 
-  const currentProvider = providers.find((provider) => provider.provider_name === topupProviderSelect.value) ?? providers[0];
+  let currentProvider = preferredProvider ? providers.find((p) => p.provider_name === preferredProvider) : null;
+  if (!currentProvider) {
+    currentProvider = providers.find((p) => p.provider_name === topupProviderSelect.value) ?? providers[0];
+  }
+  
   topupProviderSelect.innerHTML = providers.map((provider) => `
-    <option value="${escapeHtml(provider.provider_name)}" ${provider.provider_name === currentProvider.provider_name ? "selected" : ""}>${escapeHtml(provider.display_name)}</option>
+    <option value="${escapeHtml(provider.provider_name)}" ${provider.provider_name === currentProvider.provider_name ? "selected" : ""}>${escapeHtml(provider.name || provider.display_name || provider.provider_name)}</option>
   `).join("");
 
   const currencies = currentProvider.currencies ?? [];
@@ -802,7 +804,7 @@ function openPaymentCheckout() {
 }
 
 
-function openTopup(preferredCurrency = null, preserveActive=false) {
+function openTopup(preferredCurrency = null, preserveActive=false, preferredProvider=null) {
   el("productDetailDialog").close();
   if (!preserveActive && state.activeTopup && ["SUCCEEDED", "CREDITED", "REVERSED", "SETTLED_REVIEW", "FAILED", "EXPIRED", "CANCELLED"].includes(state.activeTopup.status) && !topupSheet.classList.contains("open")) {
     resetTopup();
@@ -816,7 +818,7 @@ function openTopup(preferredCurrency = null, preserveActive=false) {
   topupSheet.classList.add("open");
   topupSheet.setAttribute("aria-hidden", "false");
   if (!state.activeTopup) {
-    renderTopupForm(preferredCurrency);
+    renderTopupForm(preferredCurrency, preferredProvider);
     renderTopupStatus();
   } else {
     renderTopupStatus();

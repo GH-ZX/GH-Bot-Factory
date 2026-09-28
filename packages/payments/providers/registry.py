@@ -16,6 +16,7 @@ from packages.payments.providers.gozapay import GoZaPayProvider
 from packages.payments.providers.interface import PaymentProvider
 from packages.payments.providers.mock import MockPaymentProvider
 from packages.payments.providers.nowpayments import NowPaymentsProvider
+from packages.payments.providers.sam_api import SamApiProvider
 from packages.payments.providers.telegram_stars import TelegramStarsProvider
 from packages.payments.providers.triplea import TripleAPaymentProvider
 from packages.telegram.secrets import SecretStorage
@@ -44,6 +45,7 @@ class PaymentProviderRegistry:
         self.register_factory("bybit_pay", self._create_bybit_pay_provider)
         self.register_factory("binance_pay", self._create_binance_pay_provider)
         self.register_factory("gozapay", self._create_gozapay_provider)
+        self.register_factory("sam_api", self._create_sam_api_provider)
 
     def register_factory(self, provider_name: str, factory: ProviderFactory) -> None:
         self._factories[provider_name.lower()] = factory
@@ -199,6 +201,18 @@ class PaymentProviderRegistry:
         webhook_secret: str | None,
     ) -> GoZaPayProvider:
         return GoZaPayProvider(
+            settings=settings,
+            api_key=credentials,
+            webhook_secret=webhook_secret,
+        )
+
+    @staticmethod
+    def _create_sam_api_provider(
+        settings: dict[str, Any],
+        credentials: str,
+        webhook_secret: str | None,
+    ) -> SamApiProvider:
+        return SamApiProvider(
             settings=settings,
             api_key=credentials,
             webhook_secret=webhook_secret,
