@@ -871,3 +871,22 @@ Executed focused fine-tuning of the MiniApp Wallet page:
 - Bumped asset cache busters to `v=20260928_02`.
 - Verified browser test suite (`test_miniapp_entry_browser.cjs` and `test_admin_browser.cjs`) passing 100%.
 
+## 2026-09-28 — Wholesale Suppliers & Payment Connectors Live Integration
+
+Configured, encrypted, and live-verified all wholesale supplier providers, payment methods, and automated catalog imports for the factory bot (`@mrandroid_robot`):
+- **Live Wholesale Suppliers:**
+  - G2Bulk Gaming Top-Ups: `HEALTHY`, verified balance `$8.71 USD`.
+  - VenteBot Accounts & AI: `HEALTHY`, verified balance `$34.38 USD`.
+  - Digital Codes & Mock Sandbox: active and enabled.
+- **Payment Methods:**
+  - Telegram Stars (⭐): in-app invoice checkout (`XTR`).
+  - Sham Cash: wallet `0968098330`, SYP and USD.
+  - Syriatel Cash: wallet `0968098330`, SYP and USD.
+  - USDT (TRC-20): self-custody wallet `TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE`.
+- **Storefront & Catalog:**
+  - Imported 8 live products across "AI & Subscriptions" and "Gaming Top-Ups" with server-authoritative markup.
+  - Verified `/storefront/bootstrap` (200), `/storefront/catalog` (200), `/storefront/wallet/payment-methods` (200), and top-up intent creation (201).
+- **Verification:**
+  - Playwright browser test suites passed cleanly.
+
+

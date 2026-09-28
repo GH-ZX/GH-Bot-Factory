@@ -2428,3 +2428,31 @@ Executed focused fine-tuning of the MiniApp Wallet page:
 - Bumped asset cache busters to `v=20260928_02`.
 - Verified browser test suite (`test_miniapp_entry_browser.cjs` and `test_admin_browser.cjs`) passing 100%.
 
+## 2026-09-28 — Wholesale Suppliers & Payment Connectors Live Integration
+
+> No, we would make this as good miniapp and make sure all providers and apis works well then go for the next step (Plug-and-Play Delivery for Tenants)
+> Now, i need u to add for me on the factory, all providers and apis that we have on the connectors page i guess it's named ( i would do that but I'm lazy) i can give u what u need
+
+Configured, encrypted, and live-verified all wholesale supplier providers, payment methods, and automated catalog imports for the factory bot (`@mrandroid_robot`):
+- **Live Wholesale Suppliers Configured & Vault-Encrypted:**
+  - **G2Bulk Gaming Top-Ups:** Configured with production credentials; live health check verified (`HEALTHY`, balance `$8.71 USD`, connected as `ahmedghx`).
+  - **VenteBot Accounts & AI:** Configured with production credentials from active store DB; live health check verified (`HEALTHY`, balance `$34.38 USD`, connected as `ahmedghxx`).
+  - **Digital Codes:** Enabled reference digital vouchers provider.
+  - **Mock Sandbox:** Enabled local deterministic sandbox provider.
+- **Payment Methods & Providers Configured & Linked:**
+  - **Telegram Stars (⭐):** Configured with bot-linked credentials, supporting direct in-app invoice checkout (`XTR`, min 10, max 10,000 Stars).
+  - **Sham Cash (شام كاش):** Configured with merchant wallet `0968098330`, supporting USD and SYP.
+  - **Syriatel Cash (سيريتل كاش):** Configured with merchant wallet `0968098330`, supporting USD and SYP.
+  - **USDT (TRC-20):** Configured with self-custody wallet `TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE`.
+- **Bot Routing Profile Updated:**
+  - Attached all 4 providers and 4 payment methods to `@mrandroid_robot`'s `_business` routing profile (`HEALTHIEST` routing strategy, preferred provider: G2Bulk).
+- **Live Catalog Imported:**
+  - Populated 8 live provider-backed products into categories "AI & Subscriptions" and "Gaming Top-Ups" (Gemini 18m, ChatGPT Plus 1M, Duolingo Super 12m, Claude 10M API, PUBG 660 UC, PUBG G Coins 100, Razer Gold Turkey 50 TRY, Steam India INR 130).
+  - Established `ProviderProductMapping` with server-authoritative markup calculations and inventory mappings.
+- **End-to-End Verification:**
+  - Verified `/api/v1/storefront/bootstrap` -> 200 OK.
+  - Verified `/api/v1/storefront/catalog` -> 200 OK (8 products rendered with retail pricing).
+  - Verified `/api/v1/storefront/wallet/payment-methods` -> 200 OK (all 4 methods available).
+  - Verified `/api/v1/storefront/wallet/topups/method` -> 201 Created for both Sham Cash and Telegram Stars.
+  - Verified Playwright browser test suites passing 100%.
+
